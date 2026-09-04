@@ -1,0 +1,106 @@
+package com.example.personalassistant.navigation
+
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
+import com.example.personalassistant.feature.calendar.CalendarScreen
+import com.example.personalassistant.feature.finance.FinanceScreen
+import com.example.personalassistant.feature.settings.SettingsScreen
+import com.example.personalassistant.feature.task.TaskScreen
+import com.example.personalassistant.feature.timetable.TimetableScreen
+import com.example.personalassistant.feature.timetable.presentation.edit.CourseEditScreen
+
+/**
+ * 全局导航图：BottomBar 承载 4 个主 Tab + 设置页作为隐式入口
+ *
+ * 各 Screen 的详细实现位于 feature/<module>/presentation/ 目录下
+ */
+@Composable
+fun AppNavHost() {
+    val navController = rememberNavController()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
+
+    val showBottomBar = currentRoute in BottomTab.entries.map { it.screen.route }
+
+    Scaffold(
+        bottomBar = {
+            if (showBottomBar) {
+                AppBottomBar(navController = navController, currentRoute = currentRoute)
+            }
+        }
+    ) { padding ->
+        NavHost(
+            navController = navController,
+            startDestination = BottomTab.Timetable.screen.route,
+            modifier = Modifier.padding(PaddingValues())
+        ) {
+            // === 4 个主 Tab ===
+            composable(BottomTab.Timetable.screen.route) { TimetableScreen(navController) }
+            composable(BottomTab.Tasks.screen.route) { TaskScreen(navController) }
+            composable(BottomTab.Finance.screen.route) { FinanceScreen(navController) }
+            composable(BottomTab.Calendar.screen.route) { CalendarScreen(navController) }
+
+            // === 二级页面 ===
+            composable(BottomTab.SETTINGS.first.route) { SettingsScreen(navController) }
+
+            // === Phase 2 课表编辑页 ===
+            composable(
+                route = Screen.EditCourse.route,
+                arguments = listOf(navArgument(Screen.EditCourse.ARG_COURSE_ID) {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                }),
+            ) { entry ->
+                val courseId = entry.arguments?.getLong(Screen.EditCourse.ARG_COURSE_ID) ?: -1L
+                CourseEditScreen(courseId = courseId, onBack = { navController.popBackStack() })
+            }
+
+            // TODO Phase 3-4：编辑页/快速记账页/预算页等
+        }
+    }
+}
+
+@Composable
+private fun AppBottomBar(
+    navController: androidx.navigation.NavHostController,
+    currentRoute: String?
+) {
+    NavigationBar {
+        BottomTab.entries.forEach { tab ->
+            val selected = currentRoute == tab.screen.route
+            NavigationBarItem(
+                selected = selected,
+                onClick = {
+                    if (currentRoute != tab.screen.route) {
+                        navController.navigate(tab.screen.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                },
+                icon = { Icon(tab.icon, contentDescription = null) },
+                label = { Text(stringResource(tab.labelRes)) }
+            )
+        }
+    }
+}

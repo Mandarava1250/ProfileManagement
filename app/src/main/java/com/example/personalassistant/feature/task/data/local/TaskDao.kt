@@ -1,0 +1,99 @@
+package com.example.personalassistant.feature.task.data.local
+
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
+
+/**
+ * 任务 DAO：覆盖 tasks + sub_tasks 两张表
+ */
+@Dao
+interface TaskDao {
+
+    // ===== Task CRUD =====
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(task: TaskEntity): Long
+
+    @Update
+    suspend fun update(task: TaskEntity)
+
+    @Delete
+    suspend fun delete(task: TaskEntity)
+
+    @Query("DELETE FROM tasks WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("SELECT * FROM tasks WHERE id = :id")
+    suspend fun getById(id: Long): TaskEntity?
+
+    @Query("SELECT * FROM tasks WHERE id = :id")
+    fun observeById(id: Long): Flow<TaskEntity?>
+
+    /** 按截止日期分组：今天 / 明天 / 未来 / 已过期 / 已完成 */
+    @Query("SELECT * FROM tasks ORDER BY isCompleted ASC, dueDate ASC, priority DESC, createdAt DESC")
+    fun observeAll(): Flow<List<TaskEntity>>
+
+    @Query("SELECT * FROM tasks WHERE isCompleted = 0 ORDER BY priority DESC, dueDate ASC")
+    fun observeActive(): Flow<List<TaskEntity>>
+
+    @Query("SELECT * FROM tasks WHERE isCompleted = 1 ORDER BY dueDate DESC")
+    fun observeCompleted(): Flow<List<TaskEntity>>
+
+    @Query("SELECT * FROM tasks WHERE dueDate BETWEEN :start AND :end AND isCompleted = 0 ORDER BY priority DESC, dueDate ASC")
+    fun observeBetween(start: Long, end: Long): Flow<List<TaskEntity>>
+
+    @Query("UPDATE tasks SET isCompleted = :completed, updatedAt = :now WHERE id = :id")
+    suspend fun setCompleted(id: Long, completed: Boolean, now: Long = System.currentTimeMillis())
+
+    // ===== SubTask CRUD =====
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSubTask(subTask: SubTaskEntity): Long
+
+    @Update
+    suspend fun updateSubTask(subTask: SubTaskEntity)
+
+    @Delete
+    suspend fun deleteSubTask(subTask: SubTaskEntity)
+
+    @Query("SELECT * FROM sub_tasks WHERE parentTaskId = :parentId ORDER BY `order`, createdAt")
+    fun observeSubTasks(parentId: Long): Flow<List<SubTaskEntity>>
+
+    @Query("SELECT * FROM sub_tasks WHERE parentTaskId = :parentId ORDER BY `order`, createdAt")
+    suspend fun getSubTasks(parentId: Long): List<SubTaskEntity>
+
+    @Query("DELETE FROM sub_tasks WHERE parentTaskId = :parentId")
+    suspend fun deleteSubTasksByParent(parentId: Long)
+
+    @Query("UPDATE sub_tasks SET isCompleted = :completed WHERE id = :id")
+    suspend fun setSubTaskCompleted(id: Long, completed: Boolean)
+
+    // ===== 统计查询 =====
+
+    /** 今日完成率：[0.0, 1.0] */
+    @Query(
+        """
+        SELECT
+          CAST(SUM(CASE WHEN isCompleted = 1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*)
+        FROM tasks
+        WHERE createdAt >= :todayStart
+        """
+    )
+    suspend fun getTodayCompletionRate(todayStart: Long): Double?
+
+    @Query("SELECT COUNT(*) FROM tasks WHERE isCompleted = 0")
+    fun observeActiveCount(): Flow<Int>
+
+    /** 删除任务时同时删除所有子任务（事务保证一致性） */
+    @Transaction
+    suspend fun deleteTaskWithChildren(task: TaskEntity) {
+        deleteSubTasksByParent(task.id)
+        delete(task)
+    }
+}

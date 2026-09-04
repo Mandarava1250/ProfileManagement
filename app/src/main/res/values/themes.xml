@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主题由 core/ui/theme/Theme.kt 接管（Compose MaterialTheme）-->
+    <!-- 这里只提供一个 Splash/Pre-Compose 阶段使用的基础主题，避免启动闪烁 -->
+
+    <style name="Theme.PersonalAssistant" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@color/seed</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="Theme.PersonalAssistant.Starting" parent="Theme.PersonalAssistant">
+        <item name="android:windowBackground">@color/background_light</item>
+    </style>
+</resources>

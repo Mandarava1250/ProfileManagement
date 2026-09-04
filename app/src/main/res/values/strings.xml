@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Name -->
+    <string name="app_name">个人助手</string>
+
+    <!-- Bottom Navigation Tab Labels -->
+    <string name="tab_timetable">课表</string>
+    <string name="tab_tasks">任务</string>
+    <string name="tab_finance">记账</string>
+    <string name="tab_calendar">日历</string>
+
+    <!-- Common -->
+    <string name="action_save">保存</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_delete">删除</string>
+    <string name="action_edit">编辑</string>
+    <string name="action_done">完成</string>
+    <string name="action_add">添加</string>
+    <string name="action_refresh">刷新</string>
+    <string name="action_confirm">确认</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_theme">主题</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_backup">数据备份</string>
+    <string name="settings_restore">数据恢复</string>
+    <string name="settings_clear">清除数据</string>
+
+    <!-- 课表 -->
+    <string name="timetable_title">课表</string>
+    <string name="timetable_add_course">添加课程</string>
+    <string name="timetable_edit_course">编辑课程</string>
+    <string name="timetable_semester">学期</string>
+    <string name="timetable_no_courses">还没有课程，点击 + 添加</string>
+
+    <!-- 任务 -->
+    <string name="tasks_title">任务</string>
+    <string name="tasks_add">添加任务</string>
+    <string name="tasks_today">今天</string>
+    <string name="tasks_tomorrow">明天</string>
+    <string name="tasks_future">未来</string>
+    <string name="tasks_overdue">已过期</string>
+    <string name="tasks_completed">已完成</string>
+
+    <!-- 记账 -->
+    <string name="finance_title">记账</string>
+    <string name="finance_quick_add">快速记账</string>
+    <string name="finance_daily_pool">今日零钱池</string>
+    <string name="finance_monthly_report">月度报表</string>
+    <string name="finance_budget">月预算</string>
+    <string name="finance_expense">支出</string>
+    <string name="finance_income">收入</string>
+
+    <!-- 日历 -->
+    <string name="calendar_title">日历</string>
+    <string name="calendar_add_event">添加事件</string>
+    <string name="calendar_view_month">月视图</string>
+    <string name="calendar_view_week">周视图</string>
+    <string name="calendar_view_day">日视图</string>
+
+    <!-- Notification Channels -->
+    <string name="channel_course_name">课程提醒</string>
+    <string name="channel_course_desc">上课前 N 分钟自动提醒</string>
+    <string name="channel_task_name">任务提醒</string>
+    <string name="channel_task_desc">任务截止前的提醒</string>
+    <string name="channel_event_name">日程提醒</string>
+    <string name="channel_event_desc">日历事件的提醒</string>
+    <string name="channel_finance_name">记账与零钱池</string>
+    <string name="channel_finance_desc">零钱池刷新、月度报表等</string>
+</resources>
