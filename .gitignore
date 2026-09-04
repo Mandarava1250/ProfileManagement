@@ -1,0 +1,37 @@
+# Gradle
+.gradle/
+build/
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin
+.kotlin/
+
+# Keystore
+*.jks
+*.keystore
+
+# Backup
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Log
+*.log
+
+# Output APK
+*.apk
+*.aab
+*.ap_
+
+# Cyrene agent
+.cyrene/
+.idea/
