@@ -10,10 +10,10 @@ import javax.inject.Inject
  *
  * 实现层负责把 task.updatedAt 刷新为当前时间。
  */
-class UpsertTaskUseCase @Inject constructor(
+open class UpsertTaskUseCase @Inject constructor(
     private val repository: TaskRepository,
 ) {
-    suspend operator fun invoke(task: Task, subTasks: List<SubTask>): Long {
+    open suspend operator fun invoke(task: Task, subTasks: List<SubTask>): Long {
         require(task.title.isNotBlank()) { "任务标题不能为空" }
         val withTimestamp = if (task.id == 0L) task else task.copy(updatedAt = System.currentTimeMillis())
         return repository.upsertTask(withTimestamp, subTasks)

@@ -14,10 +14,10 @@ import javax.inject.Inject
  * Phase 4a：[ReminderScheduler] 默认实现是 Fake（仅 log），所以这条 UseCase 现在是"声明意图"层；
  * Phase 5 真正接 WorkManager 时无需改这个 UseCase。
  */
-class ScheduleReminderUseCase @Inject constructor(
+open class ScheduleReminderUseCase @Inject constructor(
     private val scheduler: ReminderScheduler,
 ) {
-    suspend operator fun invoke(task: Task) {
+    open suspend operator fun invoke(task: Task) {
         val triggerAt = task.reminderTime ?: return
         scheduler.schedule(
             ReminderInfo(

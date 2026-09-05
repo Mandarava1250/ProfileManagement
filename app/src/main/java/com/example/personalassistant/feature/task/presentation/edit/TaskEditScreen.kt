@@ -1,5 +1,8 @@
 package com.example.personalassistant.feature.task.presentation.edit
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -76,6 +79,22 @@ fun TaskEditScreen(
         state.errorMessage?.let { msg ->
             snackbarHostState.showSnackbar(msg)
             viewModel.clearError()
+        }
+    }
+
+    // ===== Phase 5b：通知权限申请 launcher =====
+    // - rememberLauncherForActivityResult 把 Activity 的 onActivityResult 桥接到 Composable
+    // - onResult 直接回调 VM；launcher 本身不持有 VM 强引用，VM 重建不影响 launcher
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = viewModel::onPermissionResult,
+    )
+    // - LaunchedEffect 监听一次性信号 shouldRequestNotificationPermission
+    // - true → launcher.launch() 触发系统弹框；launch 后立刻 consume() 置 false 防重组重放
+    LaunchedEffect(state.shouldRequestNotificationPermission) {
+        if (state.shouldRequestNotificationPermission) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            viewModel.consumeShouldRequestNotificationPermission()
         }
     }
 
