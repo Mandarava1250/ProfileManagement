@@ -2,6 +2,7 @@ package com.example.personalassistant.core.database
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
@@ -53,7 +54,7 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
         MonthlyBudgetEntity::class,
         DailyPoolEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -65,5 +66,16 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "personal_assistant.db"
+
+        /**
+         * 全部 Migration 列表（v1 → v2+）
+         *
+         * 在 CoreModule.provideAppDatabase() 里通过 addMigrations(...) 注册。
+         * ⚠️ 不允许删除任何已发布的 Migration，否则线上用户数据库会崩。
+         */
+        val ALL_MIGRATIONS: Array<Migration>
+            get() = arrayOf(
+                Migration_1_2,
+            )
     }
 }

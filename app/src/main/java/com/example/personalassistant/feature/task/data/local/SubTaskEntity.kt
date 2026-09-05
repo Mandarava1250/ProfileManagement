@@ -9,8 +9,8 @@ import androidx.room.PrimaryKey
 /**
  * 子任务实体（任务清单项）
  *
- * 与 TaskEntity 是 1:N 关系，parentTaskId 为 0 时表示顶级清单项
- * （也支持无 Task 的纯清单模式）
+ * 与 TaskEntity 是 1:N 关系，parentTaskId 为 null 时表示独立的顶级清单项
+ * （也支持无 Task 的纯清单模式）。任务删除时通过 FK SET_NULL 让子清单自动转为独立项。
  */
 @Entity(
     tableName = "sub_tasks",
@@ -23,7 +23,7 @@ import androidx.room.PrimaryKey
             entity = TaskEntity::class,
             parentColumns = ["id"],
             childColumns = ["parentTaskId"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.SET_NULL
         )
     ]
 )
@@ -32,7 +32,7 @@ data class SubTaskEntity(
     val id: Long = 0L,
 
     @ColumnInfo(name = "parentTaskId")
-    val parentTaskId: Long,
+    val parentTaskId: Long?,
 
     @ColumnInfo(name = "title")
     val title: String,

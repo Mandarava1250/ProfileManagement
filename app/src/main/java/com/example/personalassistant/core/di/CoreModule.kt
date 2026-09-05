@@ -53,8 +53,7 @@ object CoreModule {
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
-            // ⚠️ Phase 2+ 替换为正式 Migration，避免 drop 丢数据
-            .fallbackToDestructiveMigration()
+            .addMigrations(*AppDatabase.ALL_MIGRATIONS)
             .build()
 
     @Provides
