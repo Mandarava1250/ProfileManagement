@@ -26,10 +26,14 @@ import androidx.compose.foundation.lazy.items
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskQuadrant
 import com.example.personalassistant.feature.task.presentation.components.QuadrantSection
+import com.example.personalassistant.feature.task.presentation.components.SortMenu
+import com.example.personalassistant.feature.task.presentation.components.TaskFilterBar
 import com.example.personalassistant.feature.task.presentation.components.TaskItem
 
 /**
- * 任务 Tab 内容：P1-P4 + 未排期 分组，底部折叠已完成
+ * 任务 Tab 内容：顶部 FilterBar + P1-P4 + 未排期 分组 + 底部折叠已完成
+ *
+ * Phase 4b 新增：顶部 FilterBar（filter chips + sort 入口）+ 排序下拉菜单
  */
 @Composable
 fun TasksTab(
@@ -38,67 +42,93 @@ fun TasksTab(
     onEditTask: (Long) -> Unit,
     onDelete: (Task) -> Unit,
     onToggleShowCompleted: () -> Unit,
+    onFilterChange: (com.example.personalassistant.feature.task.domain.model.TaskFilter) -> Unit,
+    onSortClick: () -> Unit,
+    onSortSelected: (com.example.personalassistant.feature.task.domain.model.TaskSort) -> Unit,
+    onSortDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (state.isLoading) {
-        // 极短暂占位；Flow 第一次发射前不会出现
-        return
-    }
+    Column(modifier = modifier.fillMaxSize()) {
+        // 顶部 FilterBar
+        TaskFilterBar(
+            currentFilter = state.filter,
+            currentSort = state.sort,
+            onFilterChange = onFilterChange,
+            onSortClick = onSortClick,
+        )
 
-    if (state.groups.isEmpty) {
-        EmptyTasksHint(modifier = modifier)
-        return
-    }
-
-    val orderedQuadrants = listOf(
-        TaskQuadrant.P1,
-        TaskQuadrant.P2,
-        TaskQuadrant.P3,
-        TaskQuadrant.P4,
-        TaskQuadrant.UNSCHEDULED,
-    )
-
-    LazyColumn(modifier = modifier.fillMaxSize()) {
-        orderedQuadrants.forEach { q ->
-            val tasks = state.groups.byQuadrant[q].orEmpty()
-            if (tasks.isNotEmpty()) {
-                item(key = "header_${q.name}") {
-                    QuadrantSection(quadrant = q, count = tasks.size)
-                }
-                items(tasks, key = { it.id }) { task ->
-                    TaskItem(
-                        task = task,
-                        onToggleComplete = { onToggleComplete(task.id, it) },
-                        onClick = { onEditTask(task.id) },
-                        onDelete = { onDelete(task) },
-                    )
-                }
-            }
+        // SortMenu（挂在 FilterBar 的位置之外，由 Box 锚定）
+        // 这里采用 DropdownMenu + 父级 Box 锚点的方式
+        // 为了简化，这里放在 Column 之后通过 BoxAnchor 实现
+        Box(modifier = Modifier.fillMaxWidth()) {
+            SortMenu(
+                expanded = state.sortMenuExpanded,
+                currentSort = state.sort,
+                onSortSelected = onSortSelected,
+                onDismiss = onSortDismiss,
+            )
         }
 
-        val completed = state.groups.completed
-        if (completed.isNotEmpty()) {
-            item(key = "completed_header") {
-                CompletedHeader(
-                    count = completed.size,
-                    expanded = state.showCompleted,
-                    onToggle = onToggleShowCompleted,
-                )
-            }
-            if (state.showCompleted) {
-                items(completed, key = { it.id }) { task ->
-                    TaskItem(
-                        task = task,
-                        onToggleComplete = { onToggleComplete(task.id, it) },
-                        onClick = { onEditTask(task.id) },
-                        onDelete = { onDelete(task) },
-                    )
-                }
-            }
+        if (state.isLoading) {
+            // 极短暂占位；Flow 第一次发射前不会出现
+            return@Column
         }
 
-        item(key = "bottom_spacer") {
-            Spacer(Modifier.height(80.dp))
+        if (state.groups.isEmpty) {
+            EmptyTasksHint(modifier = Modifier.fillMaxSize())
+            return@Column
+        }
+
+        val orderedQuadrants = listOf(
+            TaskQuadrant.P1,
+            TaskQuadrant.P2,
+            TaskQuadrant.P3,
+            TaskQuadrant.P4,
+            TaskQuadrant.UNSCHEDULED,
+        )
+
+        LazyColumn(modifier = Modifier.fillMaxSize()) {
+            orderedQuadrants.forEach { q ->
+                val tasks = state.groups.byQuadrant[q].orEmpty()
+                if (tasks.isNotEmpty()) {
+                    item(key = "header_${q.name}") {
+                        QuadrantSection(quadrant = q, count = tasks.size)
+                    }
+                    items(tasks, key = { it.id }) { task ->
+                        TaskItem(
+                            task = task,
+                            onToggleComplete = { onToggleComplete(task.id, it) },
+                            onClick = { onEditTask(task.id) },
+                            onDelete = { onDelete(task) },
+                        )
+                    }
+                }
+            }
+
+            val completed = state.groups.completed
+            if (completed.isNotEmpty()) {
+                item(key = "completed_header") {
+                    CompletedHeader(
+                        count = completed.size,
+                        expanded = state.showCompleted,
+                        onToggle = onToggleShowCompleted,
+                    )
+                }
+                if (state.showCompleted) {
+                    items(completed, key = { it.id }) { task ->
+                        TaskItem(
+                            task = task,
+                            onToggleComplete = { onToggleComplete(task.id, it) },
+                            onClick = { onEditTask(task.id) },
+                            onDelete = { onDelete(task) },
+                        )
+                    }
+                }
+            }
+
+            item(key = "bottom_spacer") {
+                Spacer(Modifier.height(80.dp))
+            }
         }
     }
 }

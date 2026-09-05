@@ -73,7 +73,11 @@ class TaskEditViewModel @Inject constructor(
                         dueDate = result.task.dueDate,
                         subTasks = result.subTasks,
                         category = result.task.category,
-                        repeatRule = RepeatRule.fromRepeatType(result.task.repeatType),
+                        // Phase 4b：从 repeatType + repeatDays 共同还原 RepeatRule
+                        repeatRule = RepeatRule.fromRepeatType(
+                            result.task.repeatType,
+                            customDays = RepeatRule.parseDaysString(result.task.repeatDays),
+                        ),
                         reminderTime = result.task.reminderTime,
                     )
                 }
@@ -195,7 +199,7 @@ class TaskEditViewModel @Inject constructor(
         }
         viewModelScope.launch {
             try {
-                val (repeatType, _) = RepeatRule.toRepeatType(state.repeatRule)
+                val (repeatType, customDays) = RepeatRule.toRepeatType(state.repeatRule)
                 val task = Task(
                     id = if (isNew) 0L else taskId,
                     title = state.title.trim(),
@@ -205,6 +209,8 @@ class TaskEditViewModel @Inject constructor(
                     category = state.category,
                     reminderTime = state.reminderTime,
                     repeatType = repeatType,
+                    // Phase 4b：把 CustomWeekdays 序列化为 "MON,..." 字符串，让自定义星期真持久化
+                    repeatDays = RepeatRule.formatDaysString(customDays),
                 )
                 val newRowId = upsertTask(task, state.subTasks)
                 // 调度提醒（reminderTime 为 null 时 ScheduleReminderUseCase 内部 no-op）

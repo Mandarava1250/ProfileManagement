@@ -129,5 +129,27 @@ sealed class RepeatRule {
                 } else None
             }
         }
+
+        /**
+         * Phase 4b：把 "MONDAY,WEDNESDAY,FRIDAY" 这种字符串解析成 Set<DayOfWeek>。
+         * 返回 null 表示无自定义（入参为 null / 空 / 全部解析失败）。
+         */
+        fun parseDaysString(value: String?): Set<DayOfWeek>? {
+            if (value.isNullOrBlank()) return null
+            val days = value.split(",")
+                .mapNotNull { runCatching { DayOfWeek.valueOf(it.trim()) }.getOrNull() }
+                .toSet()
+            return days.takeIf { it.isNotEmpty() }
+        }
+
+        /**
+         * Phase 4b：把 Set<DayOfWeek> 序列化为 "MONDAY,WEDNESDAY,FRIDAY" 字符串。
+         * 按 DayOfWeek.value 自然顺序输出（周一在前，周日在后），保证写库稳定可比。
+         * 入参 null / 空集合 → 返回 null（让 mapper 写 null 进 DB）。
+         */
+        fun formatDaysString(days: Set<DayOfWeek>?): String? =
+            days?.takeIf { it.isNotEmpty() }
+                ?.sortedBy { it.value }
+                ?.joinToString(",") { it.name }
     }
 }

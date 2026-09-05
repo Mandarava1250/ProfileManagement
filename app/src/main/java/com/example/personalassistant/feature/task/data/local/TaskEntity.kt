@@ -11,6 +11,8 @@ import androidx.room.PrimaryKey
  * - priority: 0=低, 1=中, 2=高
  * - repeatType: null=不重复; "daily" | "weekly" | "monthly" | "yearly"
  * - repeatEndDate: 重复截止日期（null=无限）
+ * - repeatDays: Phase 4b 自定义星期几存储，格式 "MONDAY,WEDNESDAY"（可选；与 repeatType 配合解读）
+ *           为 null 时 repeatType 即为最终语义；非 null 时即使 repeatType 落库为 DAILY 也按自定义星期解读
  */
 @Entity(
     tableName = "tasks",
@@ -62,5 +64,9 @@ data class TaskEntity(
 
     /** 重复截止日期（可选）*/
     @ColumnInfo(name = "repeatEndDate")
-    val repeatEndDate: Long? = null
+    val repeatEndDate: Long? = null,
+
+    /** Phase 4b：自定义星期几字符串（逗号分隔 DayOfWeek.name），例如 "MONDAY,WEDNESDAY,FRIDAY"。null = 无自定义 */
+    @ColumnInfo(name = "repeatDays")
+    val repeatDays: String? = null
 )

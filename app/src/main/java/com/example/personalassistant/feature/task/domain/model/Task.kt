@@ -19,4 +19,11 @@ data class Task(
     val updatedAt: Long = System.currentTimeMillis(),
     val repeatType: RepeatType = RepeatType.NONE,
     val repeatEndDate: Long? = null,
+    /**
+     * Phase 4b：自定义星期几（与 RepeatRule.CustomWeekdays 配套）。
+     * 字符串格式 "MONDAY,WEDNESDAY,FRIDAY"，null = 无自定义。
+     * - 当业务层持有 RepeatRule.CustomWeekdays(days) 时，转 Entity 之前会先把 days 序列化到这里
+     * - 当业务层读出 RepeatRule 时，会从 repeatType + repeatDays 还原为 RepeatRule 对象
+     */
+    val repeatDays: String? = null,
 )

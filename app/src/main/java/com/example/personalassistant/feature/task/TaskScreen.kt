@@ -95,6 +95,10 @@ fun TaskScreen(
                 onEditTask = { id -> navController.navigate(Screen.EditTask.build(id)) },
                 onDelete = taskViewModel::deleteTask,
                 onToggleShowCompleted = taskViewModel::toggleShowCompleted,
+                onFilterChange = taskViewModel::setFilter,
+                onSortClick = taskViewModel::toggleSortMenu,
+                onSortSelected = taskViewModel::setSort,
+                onSortDismiss = taskViewModel::dismissSortMenu,
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
             else -> ChecklistTab(

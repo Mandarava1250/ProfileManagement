@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.task.presentation.edit
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
+import com.example.personalassistant.feature.task.presentation.edit.components.CategoryPickerSheet
+import com.example.personalassistant.feature.task.presentation.edit.components.ReminderTimePickerSheet
+import com.example.personalassistant.feature.task.presentation.edit.components.RepeatRulePickerSheet
 
 /**
  * 任务编辑页（新建 / 编辑复用）
@@ -183,6 +187,27 @@ fun TaskEditScreen(
                 }
             }
 
+            // ===== 分类（点击弹出 CategoryPickerSheet）=====
+            FieldRow(
+                label = "分类",
+                value = state.category ?: "无分类",
+                onClick = viewModel::toggleCategorySheet,
+            )
+
+            // ===== 重复规则（点击弹出 RepeatRulePickerSheet）=====
+            FieldRow(
+                label = "重复",
+                value = state.repeatRuleLabel,
+                onClick = viewModel::toggleRepeatRuleSheet,
+            )
+
+            // ===== 提醒时间（点击弹出 ReminderTimePickerSheet）=====
+            FieldRow(
+                label = "提醒",
+                value = state.reminderLabel,
+                onClick = viewModel::toggleReminderPicker,
+            )
+
             // ===== 子清单 =====
             Text(
                 text = "子清单",
@@ -247,6 +272,71 @@ fun TaskEditScreen(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+
+    // ===== CategoryPickerSheet =====
+    if (state.showCategorySheet) {
+        CategoryPickerSheet(
+            currentCategoryName = state.category,
+            categories = state.categoryChips,
+            onSelect = { viewModel.onCategoryChange(it) },
+            onDismiss = viewModel::toggleCategorySheet,
+        )
+    }
+
+    // ===== RepeatRulePickerSheet =====
+    if (state.showRepeatRuleSheet) {
+        RepeatRulePickerSheet(
+            current = state.repeatRule,
+            onConfirm = { viewModel.onRepeatRuleChange(it) },
+            onDismiss = viewModel::toggleRepeatRuleSheet,
+        )
+    }
+
+    // ===== ReminderTimePickerSheet =====
+    if (state.showReminderPicker) {
+        ReminderTimePickerSheet(
+            initialMillis = state.reminderTime,
+            onConfirm = { viewModel.onReminderChange(it) },
+            onDismiss = viewModel::toggleReminderPicker,
+        )
+    }
+}
+
+/**
+ * 编辑页字段行：左侧 label + 右侧 value + 点击触发回调。
+ *
+ * 用于分类 / 重复 / 提醒等"间接编辑"字段。
+ */
+@Composable
+private fun FieldRow(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(end = 16.dp),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "›",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
