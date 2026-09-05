@@ -29,6 +29,7 @@ internal fun TaskEntity.toDomain(): Task = Task(
     repeatType = RepeatType.fromDb(repeatType),
     repeatEndDate = repeatEndDate,
     repeatDays = repeatDays,
+    manualOrder = manualOrder,
 )
 
 internal fun Task.toEntity(): TaskEntity = TaskEntity(
@@ -45,4 +46,5 @@ internal fun Task.toEntity(): TaskEntity = TaskEntity(
     repeatType = repeatType.dbValue,
     repeatEndDate = repeatEndDate,
     repeatDays = repeatDays,
+    manualOrder = manualOrder,
 )

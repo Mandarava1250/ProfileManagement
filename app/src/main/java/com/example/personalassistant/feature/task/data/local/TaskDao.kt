@@ -51,6 +51,14 @@ interface TaskDao {
     @Query("UPDATE tasks SET isCompleted = :completed, updatedAt = :now WHERE id = :id")
     suspend fun setCompleted(id: Long, completed: Boolean, now: Long = System.currentTimeMillis())
 
+    // ===== Phase 6a：拖拽手动排序 =====
+
+    /**
+     * 更新单条任务的 manualOrder（拖拽过程中单条更新场景）
+     */
+    @Query("UPDATE tasks SET manualOrder = :order, updatedAt = :now WHERE id = :id")
+    suspend fun updateManualOrder(id: Long, order: Long, now: Long = System.currentTimeMillis())
+
     // ===== SubTask CRUD =====
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
