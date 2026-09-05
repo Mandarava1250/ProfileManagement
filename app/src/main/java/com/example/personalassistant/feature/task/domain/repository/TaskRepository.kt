@@ -63,4 +63,13 @@ interface TaskRepository {
 
     /** 删除清单项 */
     suspend fun deleteSubTask(subTask: SubTask)
+
+    /**
+     * Phase 6a：批量重排任务 manualOrder（拖拽结束时一次性提交）。
+     *
+     * - [orderedIds] 的顺序即落库后的 manualOrder 升序
+     * - 整体在一个事务里执行
+     * - 不在列表里的任务 manualOrder 保持不变
+     */
+    suspend fun reorderTasks(orderedIds: List<Long>)
 }

@@ -13,6 +13,7 @@ import com.example.personalassistant.feature.task.domain.model.TaskFilter
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.domain.model.TaskSort
 import com.example.personalassistant.feature.task.domain.model.TaskWithSubTasks
+import com.example.personalassistant.feature.task.domain.model.toComparator
 import com.example.personalassistant.feature.task.domain.repository.TaskRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
@@ -55,7 +56,8 @@ class TaskRepositoryImpl @Inject constructor(
      * - filter 是 "All" / "ByCategory" / "ByQuadrant" 时，从 observeAll 拉全量然后内存过滤
      * - sort 一律在内存层做
      *
-     * 这套策略对 MVP 数据量（百级）足够；Phase 4b 再下沉到 SQL。
+     * Phase 6a：[sort.toComparator()] 已上提到 [TaskSort.kt] 同包顶层（internal），
+     * 同包测试可直接复用，避免双份维护。
      */
     override fun observeTasks(
         filter: TaskFilter,
@@ -128,7 +130,23 @@ class TaskRepositoryImpl @Inject constructor(
         dao.deleteSubTask(subTask.toEntity())
     }
 
-    // ===== filter / sort 辅助 =====
+    /**
+     * Phase 6a：批量重排任务 manualOrder（拖拽结束时一次性提交）。
+     *
+     * - [orderedIds] 的顺序即落库后的 manualOrder 升序
+     * - 整体在一个事务里执行，要么全部成功要么全部回滚
+     * - 不在列表里的任务 manualOrder 保持不变（兜底按 id 升序）
+     */
+    override suspend fun reorderTasks(orderedIds: List<Long>) = withContext(dispatcher) {
+        database.withTransaction {
+            val now = System.currentTimeMillis()
+            orderedIds.forEachIndexed { index, id ->
+                dao.updateManualOrder(id = id, order = index.toLong(), now = now)
+            }
+        }
+    }
+
+    // ===== filter 辅助 =====
 
     /**
      * TaskFilter 的纯函数匹配（已经走过"ActiveOnly/CompletedOnly → 走对应 DAO 流"那一层，
@@ -144,15 +162,6 @@ class TaskRepositoryImpl @Inject constructor(
             com.example.personalassistant.feature.task.domain.usecase
                 .ObserveTasksByQuadrantUseCase.classifyOne(task, todayEnd) == quadrant
         }
-    }
-
-    private fun TaskSort.toComparator(): Comparator<Task> = when (this) {
-        TaskSort.PRIORITY_DUE_ASC -> compareByDescending<Task> { it.priority.rank }
-            .thenBy { it.dueDate ?: Long.MAX_VALUE }
-        TaskSort.DUE_DATE_ASC -> compareBy { it.dueDate ?: Long.MAX_VALUE }
-        TaskSort.DUE_DATE_DESC -> compareByDescending { it.dueDate ?: Long.MIN_VALUE }
-        TaskSort.CREATED_DESC -> compareByDescending { it.createdAt }
-        TaskSort.TITLE_ASC -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
     }
 
     private val TaskPriority.rank: Int get() = when (this) {

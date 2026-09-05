@@ -26,4 +26,14 @@ data class Task(
      * - 当业务层读出 RepeatRule 时，会从 repeatType + repeatDays 还原为 RepeatRule 对象
      */
     val repeatDays: String? = null,
+
+    /**
+     * Phase 6a：用户拖拽手动排序权重。
+     *
+     * - null = 未手动排序，沿用 [TaskSort] 行为
+     * - 非 null = 升序展示（值越小越靠前）
+     *
+     * 与 [TaskEntity.manualOrder] 一一对应；只由 [TaskSort.MANUAL_ORDER] 路径触发落库。
+     */
+    val manualOrder: Long? = null,
 )

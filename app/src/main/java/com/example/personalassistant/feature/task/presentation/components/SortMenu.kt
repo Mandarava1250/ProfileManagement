@@ -37,6 +37,7 @@ fun SortMenu(
         SortOption(TaskSort.DUE_DATE_DESC, "截止日期（晚 → 早）", currentSort, onSortSelected, onDismiss)
         SortOption(TaskSort.CREATED_DESC, "创建时间（新 → 旧）", currentSort, onSortSelected, onDismiss)
         SortOption(TaskSort.TITLE_ASC, "标题（A → Z）", currentSort, onSortSelected, onDismiss)
+        SortOption(TaskSort.MANUAL_ORDER, "自定义顺序（拖拽）", currentSort, onSortSelected, onDismiss)
     }
 }
 

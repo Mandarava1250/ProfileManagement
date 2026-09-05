@@ -59,6 +59,7 @@ class TaskEditViewModelTest {
         override suspend fun toggleSubTaskComplete(id: Long, completed: Boolean) {}
         override suspend fun addStandaloneSubTask(title: String): Long = -1L
         override suspend fun deleteSubTask(subTask: SubTask) {}
+        override suspend fun reorderTasks(orderedIds: List<Long>) {}
     }
 
     private object NoopReminderScheduler : ReminderScheduler {

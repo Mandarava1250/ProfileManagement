@@ -68,5 +68,17 @@ data class TaskEntity(
 
     /** Phase 4b：自定义星期几字符串（逗号分隔 DayOfWeek.name），例如 "MONDAY,WEDNESDAY,FRIDAY"。null = 无自定义 */
     @ColumnInfo(name = "repeatDays")
-    val repeatDays: String? = null
+    val repeatDays: String? = null,
+
+    /**
+     * Phase 6a：用户拖拽手动排序权重。
+     *
+     * - null = 未手动排序，沿用 [TaskSort] 行为（优先级 / 截止日期 / ...）
+     * - 非 null = 升序展示（值越小越靠前）
+     *
+     * 仅当用户在 [TaskSort.MANUAL_ORDER] 视图下拖动过顺序才落库。
+     * 其他排序方式不影响该字段。
+     */
+    @ColumnInfo(name = "manualOrder")
+    val manualOrder: Long? = null,
 )
