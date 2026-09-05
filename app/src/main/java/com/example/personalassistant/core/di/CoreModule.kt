@@ -1,5 +1,6 @@
 package com.example.personalassistant.core.di
 
+import android.app.AlarmManager
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -42,6 +43,17 @@ object CoreModule {
     @Provides
     @MainDispatcher
     fun provideMainDispatcher(): CoroutineDispatcher = Dispatchers.Main.immediate
+
+    // ========== 系统服务 ==========
+
+    /**
+     * Phase 5：AlarmManager 由 Hilt 注入给 AlarmManagerReminderScheduler。
+     * 用 @ApplicationContext 取系统服务，避免内存泄漏。
+     */
+    @Provides
+    @Singleton
+    fun provideAlarmManager(@ApplicationContext context: Context): AlarmManager =
+        context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
     // ========== 数据库 ==========
 

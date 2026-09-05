@@ -3,6 +3,7 @@ package com.example.personalassistant.feature.task.presentation.edit
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.personalassistant.core.notification.NotificationPermissionRequester
 import com.example.personalassistant.feature.task.domain.model.RepeatRule
 import com.example.personalassistant.feature.task.domain.model.RepeatType
 import com.example.personalassistant.feature.task.domain.model.SubTask
@@ -35,22 +36,49 @@ import javax.inject.Inject
  * - save() 成功后调 ScheduleReminderUseCase（按 reminderTime 决定调度）
  * - delete() 成功后调 CancelReminderUseCase
  * - RepeatRule 在 save 时通过 RepeatRule.toRepeatType() 转回 RepeatType enum 写库
+ *
+ * Phase 5b 新增接线（Compose UI 真接通知权限）：
+ * - save() 完成后根据 reminderTime + 权限状态分三路：
+ *     1) reminderTime == null           → 直接 scheduleReminder（内部 no-op）
+ *     2) reminderTime != null + 已授权   → 直接 scheduleReminder
+ *     3) reminderTime != null + 未授权   → 保留 savedTask，置 shouldRequestNotificationPermission=true，等 UI 弹权限框
+ * - UI 端 rememberLauncherForActivityResult 的 onResult → onPermissionResult(granted)
+ *     - granted=true  → scheduleReminder(savedTask)
+ *     - granted=false → 任务照存，errorMessage = 友好提示
+ */
+/**
+ * Phase 5b：通知权限接线层用 open + protected state 暴露，方便测试 fork。
+ *
+ * 生产用 @HiltViewModel 注入。
  */
 @HiltViewModel
-class TaskEditViewModel @Inject constructor(
+open class TaskEditViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val getTaskWithSubTasks: GetTaskWithSubTasksUseCase,
     private val upsertTask: UpsertTaskUseCase,
     private val deleteTask: DeleteTaskUseCase,
     private val scheduleReminder: ScheduleReminderUseCase,
     private val cancelReminder: CancelReminderUseCase,
+    private val notificationPermissionRequester: NotificationPermissionRequester,
 ) : ViewModel() {
 
     private val taskId: Long = savedStateHandle.get<Long>(Screen.EditTask.ARG_TASK_ID) ?: -1L
     private val isNew: Boolean = taskId <= 0L
 
-    private val _uiState = MutableStateFlow(TaskEditUiState(isNew = isNew))
+    /**
+     * Phase 5b: 改 `protected` 让单测 / 仪表测试能 fork VM 子类喂初始 state。
+     * - 生产代码（HiltViewModel）行为不变：UI 仍只通过 [uiState] 读
+     * - Fake 子类在 init { _uiState.value = ... } 直接覆盖
+     */
+    protected val _uiState = MutableStateFlow(TaskEditUiState(isNew = isNew))
     val uiState: StateFlow<TaskEditUiState> = _uiState.asStateFlow()
+
+    /**
+     * Phase 5b：保存成功但 reminder 待权限审批时，暂存要调度的 task。
+     * 权限回调 [onPermissionResult] 时取出来 scheduleReminder。
+     * 用 var 而非 SavedStateHandle —— 权限回调通常在同一 viewModelScope 内发生。
+     */
+    private var pendingReminderTask: Task? = null
 
     init {
         if (isNew) {
@@ -213,14 +241,38 @@ class TaskEditViewModel @Inject constructor(
                     repeatDays = RepeatRule.formatDaysString(customDays),
                 )
                 val newRowId = upsertTask(task, state.subTasks)
-                // 调度提醒（reminderTime 为 null 时 ScheduleReminderUseCase 内部 no-op）
-                // 新建场景下用返回的 rowId 作为 reminder 的 stable id
-                scheduleReminder(task.copy(id = newRowId))
+                val savedTask = task.copy(id = newRowId)
+                // Phase 5b：按 reminder + 权限分三路调度
+                handleReminderAfterSave(savedTask)
                 _uiState.update { it.copy(isSaved = true) }
             } catch (e: IllegalArgumentException) {
                 _uiState.update { it.copy(titleError = e.message ?: "保存失败") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = e.message ?: "保存失败") }
+            }
+        }
+    }
+
+    /**
+     * Phase 5b：保存后调度提醒，按权限状态分三路。
+     *
+     * 1) [Task.reminderTime] == null          → 直接 scheduleReminder（UseCase 内部 no-op）
+     * 2) 已授权                                 → 直接 scheduleReminder
+     * 3) 未授权 + 有 reminderTime               → 暂存 savedTask，等权限回调
+     */
+    private fun handleReminderAfterSave(task: Task) {
+        if (task.reminderTime == null) {
+            viewModelScope.launch { scheduleReminder(task) }
+            return
+        }
+        viewModelScope.launch {
+            if (notificationPermissionRequester.isGranted()) {
+                scheduleReminder(task)
+            } else {
+                pendingReminderTask = task
+                _uiState.update {
+                    it.copy(shouldRequestNotificationPermission = true)
+                }
             }
         }
     }
@@ -241,5 +293,41 @@ class TaskEditViewModel @Inject constructor(
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    // ===== Phase 5b：通知权限申请 =====
+
+    /**
+     * Composable 监听 [TaskEditUiState.shouldRequestNotificationPermission] 时调用后立即清零，
+     * 防止重组过程中重复弹权限框。
+     *
+     * Phase 5b: 改为 open 让 Compose UI 测试可以 override 加计数。
+     */
+    open fun consumeShouldRequestNotificationPermission() {
+        _uiState.update { it.copy(shouldRequestNotificationPermission = false) }
+    }
+
+    /**
+     * UI 端 rememberLauncherForActivityResult 的 onResult 回调。
+     *
+     * - [granted] == true  → 调度刚保存的任务
+     * - [granted] == false → 任务已存；通过 errorMessage 提示「已保存但不会响铃」
+     *
+     * 任务在任何情况下都已经被 [UpsertTaskUseCase] 写入，拒绝权限只影响提醒，不丢数据。
+     *
+     * Phase 5b: 改为 open 让 Compose UI 测试可以 override。
+     */
+    open fun onPermissionResult(granted: Boolean) {
+        consumeShouldRequestNotificationPermission()
+        val task = pendingReminderTask
+        pendingReminderTask = null
+        if (task == null) return
+        if (granted) {
+            viewModelScope.launch { scheduleReminder(task) }
+        } else {
+            _uiState.update {
+                it.copy(errorMessage = "已保存任务，但通知权限未开启，将不会响铃")
+            }
+        }
     }
 }

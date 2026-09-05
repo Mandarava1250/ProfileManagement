@@ -10,10 +10,10 @@ import javax.inject.Inject
  * - [DeleteTaskUseCase] 删除任务时
  * - [UpsertTaskUseCase] 检测 reminderTime 由非空变空时
  */
-class CancelReminderUseCase @Inject constructor(
+open class CancelReminderUseCase @Inject constructor(
     private val scheduler: ReminderScheduler,
 ) {
-    suspend operator fun invoke(taskId: Long) {
+    open suspend operator fun invoke(taskId: Long) {
         scheduler.cancel(taskId)
     }
 }

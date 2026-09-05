@@ -5,9 +5,9 @@ import com.example.personalassistant.feature.task.domain.repository.TaskReposito
 import javax.inject.Inject
 
 /** 获取任务及其子清单（编辑页用）。id 不存在时返回 null。 */
-class GetTaskWithSubTasksUseCase @Inject constructor(
+open class GetTaskWithSubTasksUseCase @Inject constructor(
     private val repository: TaskRepository,
 ) {
-    suspend operator fun invoke(id: Long): TaskWithSubTasks? =
+    open suspend operator fun invoke(id: Long): TaskWithSubTasks? =
         repository.getTaskWithSubTasks(id)
 }

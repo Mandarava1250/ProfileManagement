@@ -51,6 +51,17 @@ data class TaskEditUiState(
 
     val isSaved: Boolean = false,
     val errorMessage: String? = null,
+
+    // ===== Phase 5b 新增 =====
+    /**
+     * 一次性信号：UI 层订阅这个布尔位，触发 [androidx.activity.compose.rememberLauncherForActivityResult] 弹权限框。
+     *
+     * - true：刚保存了带 reminder 的任务且未授权，需要弹申请
+     * - Composable 监听到 true 时调 launcher.launch() 然后立刻 [consumeShouldRequestNotificationPermission] 置 false，
+     *   防止重组重复弹。
+     * - 结果回调走 [TaskEditViewModel.onPermissionResult]。
+     */
+    val shouldRequestNotificationPermission: Boolean = false,
 ) {
     val canSave: Boolean
         get() = !isLoading && title.isNotBlank()
