@@ -91,7 +91,7 @@ class TimetableRepositoryImpl @Inject constructor(
         semesterDao.getByName(name)?.toDomain()
     }
 
-    override suspend fun upsertSemester(semester: Semester) = withContext(ioDispatcher) {
+    override suspend fun upsertSemester(semester: Semester): Unit = withContext(ioDispatcher) {
         semesterDao.insert(semester.toEntity())
     }
 

@@ -20,7 +20,7 @@ import java.util.Locale
 object DateUtils {
 
     /** 默认周起始日（周一=1）*/
-    const val WEEK_START_DAY_OF_WEEK = java.time.DayOfWeek.MONDAY
+    val WEEK_START_DAY_OF_WEEK = java.time.DayOfWeek.MONDAY
 
     private val zoneId: ZoneId get() = ZoneId.systemDefault()
 
@@ -95,10 +95,13 @@ object DateUtils {
     /** 把 "HH:mm" 解析为分钟数（0-1439）*/
     fun parseMinutesOfDay(text: String): Int? = try {
         val parts = text.split(":")
-        if (parts.size != 2) return null
-        val h = parts[0].toInt()
-        val m = parts[1].toInt()
-        if (h !in 0..23 || m !in 0..59) null else h * 60 + m
+        if (parts.size != 2) {
+            null
+        } else {
+            val h = parts[0].toInt()
+            val m = parts[1].toInt()
+            if (h !in 0..23 || m !in 0..59) null else h * 60 + m
+        }
     } catch (e: Exception) {
         null
     }
