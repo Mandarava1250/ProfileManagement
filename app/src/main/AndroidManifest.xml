@@ -75,6 +75,16 @@
             android:enabled="true"
             android:exported="false" />
 
+        <!-- 任务提醒精确闹钟接收器（Phase 5）-->
+        <receiver
+            android:name=".feature.task.data.reminder.TaskReminderReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.personalassistant.action.TASK_REMINDER" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

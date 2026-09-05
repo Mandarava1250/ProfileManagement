@@ -68,6 +68,15 @@ android {
         arg("room.incremental", "true")
     }
 
+    // Phase 5: 让 JVM 单元测试里 android.util.Log 等返回默认值（而不是抛 RuntimeException），
+    // 这样 CompositeReminderScheduler 等调用 Log.i 的代码可以被直接单测覆盖。
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+            isIncludeAndroidResources = false
+        }
+    }
+
     sourceSets {
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }
