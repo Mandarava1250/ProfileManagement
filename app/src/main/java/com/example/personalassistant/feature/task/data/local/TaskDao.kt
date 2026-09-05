@@ -62,6 +62,14 @@ interface TaskDao {
     @Delete
     suspend fun deleteSubTask(subTask: SubTaskEntity)
 
+    @Query("UPDATE sub_tasks SET isCompleted = :completed WHERE id = :id")
+    suspend fun setSubTaskCompleted(id: Long, completed: Boolean)
+
+    /** 观察独立清单项（parentTaskId IS NULL） */
+    @Query("SELECT * FROM sub_tasks WHERE parentTaskId IS NULL ORDER BY `order`, createdAt")
+    fun observeStandaloneSubTasks(): Flow<List<SubTaskEntity>>
+
+    /** 观察任务的所有子清单 */
     @Query("SELECT * FROM sub_tasks WHERE parentTaskId = :parentId ORDER BY `order`, createdAt")
     fun observeSubTasks(parentId: Long): Flow<List<SubTaskEntity>>
 
@@ -70,9 +78,6 @@ interface TaskDao {
 
     @Query("DELETE FROM sub_tasks WHERE parentTaskId = :parentId")
     suspend fun deleteSubTasksByParent(parentId: Long)
-
-    @Query("UPDATE sub_tasks SET isCompleted = :completed WHERE id = :id")
-    suspend fun setSubTaskCompleted(id: Long, completed: Boolean)
 
     // ===== 统计查询 =====
 
@@ -90,10 +95,11 @@ interface TaskDao {
     @Query("SELECT COUNT(*) FROM tasks WHERE isCompleted = 0")
     fun observeActiveCount(): Flow<Int>
 
-    /** 删除任务时同时删除所有子任务（事务保证一致性） */
+    /**
+     * 删除任务。子清单由 FK SET_NULL 自动转为独立项（不删除清单内容）。
+     */
     @Transaction
     suspend fun deleteTaskWithChildren(task: TaskEntity) {
-        deleteSubTasksByParent(task.id)
         delete(task)
     }
 }

@@ -1,0 +1,66 @@
+package com.example.personalassistant.feature.task.domain.repository
+
+import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Task
+import com.example.personalassistant.feature.task.domain.model.TaskFilter
+import com.example.personalassistant.feature.task.domain.model.TaskSort
+import com.example.personalassistant.feature.task.domain.model.TaskWithSubTasks
+import kotlinx.coroutines.flow.Flow
+
+/**
+ * 任务领域仓库接口
+ *
+ * 由 Data 层的 TaskRepositoryImpl 实现。
+ */
+interface TaskRepository {
+
+    // ===== 观察流 =====
+
+    /** 未完成任务（按 priority DESC, dueDate ASC） */
+    fun observeActive(): Flow<List<Task>>
+
+    /** 已完成任务（按 dueDate DESC） */
+    fun observeCompleted(): Flow<List<Task>>
+
+    /** 独立清单项（parentTaskId IS NULL） */
+    fun observeStandaloneChecklist(): Flow<List<SubTask>>
+
+    /**
+     * 通用观察入口 —— 接 [filter] 和 [sort]，返回过滤+排序后的任务流。
+     *
+     * Phase 4a：filter 在内存里应用（适合 MVP 数据量），sort 也走内存 .sortedWith()。
+     * Phase 4b：可下沉到 DAO `@RawQuery`。
+     */
+    fun observeTasks(filter: TaskFilter = TaskFilter.ActiveOnly, sort: TaskSort = TaskSort.DEFAULT): Flow<List<Task>>
+
+    // ===== 单点查询 =====
+
+    /** 获取任务 + 子清单；id 不存在时返回 null */
+    suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks?
+
+    // ===== 写操作 =====
+
+    /**
+     * 写入任务及其子清单。
+     *
+     * - 若 task.id = 0L 视为新增，返回新生成的 rowId
+     * - 若 task.id > 0L 视为更新；同时把 subTasks 列表整体替换为任务下的清单
+     * - 整个操作在一个事务内完成
+     */
+    suspend fun upsertTask(task: Task, subTasks: List<SubTask>): Long
+
+    /** 删除任务。其子清单由 FK SET_NULL 自动转为独立项（不删除清单内容）。 */
+    suspend fun deleteTask(task: Task)
+
+    /** 切换任务完成状态 */
+    suspend fun toggleTaskComplete(id: Long, completed: Boolean)
+
+    /** 切换清单项完成状态 */
+    suspend fun toggleSubTaskComplete(id: Long, completed: Boolean)
+
+    /** 添加独立清单项（parentTaskId = null） */
+    suspend fun addStandaloneSubTask(title: String): Long
+
+    /** 删除清单项 */
+    suspend fun deleteSubTask(subTask: SubTask)
+}
