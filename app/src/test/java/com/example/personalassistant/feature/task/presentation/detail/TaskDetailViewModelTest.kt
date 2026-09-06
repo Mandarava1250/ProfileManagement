@@ -1,16 +1,23 @@
 package com.example.personalassistant.feature.task.presentation.detail
 
 import androidx.lifecycle.SavedStateHandle
+import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Tag
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.domain.model.TaskSort
 import com.example.personalassistant.feature.task.domain.model.TaskWithSubTasks
+import com.example.personalassistant.feature.task.domain.repository.TagRepository
 import com.example.personalassistant.feature.task.domain.repository.TaskRepository
 import com.example.personalassistant.feature.task.domain.usecase.AddSubTaskToTaskUseCase
+import com.example.personalassistant.feature.task.domain.usecase.AddTagToTaskUseCase
+import com.example.personalassistant.feature.task.domain.usecase.CreateTagUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DeleteSubTaskUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveSubTasksUseCase
+import com.example.personalassistant.feature.task.domain.usecase.ObserveTagsForTaskUseCase
+import com.example.personalassistant.feature.task.domain.usecase.RemoveTagFromTaskUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleSubTaskCompleteUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleTaskCompleteUseCase
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +62,9 @@ class TaskDetailViewModelTest {
         override fun observeStandaloneChecklist() = MutableStateFlow<List<SubTask>>(emptyList())
         override fun observeSubTasks(parentId: Long) = subTaskFlow
         override fun observeTasks(filter: TaskFilter, sort: TaskSort) =
+            MutableStateFlow<List<Task>>(emptyList())
+        // Phase 6c：FilterExpression 重载
+        override fun observeTasks(filter: FilterExpression, sort: TaskSort) =
             MutableStateFlow<List<Task>>(emptyList())
 
         override suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks? = null
@@ -127,20 +137,69 @@ class TaskDetailViewModelTest {
         }
     }
 
+    // ===== Phase 6c：Tag 相关 Fake =====
+
+    private class FakeTagRepository : TagRepository {
+        override fun observeAllTags() = MutableStateFlow<List<Tag>>(emptyList())
+        override fun observeAllTagsWithCount() = MutableStateFlow<List<Tag>>(emptyList())
+        override fun observeTagsForTask(taskId: Long) = MutableStateFlow<List<Tag>>(emptyList())
+        override suspend fun createTag(displayName: String, colorHex: Long): Tag = Tag(
+            id = 1L, nameNormalized = displayName.lowercase(),
+            displayName = displayName, colorHex = colorHex,
+        )
+        override suspend fun deleteTag(id: Long) {}
+        override suspend fun addTagToTask(taskId: Long, tagId: Long) {}
+        override suspend fun removeTagFromTask(taskId: Long, tagId: Long) {}
+    }
+
+    private fun makeFakeObserveTagsForTask() =
+        ObserveTagsForTaskUseCase(FakeTagRepository())
+
+    private class FakeCreateTagUseCase : CreateTagUseCase(repository = FakeTagRepository()) {
+        override suspend operator fun invoke(displayName: String, colorHex: Long): Tag = Tag(
+            id = 1L, nameNormalized = displayName.lowercase(),
+            displayName = displayName, colorHex = colorHex,
+        )
+    }
+
+    private class FakeAddTagToTaskUseCase : AddTagToTaskUseCase(repository = FakeTagRepository()) {
+        var calls: Int = 0; private set
+        var lastTaskId: Long = -1L; private set
+        var lastTagId: Long = -1L; private set
+        override suspend operator fun invoke(taskId: Long, tagId: Long) {
+            calls++; lastTaskId = taskId; lastTagId = tagId
+        }
+    }
+
+    private class FakeRemoveTagFromTaskUseCase : RemoveTagFromTaskUseCase(repository = FakeTagRepository()) {
+        var calls: Int = 0; private set
+        var lastTaskId: Long = -1L; private set
+        var lastTagId: Long = -1L; private set
+        override suspend operator fun invoke(taskId: Long, tagId: Long) {
+            calls++; lastTaskId = taskId; lastTagId = tagId
+        }
+    }
+
     @Before fun setUp() { Dispatchers.setMain(testDispatcher) }
     @After fun tearDown() { Dispatchers.resetMain() }
 
     private fun makeVm(taskId: Long = 100L): Pair<TaskDetailViewModel, FakeAddSubTaskToTaskUseCase> {
         val repo = FakeTaskRepository()
         val addSubTaskToTask = FakeAddSubTaskToTaskUseCase(repo)
+        val tagRepo = FakeTagRepository()
         val vm = TaskDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf(TaskDetailViewModel.ARG_TASK_ID to taskId)),
             observeSubTasks = FakeObserveSubTasksUseCase(repo),
+            observeTagsForTask = makeFakeObserveTagsForTask(),
+            tagRepository = tagRepo,
             repository = repo,
             toggleTaskComplete = FakeToggleTaskCompleteUseCase(repo),
             toggleSubTaskCompleteUseCase = FakeToggleSubTaskCompleteUseCase(repo),
             deleteSubTaskUseCase = FakeDeleteSubTaskUseCase(repo),
             addSubTaskToTaskUseCase = addSubTaskToTask,
+            createTagUseCase = FakeCreateTagUseCase(),
+            addTagToTaskUseCase = FakeAddTagToTaskUseCase(),
+            removeTagFromTaskUseCase = FakeRemoveTagFromTaskUseCase(),
         )
         return vm to addSubTaskToTask
     }
@@ -188,11 +247,16 @@ class TaskDetailViewModelTest {
         val vm = TaskDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf(TaskDetailViewModel.ARG_TASK_ID to 1L)),
             observeSubTasks = FakeObserveSubTasksUseCase(repo),
+            observeTagsForTask = makeFakeObserveTagsForTask(),
+            tagRepository = FakeTagRepository(),
             repository = repo,
             toggleTaskComplete = FakeToggleTaskCompleteUseCase(repo),
             toggleSubTaskCompleteUseCase = toggleSubTask,
             deleteSubTaskUseCase = FakeDeleteSubTaskUseCase(repo),
             addSubTaskToTaskUseCase = FakeAddSubTaskToTaskUseCase(repo),
+            createTagUseCase = FakeCreateTagUseCase(),
+            addTagToTaskUseCase = FakeAddTagToTaskUseCase(),
+            removeTagFromTaskUseCase = FakeRemoveTagFromTaskUseCase(),
         )
 
         vm.toggleSubTaskComplete(99L, true)
@@ -210,11 +274,16 @@ class TaskDetailViewModelTest {
         val vm = TaskDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf(TaskDetailViewModel.ARG_TASK_ID to 1L)),
             observeSubTasks = FakeObserveSubTasksUseCase(repo),
+            observeTagsForTask = makeFakeObserveTagsForTask(),
+            tagRepository = FakeTagRepository(),
             repository = repo,
             toggleTaskComplete = FakeToggleTaskCompleteUseCase(repo),
             toggleSubTaskCompleteUseCase = FakeToggleSubTaskCompleteUseCase(repo),
             deleteSubTaskUseCase = deleteSubTask,
             addSubTaskToTaskUseCase = FakeAddSubTaskToTaskUseCase(repo),
+            createTagUseCase = FakeCreateTagUseCase(),
+            addTagToTaskUseCase = FakeAddTagToTaskUseCase(),
+            removeTagFromTaskUseCase = FakeRemoveTagFromTaskUseCase(),
         )
         val subTask = SubTask(id = 7L, parentTaskId = 1L, title = "test")
 

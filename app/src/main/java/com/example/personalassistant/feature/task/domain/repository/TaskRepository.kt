@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.task.domain.repository
 
+import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
@@ -42,16 +43,32 @@ interface TaskRepository {
     fun observeSubTasks(parentId: Long): Flow<List<SubTask>>
 
     /**
-     * 通用观察入口 —— 接 [filter] 和 [sort]，返回过滤+排序后的任务流。
+     * 旧路径：通用观察入口 —— 接 [TaskFilter] 和 [TaskSort]，返回过滤+排序后的任务流。
      *
      * Phase 4a：filter 在内存里应用（适合 MVP 数据量），sort 也走内存 .sortedWith()。
      * Phase 4b：可下沉到 DAO `@RawQuery`。
+     *
+     * Phase 6c：内部委托给 [observeTasks(filter: FilterExpression, sort)]（通过
+     * [TaskFilter.toExpression] 转译），保持 API 向后兼容。
      */
     fun observeTasks(filter: TaskFilter = TaskFilter.ActiveOnly, sort: TaskSort = TaskSort.DEFAULT): Flow<List<Task>>
 
+    /**
+     * Phase 6c 新增路径：通用观察入口 —— 接 [FilterExpression] 和 [TaskSort]。
+     *
+     * 支持：
+     * - 旧 case（All / ByCategory / ByQuadrant / ActiveOnly / CompletedOnly）行为不变
+     * - 新增 [FilterExpression.ByTag] 单 tag 筛选
+     * - 复合 [FilterExpression.And] / [FilterExpression.Or] / [FilterExpression.Not] 树组合
+     *
+     * 列表页（TasksTab）新代码路径会走这里；旧 UI 代码（仍用 TaskFilter）的路径
+     * 内部通过 [TaskFilter.toExpression] 委托到此方法，避免重复逻辑。
+     */
+    fun observeTasks(filter: FilterExpression, sort: TaskSort = TaskSort.DEFAULT): Flow<List<Task>>
+
     // ===== 单点查询 =====
 
-    /** 获取任务 + 子清单；id 不存在时返回 null */
+    /** 获取任务与子清单；id 不存在时返回 null */
     suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks?
 
     // ===== 写操作 =====

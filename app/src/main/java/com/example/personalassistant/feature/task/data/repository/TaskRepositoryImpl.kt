@@ -5,8 +5,11 @@ import com.example.personalassistant.core.database.AppDatabase
 import com.example.personalassistant.core.di.IoDispatcher
 import com.example.personalassistant.feature.task.data.local.SubTaskEntity
 import com.example.personalassistant.feature.task.data.local.TaskDao
+import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
+import com.example.personalassistant.feature.task.data.local.TaskTagDao
 import com.example.personalassistant.feature.task.data.mapper.toDomain
 import com.example.personalassistant.feature.task.data.mapper.toEntity
+import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
@@ -14,9 +17,13 @@ import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.domain.model.TaskSort
 import com.example.personalassistant.feature.task.domain.model.TaskWithSubTasks
 import com.example.personalassistant.feature.task.domain.model.toComparator
+import com.example.personalassistant.feature.task.domain.model.toExpression
+import com.example.personalassistant.feature.task.domain.model.matches
 import com.example.personalassistant.feature.task.domain.repository.TaskRepository
+import com.example.personalassistant.feature.task.domain.usecase.ObserveTasksByQuadrantUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -28,11 +35,17 @@ import javax.inject.Singleton
  * - 所有 IO 通过 [dispatcher]（IoDispatcher）执行
  * - upsertTask 走 withTransaction 保证原子性
  * - 子清单按 FK SET_NULL 行为：删除任务时子清单自动转为独立项
- * - filter / sort 在内存层应用（Phase 4a）；未来可下沉到 DAO @RawQuery
+ * - filter / sort 在内存层应用（Phase 4a）；未来可下沉到 DAO `@RawQuery`
+ *
+ * Phase 6c：
+ * - 新增 [observeTasks] 的 [FilterExpression] 重载，支持 [FilterExpression.ByTag] + And/Or/Not 组合
+ * - 旧 [observeTasks] ([TaskFilter], sort) 入口委托给新路径（通过 [TaskFilter.toExpression]）
+ * - tag 筛选走内存过滤：从 [TaskTagDao.observeAllTaskTagPairs] 拉所有关联，构 tagId→taskIds 索引
  */
 @Singleton
 class TaskRepositoryImpl @Inject constructor(
     private val dao: TaskDao,
+    private val taskTagDao: TaskTagDao,
     private val database: AppDatabase,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : TaskRepository {
@@ -61,29 +74,45 @@ class TaskRepositoryImpl @Inject constructor(
         dao.observeSubTasks(parentId).map { list -> list.map { it.toDomain() } }
 
     /**
-     * 通用观察入口：filter + sort。
+     * 旧路径：接 [TaskFilter] 的入口（向后兼容）。
      *
-     * Phase 4a 简化策略：
-     * - filter 是 "ActiveOnly" / "CompletedOnly" 时直接走对应的 DAO 索引流（性能更好）
-     * - filter 是 "All" / "ByCategory" / "ByQuadrant" 时，从 observeAll 拉全量然后内存过滤
-     * - sort 一律在内存层做
-     *
-     * Phase 6a：[sort.toComparator()] 已上提到 [TaskSort.kt] 同包顶层（internal），
-     * 同包测试可直接复用，避免双份维护。
+     * 内部直接委托给 [observeTasks] ([FilterExpression], sort) 重载。
      */
     override fun observeTasks(
         filter: TaskFilter,
         sort: TaskSort,
+    ): Flow<List<Task>> = observeTasks(filter.toExpression(), sort)
+
+    /**
+     * 新路径：接 [FilterExpression] 的入口。
+     *
+     * 实现要点：
+     * 1. 决定源流：filter 不含 ByTag 时走 [TaskDao.observeAll]（拿全量任务，内存层 filter）
+     *    - Phase 4a 优化策略：若 filter 是 ActiveOnly / CompletedOnly，走对应索引流
+     * 2. 内存层评估 [FilterExpression] 树（递归 matches）
+     * 3. sort 一律内存层做
+     *
+     * Phase 6c：ByTag 路径需要 [TaskTagDao.observeAllTaskTagPairs] 提供的关联索引，
+     * 通过 [combine] 拉到内存里建 tagId → Set<taskId> 映射。
+     */
+    override fun observeTasks(
+        filter: FilterExpression,
+        sort: TaskSort,
     ): Flow<List<Task>> {
+        val todayEnd = ObserveTasksByQuadrantUseCase.todayEndMillis()
+        // 含 ByTag 时拉关联表，构索引
         val sourceFlow: Flow<List<Task>> = when (filter) {
-            TaskFilter.ActiveOnly -> dao.observeActive().map { it.map { e -> e.toDomain() } }
-            TaskFilter.CompletedOnly -> dao.observeCompleted().map { it.map { e -> e.toDomain() } }
+            FilterExpression.ActiveOnly -> dao.observeActive().map { it.map { e -> e.toDomain() } }
+            FilterExpression.CompletedOnly -> dao.observeCompleted().map { it.map { e -> e.toDomain() } }
             else -> dao.observeAll().map { it.map { e -> e.toDomain() } }
         }
-        return sourceFlow.map { tasks ->
-            tasks
-                .asSequence()
-                .filter { task -> filter.matches(task) }
+        return combine(sourceFlow, taskTagDao.observeAllTaskTagPairs()) { tasks, pairs ->
+            val tagIndex: Map<Long, Set<Long>> = pairs.groupBy(
+                keySelector = { it.tagId },
+                valueTransform = { it.taskId }
+            ).mapValues { it.value.toSet() }
+            tasks.asSequence()
+                .filter { task -> filter.matches(task, todayEnd, tagIndex) }
                 .toList()
                 .sortedWith(sort.toComparator())
         }
@@ -116,6 +145,7 @@ class TaskRepositoryImpl @Inject constructor(
     override suspend fun deleteTask(task: Task) = withContext(dispatcher) {
         dao.delete(task.toEntity())
         // 子清单由 FK SET_NULL 自动转为独立项（设计意图：不删清单内容）
+        // 任务↔标签关联由 FK CASCADE 自动清掉
     }
 
     override suspend fun toggleTaskComplete(id: Long, completed: Boolean) =
@@ -177,26 +207,7 @@ class TaskRepositoryImpl @Inject constructor(
     }
 
     // ===== filter 辅助 =====
-
-    /**
-     * TaskFilter 的纯函数匹配（已经走过"ActiveOnly/CompletedOnly → 走对应 DAO 流"那一层，
-     * 这里主要处理 "All / ByCategory / ByQuadrant"）。
-     */
-    private fun TaskFilter.matches(task: Task): Boolean = when (this) {
-        TaskFilter.All, TaskFilter.ActiveOnly, TaskFilter.CompletedOnly -> true
-        is TaskFilter.ByCategory -> task.category.equals(categoryName, ignoreCase = true)
-        is TaskFilter.ByQuadrant -> {
-            // 委托给 ObserveTasksByQuadrantUseCase.classifyOne（已有公开 companion 方法）
-            val todayEnd = com.example.personalassistant.feature.task.domain.usecase
-                .ObserveTasksByQuadrantUseCase.todayEndMillis()
-            com.example.personalassistant.feature.task.domain.usecase
-                .ObserveTasksByQuadrantUseCase.classifyOne(task, todayEnd) == quadrant
-        }
-    }
-
-    private val TaskPriority.rank: Int get() = when (this) {
-        TaskPriority.HIGH -> 2
-        TaskPriority.MEDIUM -> 1
-        TaskPriority.LOW -> 0
-    }
+    // Phase 6c：[FilterExpression] 的评估函数（matches / 等））
+    // 已上提到 domain/model/FilterExpression.kt（internal 扩展函数），
+    // 这里仅保留类型 import，复用同一份实现以保持 Repository 与测试用同一份逻辑。
 }

@@ -11,8 +11,12 @@ import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
 import com.example.personalassistant.feature.task.data.local.SubTaskEntity
+import com.example.personalassistant.feature.task.data.local.TagDao
+import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskDao
 import com.example.personalassistant.feature.task.data.local.TaskEntity
+import com.example.personalassistant.feature.task.data.local.TaskTagDao
+import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseDao
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
@@ -21,16 +25,18 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 /**
  * App 主数据库
  *
- * 9 张表：
+ * 11 张表：
  * 1. courses          - 课程
  * 2. semesters        - 学期
  * 3. tasks            - 任务
  * 4. sub_tasks        - 子任务
- * 5. events           - 日历事件
- * 6. transactions     - 记账流水
- * 7. categories       - 记账分类
- * 8. monthly_budgets  - 月度预算
- * 9. daily_pools      - 每日零钱池
+ * 5. tags             - 标签（Phase 6c 新增）
+ * 6. task_tag_cross_ref - 任务↔标签关联（Phase 6c 新增）
+ * 7. events           - 日历事件
+ * 8. transactions     - 记账流水
+ * 9. categories       - 记账分类
+ * 10. monthly_budgets  - 月度预算
+ * 11. daily_pools      - 每日零钱池
  *
  * ⚠️ schema 变更必须按以下流程：
  *   1. 修改对应 Entity
@@ -46,6 +52,8 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
         // 任务
         TaskEntity::class,
         SubTaskEntity::class,
+        TagEntity::class,
+        TaskTagCrossRef::class,
         // 日历
         EventEntity::class,
         // 记账
@@ -54,13 +62,15 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
         MonthlyBudgetEntity::class,
         DailyPoolEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao
     abstract fun semesterDao(): SemesterDao
     abstract fun taskDao(): TaskDao
+    abstract fun tagDao(): TagDao
+    abstract fun taskTagDao(): TaskTagDao
     abstract fun eventDao(): EventDao
     abstract fun financeDao(): FinanceDao
 
@@ -78,6 +88,7 @@ abstract class AppDatabase : RoomDatabase() {
                 Migration_1_2,
                 Migration_2_3,
                 Migration_3_4,
+                Migration_4_5,
             )
     }
 }

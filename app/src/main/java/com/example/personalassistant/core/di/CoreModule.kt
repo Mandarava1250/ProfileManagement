@@ -10,7 +10,9 @@ import androidx.room.Room
 import com.example.personalassistant.core.database.AppDatabase
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
+import com.example.personalassistant.feature.task.data.local.TagDao
 import com.example.personalassistant.feature.task.data.local.TaskDao
+import com.example.personalassistant.feature.task.data.local.TaskTagDao
 import com.example.personalassistant.feature.timetable.data.local.CourseDao
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
 import dagger.Module
@@ -76,6 +78,12 @@ object CoreModule {
 
     @Provides
     fun provideTaskDao(db: AppDatabase): TaskDao = db.taskDao()
+
+    @Provides
+    fun provideTagDao(db: AppDatabase): TagDao = db.tagDao()
+
+    @Provides
+    fun provideTaskTagDao(db: AppDatabase): TaskTagDao = db.taskTagDao()
 
     @Provides
     fun provideEventDao(db: AppDatabase): EventDao = db.eventDao()
