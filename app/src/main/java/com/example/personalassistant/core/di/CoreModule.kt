@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import com.example.personalassistant.core.database.AppDatabase
+import com.example.personalassistant.core.database.DatabaseCallback
+import com.example.personalassistant.core.database.DatabaseCallbackHolder
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.task.data.local.TagDao
@@ -61,14 +63,27 @@ object CoreModule {
 
     @Provides
     @Singleton
-    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(
+    fun provideAppDatabase(
+        @ApplicationContext context: Context,
+        holder: DatabaseCallbackHolder,
+    ): AppDatabase {
+        // 1. 拿 callback（Hilt @Singleton 注入的是同一个实例）
+        val callback = holder.callback
+
+        // 2. 构建 db，绑定 callback
+        val db = Room.databaseBuilder(
             context,
             AppDatabase::class.java,
             AppDatabase.DATABASE_NAME
         )
             .addMigrations(*AppDatabase.ALL_MIGRATIONS)
+            .addCallback(callback)
             .build()
+
+        // 3. db 建好之后回填给 callback，让 callback.onCreate 能访问 dao
+        callback.attachDatabase(db)
+        return db
+    }
 
     @Provides
     fun provideCourseDao(db: AppDatabase): CourseDao = db.courseDao()

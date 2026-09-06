@@ -15,20 +15,19 @@ import javax.inject.Inject
 /**
  * 开机广播接收器：BOOT_COMPLETED / MY_PACKAGE_REPLACED 时触发
  *
- * Phase 5 实现：
- * - 清空旧提醒（cancelAll）
+ * Phase 5 行为：
+ * - 清空旧任务提醒（cancelAll）
  * - 由 [com.example.personalassistant.feature.task.data.repository.TaskRepositoryImpl] 的观察流
  *   在应用首次进入 UI 时自动 reschedule，无需在此枚举任务（避免 BroadcastReceiver 内做重 IO）
  *
- * 设计动机：
- * - BR 生命周期只有 10 秒，做重 IO 会被杀
- * - Compose UI 启动后会自动观察 task 流 + 重新调度（应用启动 path）
- * - 这里只清旧提醒防止「重启后弹出陈旧通知」
+ * Phase 7a 增量：
+ * - 调度下一日的 [DailyPoolRefreshWorker]（WorkManager 被国产 ROM 杀掉后，重启时需重设）
  */
 @AndroidEntryPoint
 class BootReceiver : BroadcastReceiver() {
 
     @Inject lateinit var reminderScheduler: ReminderScheduler
+    @Inject lateinit var dailyPoolScheduler: DailyPoolRefreshScheduler
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -36,13 +35,14 @@ class BootReceiver : BroadcastReceiver() {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
-                Log.i(TAG, "Device booted / app replaced, clearing stale reminders...")
+                Log.i(TAG, "Device booted / app replaced, clearing stale reminders & rescheduling...")
                 val pendingResult = goAsync()
                 scope.launch {
                     try {
                         reminderScheduler.cancelAll()
+                        dailyPoolScheduler.scheduleNext()
                     } catch (e: Exception) {
-                        Log.w(TAG, "cancelAll on boot failed: ${e.message}")
+                        Log.w(TAG, "BootReceiver action failed: ${e.message}")
                     } finally {
                         pendingResult.finish()
                     }
