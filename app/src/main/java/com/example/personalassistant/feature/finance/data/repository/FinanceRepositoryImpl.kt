@@ -82,6 +82,28 @@ class FinanceRepositoryImpl @Inject constructor(
         financeDao.deleteTransactionAndRollbackPool(tx, poolDate)
     }
 
+    override suspend fun updateTransaction(
+        id: Long,
+        type: TransactionType,
+        amount: Double,
+        categoryId: Long,
+        note: String?,
+        date: Long,
+    ): Unit = withContext(dispatcher) {
+        // 1. 取旧 tx；不存在 → no-op
+        val oldTx = financeDao.getTransactionById(id) ?: return@withContext
+        // 2. 构造新 tx（保留 createdAt / source / attachmentUri，便于审计）
+        val newTx = oldTx.copy(
+            amount = amount,
+            type = type.storageValue,
+            categoryId = categoryId,
+            date = date,
+            note = note,
+        )
+        // 3. 走 DAO 事务方法：退旧 pool + 应用新 pool
+        financeDao.transactionalUpdateTransaction(oldTx, newTx)
+    }
+
     override fun observeAllTransactions(): Flow<List<Transaction>> =
         financeDao.observeAllTransactions().map { list -> list.map { it.toDomain() } }
 
@@ -95,6 +117,9 @@ class FinanceRepositoryImpl @Inject constructor(
     ): Flow<List<Transaction>> =
         financeDao.observeByTypeBetween(type.storageValue, start, end)
             .map { list -> list.map { it.toDomain() } }
+
+    override fun searchTransactions(keyword: String): Flow<List<Transaction>> =
+        financeDao.searchTransactions(keyword).map { list -> list.map { it.toDomain() } }
 
     // ===================== 分类 =====================
 

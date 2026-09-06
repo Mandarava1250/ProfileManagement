@@ -16,7 +16,13 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Phase 7a：月度预算 Sheet 的 ViewModel
+ * Phase 7b：月度预算 Sheet 的 ViewModel
+ *
+ * 7a → 7b 增量：
+ * - UiState 新增 warningThresholdText 字段（用户输入用字符串，保留原始格式）
+ * - loadFromPersisted 同步加载持久化的 warningThreshold
+ * - save() 透传给 SetMonthlyBudgetUseCase
+ * - DailyPoolCard 据此判断三档颜色（绿/橙/红）
  */
 @HiltViewModel
 class BudgetViewModel @Inject constructor(
@@ -44,6 +50,7 @@ class BudgetViewModel @Inject constructor(
                 totalAmountText = budget.totalAmount.toString().trimEnd('0').trimEnd('.'),
                 isAutoRefresh = budget.isAutoRefresh,
                 carryOverEnabled = budget.carryOverEnabled,
+                warningThresholdText = formatThreshold(budget.warningThreshold),
             )
         } else {
             UiState.empty()
@@ -62,9 +69,15 @@ class BudgetViewModel @Inject constructor(
         _editing.value = _editing.value.copy(carryOverEnabled = value)
     }
 
+    /** 7b：用户输入警告阈值（剩余金额低于此值时变色提示） */
+    fun setWarningThreshold(text: String) {
+        _editing.value = _editing.value.copy(warningThresholdText = text)
+    }
+
     fun save(onDone: () -> Unit) {
         val s = _editing.value
         val amount = s.totalAmountText.toDoubleOrNull() ?: return
+        val threshold = s.warningThresholdText.toDoubleOrNull() ?: 0.0
         viewModelScope.launch {
             runCatching {
                 setMonthlyBudget(
@@ -72,6 +85,7 @@ class BudgetViewModel @Inject constructor(
                     totalAmount = amount,
                     isAutoRefresh = s.isAutoRefresh,
                     carryOverEnabled = s.carryOverEnabled,
+                    warningThreshold = threshold,
                 )
             }.onSuccess { onDone() }
         }
@@ -81,12 +95,14 @@ class BudgetViewModel @Inject constructor(
         val totalAmountText: String,
         val isAutoRefresh: Boolean,
         val carryOverEnabled: Boolean,
+        val warningThresholdText: String = "",
     ) {
         companion object {
             fun empty() = UiState(
                 totalAmountText = "",
                 isAutoRefresh = true,
                 carryOverEnabled = true,
+                warningThresholdText = "",
             )
         }
 
@@ -96,3 +112,7 @@ class BudgetViewModel @Inject constructor(
         }
     }
 }
+
+/** 持久化时若 threshold = 0，输入框显示空字符串（避免显示"0.00"） */
+private fun formatThreshold(value: Double): String =
+    if (value <= 0.0) "" else value.toString().trimEnd('0').trimEnd('.')

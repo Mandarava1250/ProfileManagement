@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -49,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.domain.model.TransactionType
+import com.example.personalassistant.feature.finance.presentation.components.IconPickerSheet
 import com.example.personalassistant.feature.finance.presentation.util.IconRegistry
 import kotlinx.coroutines.launch
 
@@ -70,6 +72,8 @@ fun CategoryManagementScreen(
     val scope = rememberCoroutineScope()
     var showAddDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Category?>(null) }
+    // 7b：图标编辑态（null = 关闭；非 null = 当前编辑的分类）
+    var iconEditingFor by remember { mutableStateOf<Category?>(null) }
 
     LaunchedEffect(feedback) {
         feedback?.let {
@@ -117,6 +121,7 @@ fun CategoryManagementScreen(
                     CategoryRow(
                         category = cat,
                         onDelete = { pendingDelete = cat },
+                        onEditIcon = { iconEditingFor = cat },
                     )
                 }
             }
@@ -149,10 +154,22 @@ fun CategoryManagementScreen(
             },
         )
     }
+
+    // 7b：图标编辑 Sheet
+    iconEditingFor?.let { cat ->
+        IconPickerSheet(
+            selectedIconName = cat.iconName,
+            onPick = { newName ->
+                viewModel.setIcon(cat, newName)
+                iconEditingFor = null
+            },
+            onDismiss = { iconEditingFor = null },
+        )
+    }
 }
 
 @Composable
-private fun CategoryRow(category: Category, onDelete: () -> Unit) {
+private fun CategoryRow(category: Category, onDelete: () -> Unit, onEditIcon: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -183,6 +200,10 @@ private fun CategoryRow(category: Category, onDelete: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             )
+        }
+        // 7b：编辑图标按钮（所有分类都可改 icon，不再受 isDefault 限制）
+        IconButton(onClick = onEditIcon) {
+            Icon(Icons.Filled.Edit, contentDescription = "更换图标")
         }
         if (!category.isDefault) {
             IconButton(onClick = onDelete) {

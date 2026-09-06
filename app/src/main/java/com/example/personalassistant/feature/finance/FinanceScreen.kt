@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -21,13 +23,21 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,18 +53,20 @@ import com.example.personalassistant.feature.finance.presentation.add.AddTransac
 import com.example.personalassistant.feature.finance.presentation.budget.BudgetSheet
 import com.example.personalassistant.feature.finance.presentation.category.CategoryManagementScreen
 import com.example.personalassistant.feature.finance.presentation.components.DailyPoolCard
+import com.example.personalassistant.feature.finance.presentation.components.MonthlyReportCard
+import com.example.personalassistant.feature.finance.presentation.components.SearchBar
 import com.example.personalassistant.feature.finance.presentation.components.TransactionRow
 import com.example.personalassistant.feature.finance.presentation.util.FinanceDateUtils
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
+import com.example.personalassistant.feature.finance.domain.model.Transaction
+import kotlinx.coroutines.launch
 
 /**
- * Phase 7a：Finance 主页
+ * Phase 7b：Finance 主页
  *
- * 顶层入口：TopBar + 滚动列表 + FAB
- * - 顶部 DailyPoolCard
- * - 中部：按日分组的流水列表
- * - FAB → AddTransactionSheet
- * - TopBar 菜单：预算 / 分类管理
+ * 7a → 7b 增量：
+ * - 点击 TransactionRow → 打开编辑 Sheet（AddTransactionSheet 复用，editing=tx）
+ * - DailyPoolCard 接收 warningThreshold，三档颜色（绿/橙/红）
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -63,9 +75,25 @@ fun FinanceScreen(
     viewModel: FinanceViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showAddSheet by remember { mutableStateOf(false) }
+    val searchKeyword by viewModel.searchKeyword.collectAsStateWithLifecycle()
+    val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    var showSheet by remember { mutableStateOf(false) }
+    var editingTx by remember { mutableStateOf<Transaction?>(null) }
     var showBudgetSheet by remember { mutableStateOf(false) }
     var showCategoryScreen by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    // 7b：feedback → Snackbar
+    LaunchedEffect(feedback) {
+        feedback?.let {
+            scope.launch {
+                snackbarHostState.showSnackbar(it)
+                viewModel.clearFeedback()
+            }
+        }
+    }
 
     // 分类管理页是独立全屏
     if (showCategoryScreen) {
@@ -78,6 +106,12 @@ fun FinanceScreen(
             TopAppBar(
                 title = { Text("记账") },
                 actions = {
+                    IconButton(onClick = { showImportDialog = true }) {
+                        Icon(Icons.Filled.FileUpload, contentDescription = "导入 CSV")
+                    }
+                    IconButton(onClick = { viewModel.exportTransactions() }) {
+                        Icon(Icons.Filled.FileDownload, contentDescription = "导出 CSV")
+                    }
                     IconButton(onClick = { showBudgetSheet = true }) {
                         Icon(Icons.Filled.Settings, contentDescription = "预算设置")
                     }
@@ -88,29 +122,91 @@ fun FinanceScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddSheet = true }) {
+            FloatingActionButton(onClick = {
+                editingTx = null
+                showSheet = true
+            }) {
                 Icon(Icons.Filled.Add, contentDescription = "记一笔")
             }
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) { data -> Snackbar(snackbarData = data) } },
     ) { padding ->
         FinanceContent(
             uiState = uiState,
             contentPadding = padding,
+            onTransactionClick = { tx ->
+                editingTx = tx
+                showSheet = true
+            },
+            onSearchKeywordChange = viewModel::setSearchKeyword,
+            searchKeyword = searchKeyword,
         )
     }
 
-    if (showAddSheet) {
-        AddTransactionSheet(onDismiss = { showAddSheet = false })
+    if (showSheet) {
+        AddTransactionSheet(
+            onDismiss = {
+                showSheet = false
+                editingTx = null
+            },
+            editing = editingTx,
+        )
     }
     if (showBudgetSheet) {
         BudgetSheet(onDismiss = { showBudgetSheet = false })
     }
+
+    // 7b：导入 CSV Dialog（粘贴文本）
+    if (showImportDialog) {
+        ImportCsvDialog(
+            onDismiss = { showImportDialog = false },
+            onConfirm = { csvText ->
+                viewModel.importTransactions(csvText)
+                showImportDialog = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun ImportCsvDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("导入 CSV") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("CSV 内容") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                maxLines = 10,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(text) },
+                enabled = text.isNotBlank(),
+            ) { Text("导入") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
 }
 
 @Composable
 private fun FinanceContent(
     uiState: FinanceUiState,
     contentPadding: PaddingValues,
+    onTransactionClick: (Transaction) -> Unit,
+    onSearchKeywordChange: (String) -> Unit,
+    searchKeyword: String,
 ) {
     if (uiState.isLoading) {
         Box(
@@ -131,26 +227,56 @@ private fun FinanceContent(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // 顶部：零钱池卡片
+        // 7b：搜索条（注入关键字 + 监听变更）
+        item {
+            SearchBar(
+                keyword = searchKeyword,
+                onValueChange = onSearchKeywordChange,
+            )
+        }
+
+        // 顶部：零钱池卡片（7b 增量：传入 warningThreshold）
         item {
             DailyPoolCard(
                 pool = uiState.dailyPool,
                 monthBudget = uiState.monthBudget?.totalAmount,
                 monthExpense = uiState.monthExpense,
+                warningThreshold = uiState.monthBudget?.warningThreshold ?: 0.0,
                 modifier = Modifier.padding(vertical = 8.dp),
             )
         }
 
+        // 7b：月度报表卡片（支出 / 收入 / 结余 / Top 5 / 折线）
+        item {
+            MonthlyReportCard(
+                report = uiState.monthReport,
+                categoryById = uiState.categoryById,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+        }
+
         // 流水列表
-        if (uiState.transactionsByDay.isEmpty()) {
+        if (uiState.transactions.isEmpty()) {
             item {
-                EmptyTransactionsPlaceholder()
+                if (searchKeyword.isNotBlank()) {
+                    Text(
+                        text = "没有匹配「${searchKeyword}」的流水",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 32.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    )
+                } else {
+                    EmptyTransactionsPlaceholder()
+                }
             }
         } else {
             items(uiState.transactionsByDay, key = { it.dayMillis }) { day ->
                 DaySection(
                     day = day,
                     categoryById = uiState.categoryById,
+                    onTransactionClick = onTransactionClick,
                 )
             }
         }
@@ -161,6 +287,7 @@ private fun FinanceContent(
 private fun DaySection(
     day: DayGroup,
     categoryById: Map<Long, com.example.personalassistant.feature.finance.domain.model.Category>,
+    onTransactionClick: (Transaction) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -201,6 +328,7 @@ private fun DaySection(
             TransactionRow(
                 transaction = tx,
                 category = categoryById[tx.categoryId],
+                onClick = { onTransactionClick(tx) },
             )
             HorizontalDivider(
                 modifier = Modifier.padding(start = 68.dp),

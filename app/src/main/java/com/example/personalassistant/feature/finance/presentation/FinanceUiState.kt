@@ -22,6 +22,7 @@ data class FinanceUiState(
     val categories: List<Category> = emptyList(),
     val transactions: List<Transaction> = emptyList(),
     val monthReport: MonthlyReport? = null,
+    // 注：searchKeyword 7b 从独立的 StateFlow 注入（Kotlin Flow.combine 限 5 个 flow）
 ) {
     /** 按 categoryId 查分类 */
     val categoryById: Map<Long, Category> by lazy {

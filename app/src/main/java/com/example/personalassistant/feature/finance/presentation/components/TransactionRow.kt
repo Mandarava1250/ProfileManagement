@@ -1,13 +1,12 @@
 package com.example.personalassistant.feature.finance.presentation.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,10 +26,13 @@ import com.example.personalassistant.feature.finance.presentation.util.IconRegis
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
 
 /**
- * Phase 7a：交易行（一行展示一条流水）
+ * Phase 7b：交易行（一行展示一条流水）
+ *
+ * 7a → 7b 增量：
+ * - 整行可点击（onClick 回调）→ 编辑流水入口
  *
  * - 左侧：分类彩色圆形 + icon
- * - 中间：分类名 + 备注（或"无备注"）
+ * - 中间：分类名 + 备注（或"无备注"）+ source（手动 / 自动，7b 增量）
  * - 右侧：金额（支出负红色 / 收入正绿色） + 时间
  */
 @Composable
@@ -38,6 +40,7 @@ fun TransactionRow(
     transaction: Transaction,
     category: Category?,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     val categoryName = category?.name ?: "未知分类"
     val categoryColor = category?.color?.let { Color(it) } ?: Color(0xFF9E9E9E)
@@ -46,6 +49,7 @@ fun TransactionRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -64,7 +68,7 @@ fun TransactionRow(
             )
         }
 
-        // 中间：分类名 + 备注
+        // 中间：分类名 + 备注 + source
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -74,8 +78,10 @@ fun TransactionRow(
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
             )
+            val noteOrEmpty = transaction.note?.takeIf { it.isNotBlank() } ?: "无备注"
+            val sourceLabel = " · ${transaction.source}"
             Text(
-                text = transaction.note?.takeIf { it.isNotBlank() } ?: "无备注",
+                text = noteOrEmpty + sourceLabel,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             )

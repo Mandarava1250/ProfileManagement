@@ -65,6 +65,15 @@ fun BudgetSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            OutlinedTextField(
+                value = editing.warningThresholdText,
+                onValueChange = viewModel::setWarningThreshold,
+                label = { Text("警告阈值（剩余低于此值时变橙）") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,

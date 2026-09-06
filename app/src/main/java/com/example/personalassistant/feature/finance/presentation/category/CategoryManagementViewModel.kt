@@ -77,4 +77,17 @@ class CategoryManagementViewModel @Inject constructor(
                 }
         }
     }
+
+    /**
+     * 7b：更改分类图标（仅替换 iconName，其它字段保持原值）。
+     * 通过 UpsertCategoryUseCase 走 upsertCategory。
+     */
+    fun setIcon(category: Category, iconName: String) {
+        viewModelScope.launch {
+            runCatching {
+                upsertCategory(category.copy(iconName = iconName))
+            }.onSuccess { _feedback.value = "已更新图标：${category.name}" }
+                .onFailure { _feedback.value = "更新图标失败：${it.message ?: "未知错误"}" }
+        }
+    }
 }

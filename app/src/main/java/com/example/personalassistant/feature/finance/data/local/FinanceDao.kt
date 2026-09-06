@@ -263,6 +263,43 @@ interface FinanceDao {
             }
         }
     }
+
+    /**
+     * 原子编辑一笔流水：删旧 + 同步回滚旧 pool；插新 + 应用新 pool。
+     * 全程同一 Room 事务，失败回滚（说明书 6.7）。
+     *
+     * 任何编辑都走"退旧+重插"路径，便于：
+     * - 类型/金额/日期/分类变更都按相同语义处理
+     * - 实现简单，无需判断"是否真变化"
+     *
+     * 注意：调用方负责传入同 id 的 newTx（id 与 oldTx 保持一致，便于审计追溯）。
+     */
+    @Transaction
+    suspend fun transactionalUpdateTransaction(
+        oldTx: TransactionEntity,
+        newTx: TransactionEntity,
+        now: Long = System.currentTimeMillis()
+    ) {
+        // 1. 删除旧 tx 并回滚旧 pool（事务内）
+        deleteTransactionAndRollbackPool(oldTx, startOfDayMillis(oldTx.date), now)
+        // 2. 插入新 tx 并应用新 pool（事务内）
+        val newPoolDate = startOfDayMillis(newTx.date)
+        when (newTx.type) {
+            0 -> recordExpense(newTx, newPoolDate, newTx.amount, now)
+            1 -> recordIncome(newTx, newPoolDate, newTx.amount, now)
+        }
+    }
+
+    /** 把任意毫秒时间戳归到当天 00:00（与 RepositoryImpl 内实现对齐） */
+    private fun startOfDayMillis(epochMillis: Long): Long {
+        val zone = java.time.ZoneId.systemDefault()
+        return java.time.Instant.ofEpochMilli(epochMillis)
+            .atZone(zone)
+            .toLocalDate()
+            .atStartOfDay(zone)
+            .toInstant()
+            .toEpochMilli()
+    }
 }
 
 /** 按日汇总 */

@@ -69,6 +69,30 @@ class FakeFinanceRepository : FinanceRepository {
         transactionsState.value = transactionsState.value.filter { it.id != id }
     }
 
+    /**
+     * 7b 新增：编辑流水。
+     * 模拟 RepositoryImpl：找出旧 tx，用新字段替换（id 不变）。
+     * 不模拟 pool 同步（Fake 不承担算法测试）。
+     */
+    override suspend fun updateTransaction(
+        id: Long,
+        type: TransactionType,
+        amount: Double,
+        categoryId: Long,
+        note: String?,
+        date: Long,
+    ) {
+        transactionsState.value = transactionsState.value.map {
+            if (it.id == id) it.copy(
+                amount = amount,
+                type = type,
+                categoryId = categoryId,
+                note = note,
+                date = date,
+            ) else it
+        }
+    }
+
     override fun observeAllTransactions(): Flow<List<Transaction>> = transactionsState
 
     override fun observeTransactionsBetween(start: Long, end: Long): Flow<List<Transaction>> =
@@ -81,6 +105,15 @@ class FakeFinanceRepository : FinanceRepository {
     ): Flow<List<Transaction>> = transactionsState.map { list ->
         list.filter { it.type == type && it.date in start until end }
     }
+
+    /** 7b 新增：按关键字搜索（Fake 在内存里做简单子串匹配，不依赖分类名——7a 分类未落库） */
+    override fun searchTransactions(keyword: String): Flow<List<Transaction>> =
+        transactionsState.map { list ->
+            if (keyword.isBlank()) list
+            else list.filter { tx ->
+                tx.note?.contains(keyword, ignoreCase = true) == true
+            }
+        }
 
     // ===== Categories =====
 
@@ -206,5 +239,31 @@ class FakeFinanceRepository : FinanceRepository {
             .atStartOfDay(zone)
             .toInstant()
             .toEpochMilli()
+    }
+
+    // ===== 测试辅助 helpers（7b 加） =====
+
+    /** 快速建一个支出分类，返回 id */
+    suspend fun seedExpenseCategory(name: String): Long {
+        val id = nextCategoryId++
+        categoriesState.value = categoriesState.value + Category(
+            id = id,
+            name = name,
+            type = TransactionType.EXPENSE,
+            iconName = "Restaurant",
+            color = 0xFFE91E63.toInt(),
+        )
+        return id
+    }
+
+    /** 快速建一笔交易（走 Repository 接口等价路径），返回 id */
+    suspend fun seedTransaction(
+        type: TransactionType,
+        amount: Double,
+        categoryId: Long,
+        note: String?,
+        date: Long,
+    ): Long {
+        return addTransaction(type, amount, categoryId, note, date)
     }
 }

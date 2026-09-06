@@ -47,6 +47,22 @@ interface FinanceRepository {
      */
     suspend fun deleteTransaction(id: Long)
 
+    /**
+     * 编辑流水（原子：退旧 pool + 应用新 pool，同事务）。
+     *
+     * 涟宝解读：任何编辑都走"退旧 + 插新"路径，DAO 内部保证原子性。
+     * - id 不存在时静默 no-op
+     * - source / attachmentUri / createdAt 保留原值
+     */
+    suspend fun updateTransaction(
+        id: Long,
+        type: TransactionType,
+        amount: Double,
+        categoryId: Long,
+        note: String?,
+        date: Long,
+    )
+
     /** 全部流水，按 date DESC, createdAt DESC */
     fun observeAllTransactions(): Flow<List<Transaction>>
 
@@ -59,6 +75,15 @@ interface FinanceRepository {
         start: Long,
         end: Long,
     ): Flow<List<Transaction>>
+
+    /**
+     * 关键字搜索流水（7b 新增）。
+     * 匹配范围：备注 + 分类名（DAO 已实现 `OR note LIKE / category.name LIKE`）。
+     *
+     * - 关键字为空 / 空白时返回全部流水（语义同 [observeAllTransactions]）
+     * - 区分大小写（SQLite 默认 NOCASE collation 不在所有设备上保证，先按大小写敏感实现）
+     */
+    fun searchTransactions(keyword: String): Flow<List<Transaction>>
 
     // ===== 分类 =====
 

@@ -8,6 +8,7 @@ import com.example.personalassistant.feature.finance.domain.model.TransactionTyp
 import com.example.personalassistant.feature.finance.domain.usecase.AddTransactionUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.DeleteTransactionUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveCategoriesUseCase
+import com.example.personalassistant.feature.finance.domain.usecase.UpdateTransactionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,9 +23,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Phase 7a：新增/编辑流水 Sheet 的 ViewModel
+ * Phase 7b：新增/编辑流水 Sheet 的 ViewModel
  *
  * - 复用 AddTransactionSheet 做新增和编辑（editingTransaction != null 时为编辑模式）
+ * - 编辑模式 save() 走 [UpdateTransactionUseCase]，保证旧 pool 回滚 + 新 pool 应用同事务
  * - 编辑模式可"删除"（DeleteTransactionUseCase）
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -32,6 +34,7 @@ import javax.inject.Inject
 class AddTransactionViewModel @Inject constructor(
     observeCategories: ObserveCategoriesUseCase,
     private val addTransaction: AddTransactionUseCase,
+    private val updateTransaction: UpdateTransactionUseCase,
     private val deleteTransaction: DeleteTransactionUseCase,
 ) : ViewModel() {
 
@@ -80,13 +83,27 @@ class AddTransactionViewModel @Inject constructor(
         if (s.amount <= 0.0) return
         viewModelScope.launch {
             runCatching {
-                addTransaction(
-                    type = s.type,
-                    amount = s.amount,
-                    categoryId = catId,
-                    note = s.note.takeIf { it.isNotBlank() },
-                    date = s.date,
-                )
+                val editing = s.editingTransaction
+                if (editing != null) {
+                    // 编辑模式：走 update（事务：退旧 pool + 应用新 pool）
+                    updateTransaction(
+                        id = editing.id,
+                        type = s.type,
+                        amount = s.amount,
+                        categoryId = catId,
+                        note = s.note.takeIf { it.isNotBlank() },
+                        date = s.date,
+                    )
+                } else {
+                    // 新增模式：走 add（事务：写入 tx + 应用 pool）
+                    addTransaction(
+                        type = s.type,
+                        amount = s.amount,
+                        categoryId = catId,
+                        note = s.note.takeIf { it.isNotBlank() },
+                        date = s.date,
+                    )
+                }
             }.onSuccess {
                 reset()
                 onDone()
@@ -130,6 +147,9 @@ class AddTransactionViewModel @Inject constructor(
         val date: Long = System.currentTimeMillis(),
         val editingTransaction: Transaction? = null,
     ) {
+        /** 编辑模式 = editingTransaction != null */
+        val isEditing: Boolean get() = editingTransaction != null
+
         val canSave: Boolean get() = amount > 0.0 && categoryId != null
     }
 }

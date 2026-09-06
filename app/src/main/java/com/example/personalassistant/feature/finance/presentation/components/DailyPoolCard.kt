@@ -1,8 +1,6 @@
 package com.example.personalassistant.feature.finance.presentation.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,7 +12,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -23,18 +20,22 @@ import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
 
 /**
- * Phase 7a：当日零钱池卡片（顶部常驻）
+ * Phase 7b：当日零钱池卡片（顶部常驻）
  *
  * - 大字号显示当日剩余
  * - 副标题显示动态提示（本月已用 / 总额）
  * - 当 remainingAmount < 0 时显示红色高亮
+ * - 当 remainingAmount < warningThreshold 时显示橙色（7b 增量）
  * - 当 dailyBudget == 0 且 remainingAmount == 0 时显示"未设置预算"占位
+ *
+ * @param warningThreshold 警告阈值（剩余金额低于此值时显示橙色）。0 表示禁用。
  */
 @Composable
 fun DailyPoolCard(
     pool: DailyPool?,
     monthBudget: Double?,
     monthExpense: Double?,
+    warningThreshold: Double = 0.0,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -55,11 +56,11 @@ fun DailyPoolCard(
             )
 
             val remaining = pool?.remainingAmount ?: 0.0
-            val isOverBudget = remaining < 0
             val amountColor = when {
                 pool == null -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
-                isOverBudget -> Color(0xFFD32F2F) // 红
-                else -> MaterialTheme.colorScheme.onPrimaryContainer
+                remaining < 0 -> Color(0xFFD32F2F) // 红：超支
+                warningThreshold > 0.0 && remaining < warningThreshold -> Color(0xFFF57C00) // 橙：警告
+                else -> MaterialTheme.colorScheme.onPrimaryContainer // 默认
             }
             Text(
                 text = if (pool == null) "未设置预算" else MoneyFormat.format(remaining),
