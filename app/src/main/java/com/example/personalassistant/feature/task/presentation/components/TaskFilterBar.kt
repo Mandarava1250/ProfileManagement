@@ -20,9 +20,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.TaskCategory
-import com.example.personalassistant.feature.task.domain.model.TaskFilter
-import com.example.personalassistant.feature.task.domain.model.TaskSort
 
 /**
  * 任务列表顶部 FilterBar
@@ -30,18 +29,20 @@ import com.example.personalassistant.feature.task.domain.model.TaskSort
  * - 左侧：横向滚动的 FilterChip —— "全部" + 4 个分类
  * - 右侧：排序图标按钮（点击弹出 [SortMenu]）
  *
- * 当前筛选通过 [TaskFilter.equals] 判断（All / ByCategory(name) / ...）。
+ * 当前筛选通过 [FilterExpression.equals] 判断。
  *
  * Phase 4b 设计取舍：分类列表固定为 [TaskCategory.PRESETS]。
+ * Phase 6c：[onFilterChange] 改用 [FilterExpression] 类型（同时支持标签筛选的复合）。
+ *
  * 未来用户自定义分类接入后，传 `categories` 参数替换。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskFilterBar(
-    currentFilter: TaskFilter,
-    currentSort: TaskSort,
+    currentFilter: FilterExpression,
+    currentSort: com.example.personalassistant.feature.task.domain.model.TaskSort,
     categories: List<TaskCategory> = TaskCategory.PRESETS,
-    onFilterChange: (TaskFilter) -> Unit,
+    onFilterChange: (FilterExpression) -> Unit,
     onSortClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -62,19 +63,19 @@ fun TaskFilterBar(
         ) {
             // 「全部」
             FilterChip(
-                selected = currentFilter is TaskFilter.All,
-                onClick = { onFilterChange(TaskFilter.All) },
+                selected = currentFilter is FilterExpression.All,
+                onClick = { onFilterChange(FilterExpression.All) },
                 label = { Text("全部") },
             )
 
             // 分类 chips
             categories.forEach { category ->
-                val selected = currentFilter is TaskFilter.ByCategory &&
+                val selected = currentFilter is FilterExpression.ByCategory &&
                     currentFilter.categoryName == category.name
                 FilterChip(
                     selected = selected,
                     onClick = {
-                        onFilterChange(TaskFilter.ByCategory(category.name))
+                        onFilterChange(FilterExpression.ByCategory(category.name))
                     },
                     label = { Text(category.name) },
                 )
@@ -88,7 +89,7 @@ fun TaskFilterBar(
             Icon(
                 imageVector = Icons.Default.Sort,
                 contentDescription = "排序",
-                tint = if (currentSort != TaskSort.DEFAULT)
+                tint = if (currentSort != com.example.personalassistant.feature.task.domain.model.TaskSort.DEFAULT)
                     MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.onSurfaceVariant,
             )

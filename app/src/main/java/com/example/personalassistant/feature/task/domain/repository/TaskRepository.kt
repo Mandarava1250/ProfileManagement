@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.task.domain.repository
 
+import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
@@ -22,20 +23,52 @@ interface TaskRepository {
     /** 已完成任务（按 dueDate DESC） */
     fun observeCompleted(): Flow<List<Task>>
 
+    /**
+     * Phase 6b：观察单个任务（详情页用，id 不存在时 emit null）
+     *
+     * - 任务被删除时 emit null，UI 监听触发 popBackStack
+     * - 任务被更新（标题/优先级/截止/...）时自动刷新 UI
+     */
+    fun observeTaskById(id: Long): Flow<Task?>
+
     /** 独立清单项（parentTaskId IS NULL） */
     fun observeStandaloneChecklist(): Flow<List<SubTask>>
 
     /**
-     * 通用观察入口 —— 接 [filter] 和 [sort]，返回过滤+排序后的任务流。
+     * Phase 6b：观察某个任务下的子清单（parentTaskId = taskId）
+     *
+     * - 用于详情页子任务 section 实时刷新
+     * - 排序：`order` ASC, `createdAt` ASC（与 DAO 查询一致）
+     */
+    fun observeSubTasks(parentId: Long): Flow<List<SubTask>>
+
+    /**
+     * 旧路径：通用观察入口 —— 接 [TaskFilter] 和 [TaskSort]，返回过滤+排序后的任务流。
      *
      * Phase 4a：filter 在内存里应用（适合 MVP 数据量），sort 也走内存 .sortedWith()。
      * Phase 4b：可下沉到 DAO `@RawQuery`。
+     *
+     * Phase 6c：内部委托给 [observeTasks(filter: FilterExpression, sort)]（通过
+     * [TaskFilter.toExpression] 转译），保持 API 向后兼容。
      */
     fun observeTasks(filter: TaskFilter = TaskFilter.ActiveOnly, sort: TaskSort = TaskSort.DEFAULT): Flow<List<Task>>
 
+    /**
+     * Phase 6c 新增路径：通用观察入口 —— 接 [FilterExpression] 和 [TaskSort]。
+     *
+     * 支持：
+     * - 旧 case（All / ByCategory / ByQuadrant / ActiveOnly / CompletedOnly）行为不变
+     * - 新增 [FilterExpression.ByTag] 单 tag 筛选
+     * - 复合 [FilterExpression.And] / [FilterExpression.Or] / [FilterExpression.Not] 树组合
+     *
+     * 列表页（TasksTab）新代码路径会走这里；旧 UI 代码（仍用 TaskFilter）的路径
+     * 内部通过 [TaskFilter.toExpression] 委托到此方法，避免重复逻辑。
+     */
+    fun observeTasks(filter: FilterExpression, sort: TaskSort = TaskSort.DEFAULT): Flow<List<Task>>
+
     // ===== 单点查询 =====
 
-    /** 获取任务 + 子清单；id 不存在时返回 null */
+    /** 获取任务与子清单；id 不存在时返回 null */
     suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks?
 
     // ===== 写操作 =====
@@ -60,6 +93,15 @@ interface TaskRepository {
 
     /** 添加独立清单项（parentTaskId = null） */
     suspend fun addStandaloneSubTask(title: String): Long
+
+    /**
+     * Phase 6b：在指定任务下新增一个子清单项（parentTaskId = parentId）
+     *
+     * - 自动追加到当前最大 `order` + 1，避免显示错乱
+     * - 空白标题由 UseCase 层拦截校验
+     * - parentId 对应的 task 不存在时由 FK 报错（应不会发生，由 ViewModel 在 init 阶段保证）
+     */
+    suspend fun addSubTaskToTask(parentId: Long, title: String): Long
 
     /** 删除清单项 */
     suspend fun deleteSubTask(subTask: SubTask)

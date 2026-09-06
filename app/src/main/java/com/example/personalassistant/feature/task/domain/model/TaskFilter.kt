@@ -7,7 +7,13 @@ package com.example.personalassistant.feature.task.domain.model
  *
  * Phase 4a 设计取舍：
  * - [ByCategory] 用 String（category 名）而不是 Long id —— 因为 [Task.category] 本身就是 String?，
- *   现有 DB schema（v2）已落库 category 文本。Phase 5 若要 category 表外键，再升级到 Long id。
+ *   现有 DB schema（v2）已落库 category 文本。Phase 5 若要 Category 表外键，再升级到 Long id。
+ *
+ * Phase 6c 演化（双轨制）：
+ * - 旧 [TaskFilter] 不删，继续作为「TaskFilterBar / 老 ViewModel」的入参类型
+ * - 新代码统一用 [FilterExpression]（支持 [FilterExpression.ByTag] + 复合 case）
+ * - [toExpression] 提供单向转译，把旧 case 转成新 case
+ * - 这样保留了所有现有调用方（Tests / VM / UseCase）零修改
  */
 sealed class TaskFilter {
     /** 不过滤 */
@@ -24,4 +30,20 @@ sealed class TaskFilter {
 
     /** 仅已完成 */
     object CompletedOnly : TaskFilter()
+}
+
+/**
+ * Phase 6c：把 [TaskFilter] 转译成 [FilterExpression]（一对一映射）。
+ *
+ * 用于 Repository 旧入口的内部委托：
+ * `observeTasks(filter: TaskFilter, sort)` -> `observeTasks(filter.toExpression(), sort)`
+ *
+ * 所有 case 都有一一对应：[All]->[All]、[ActiveOnly]->[ActiveOnly] 等等。
+ */
+internal fun TaskFilter.toExpression(): FilterExpression = when (this) {
+    TaskFilter.All -> FilterExpression.All
+    is TaskFilter.ByCategory -> FilterExpression.ByCategory(categoryName)
+    is TaskFilter.ByQuadrant -> FilterExpression.ByQuadrant(quadrant)
+    TaskFilter.ActiveOnly -> FilterExpression.ActiveOnly
+    TaskFilter.CompletedOnly -> FilterExpression.CompletedOnly
 }
