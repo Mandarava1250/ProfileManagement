@@ -1,6 +1,5 @@
 package com.example.personalassistant.feature.calendar
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,27 +14,41 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.example.personalassistant.core.utils.DateUtils
+import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
 import com.example.personalassistant.feature.calendar.presentation.CalendarViewModel
+import com.example.personalassistant.feature.calendar.presentation.components.DayCalendarView
+import com.example.personalassistant.feature.calendar.presentation.components.DayDetailSheet
 import com.example.personalassistant.feature.calendar.presentation.components.MonthCalendarGrid
+import com.example.personalassistant.feature.calendar.presentation.components.WeekCalendarView
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
- * Phase 7c：日历主页（重写原占位实现）
+ * Phase 7c Sub-step 4：日历主页（三视图切换 + DayDetailSheet）
  *
- * - 顶部 TopAppBar：左/右月份切换 + 中间 yyyy 年 M 月 + "回到今天"按钮
- * - 中间：6×7 月视图（MonthCalendarGrid）
- * - 底部：DayDetailSheet（Sub-step 4 实现）
+ * 涟宝解读：
+ * - 顶部 TopAppBar：左/右按 viewType 切换单位（MONTH=月 / WEEK=周 / DAY=日） + 中间标题 + "回到今天"
+ * - 中间：SingleChoiceSegmentedButtonRow（月/周/日切换）
+ * - 主区：根据 viewType 渲染 MonthCalendarGrid / WeekCalendarView / DayCalendarView
+ * - 底部：用户点击日期 → 弹出 DayDetailSheet（仅 MONTH/WEEK 视图触发）
  *
- * @param navController 保留参数供 Sub-step 4/5 导航使用（暂时 unused）
+ * @param navController 保留参数供 Phase 8 导航使用（暂时 unused）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,26 +57,26 @@ fun CalendarScreen(
     viewModel: CalendarViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val viewType by viewModel.viewType.collectAsStateWithLifecycle()
     val selectedDate by viewModel.selectedDate.collectAsStateWithLifecycle()
+    val selectedDayDetail by viewModel.selectedDayDetail.collectAsStateWithLifecycle()
+    val weekCells by viewModel.weekCells.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = uiState.yearMonthDisplay) },
+                title = { Text(text = headerTitle(viewType, uiState.yearMonth, selectedDate)) },
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.goToPrevMonth() }) {
-                        Icon(Icons.Filled.ChevronLeft, contentDescription = "上个月")
+                    IconButton(onClick = { viewModel.goToPrevious() }) {
+                        Icon(prevIcon(viewType), contentDescription = "上一个")
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = { viewModel.goToToday() },
-                        enabled = !uiState.isShowingCurrentMonth,
-                    ) {
+                    IconButton(onClick = { viewModel.goToCurrent() }) {
                         Icon(Icons.Filled.Today, contentDescription = "回到今天")
                     }
-                    IconButton(onClick = { viewModel.goToNextMonth() }) {
-                        Icon(Icons.Filled.ChevronRight, contentDescription = "下个月")
+                    IconButton(onClick = { viewModel.goToNext() }) {
+                        Icon(nextIcon(viewType), contentDescription = "下一个")
                     }
                 },
             )
@@ -73,30 +86,134 @@ fun CalendarScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            MonthCalendarGrid(
-                cells = uiState.monthCells,
-                selectedDate = selectedDate,
-                onDateClick = viewModel::onDateClick,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            // 视图切换 SegmentedButton
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                CalendarViewType.entries.forEachIndexed { index, type ->
+                    SegmentedButton(
+                        selected = viewType == type,
+                        onClick = { viewModel.setViewType(type) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = CalendarViewType.entries.size,
+                        ),
+                    ) {
+                        Text(text = type.label)
+                    }
+                }
+            }
 
-            // DayDetailSheet 占位（Sub-step 4 实装）
-            if (selectedDate != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "Sub-step 4 将在这里展示 DayDetailSheet",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // 主视图
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (viewType) {
+                    CalendarViewType.MONTH -> MonthCalendarGrid(
+                        cells = uiState.monthCells,
+                        selectedDate = selectedDate,
+                        onDateClick = viewModel::onDateClick,
+                        modifier = Modifier.fillMaxWidth(),
                     )
+                    CalendarViewType.WEEK -> WeekCalendarView(
+                        cells = weekCells,
+                        selectedDate = selectedDate,
+                        onDateClick = viewModel::onDateClick,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    CalendarViewType.DAY -> {
+                        val anchor = selectedDate
+                        if (anchor != null) {
+                            // 复用 selectedDayDetail（已经是 selectedDate 派生）
+                            DayCalendarView(
+                                date = anchor,
+                                dayDetail = selectedDayDetail,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            EmptyViewPlaceholder(text = "请回到今天")
+                        }
+                    }
                 }
             }
         }
+
+        // BottomSheet：MONTH/WEEK 视图点击日期时弹出
+        if (selectedDate != null && viewType != CalendarViewType.DAY) {
+            DayDetailSheet(
+                date = selectedDate!!,
+                dayDetail = selectedDayDetail,
+                onDismiss = { viewModel.dismissDayDetail() },
+            )
+        }
     }
 }
+
+/** 顶部标题：MONTH=月份；WEEK=周首末日期；DAY=具体日期 */
+private fun headerTitle(
+    viewType: CalendarViewType,
+    yearMonth: String,
+    selectedDate: Long?,
+): String = when (viewType) {
+    CalendarViewType.MONTH -> {
+        val parts = yearMonth.split("-")
+        if (parts.size == 2) "${parts[0]} 年 ${parts[1].toInt()} 月" else yearMonth
+    }
+    CalendarViewType.WEEK -> {
+        if (selectedDate == null) "本周"
+        else weekRangeLabel(selectedDate)
+    }
+    CalendarViewType.DAY -> {
+        if (selectedDate == null) "今日"
+        else DateUtils.formatChineseDate(selectedDate)
+    }
+}
+
+private fun weekRangeLabel(date: Long): String {
+    val zone = ZoneId.systemDefault()
+    val (weekStart, weekEndExclusive) = CalendarViewModel.computeWeekRange(date)
+    val start = Instant.ofEpochMilli(weekStart).atZone(zone).toLocalDate()
+    val end = Instant.ofEpochMilli(weekEndExclusive - 1).atZone(zone).toLocalDate()
+    val sMonth = start.monthValue
+    val eMonth = end.monthValue
+    return if (sMonth == eMonth) {
+        "${sMonth}月${start.dayOfMonth}日 - ${end.dayOfMonth}日"
+    } else {
+        "${sMonth}月${start.dayOfMonth}日 - ${eMonth}月${end.dayOfMonth}日"
+    }
+}
+
+private fun prevIcon(viewType: CalendarViewType) = when (viewType) {
+    CalendarViewType.MONTH -> Icons.Filled.ChevronLeft
+    CalendarViewType.WEEK -> Icons.Filled.ChevronLeft
+    CalendarViewType.DAY -> Icons.Filled.ChevronLeft
+}
+
+private fun nextIcon(viewType: CalendarViewType) = when (viewType) {
+    CalendarViewType.MONTH -> Icons.Filled.ChevronRight
+    CalendarViewType.WEEK -> Icons.Filled.ChevronRight
+    CalendarViewType.DAY -> Icons.Filled.ChevronRight
+}
+
+@Composable
+private fun EmptyViewPlaceholder(text: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** CalendarViewType 的中文标签，UI 用 */
+private val CalendarViewType.label: String
+    get() = when (this) {
+        CalendarViewType.MONTH -> "月"
+        CalendarViewType.WEEK -> "周"
+        CalendarViewType.DAY -> "日"
+    }

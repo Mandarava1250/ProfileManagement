@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -91,6 +92,28 @@ class CalendarViewModel @Inject constructor(
                 initialValue = null,
             )
 
+    /**
+     * 周视图 7 个 cell（基于当前选中日期所在的周）
+     *
+     * - 选中日期变化 → flatMapLatest 重新订阅 ObserveMonthSummaryUseCase(weekStart, weekEnd+1, today)
+     * - 输出 List<CalendarDayCell> 共 7 个（周一~周日），用于周视图组件
+     *
+     * Sub-step 4：周视图组件（WeekCalendarView）订阅这个流
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val weekCells: StateFlow<List<CalendarDayCell>> = _selectedDate
+        .filterNotNull()
+        .flatMapLatest { date ->
+            val (weekStart, weekEndExclusive) = computeWeekRange(date)
+            observeMonthSummary(weekStart, weekEndExclusive, today)
+                .map { summary -> generateWeekCells(date, summary, today) }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
     fun goToPrevMonth() {
         _currentYearMonth.value = shiftMonth(_currentYearMonth.value, -1)
     }
@@ -113,6 +136,48 @@ class CalendarViewModel @Inject constructor(
 
     fun setViewType(type: CalendarViewType) {
         _viewType.value = type
+        // 切换到周/日视图时，把 selectedDate 设为今天（首次进入视图的位置）
+        if (_selectedDate.value == null) {
+            _selectedDate.value = today
+        }
+    }
+
+    /**
+     * Sub-step 4：通用「上一个」按钮
+     * - MONTH：上个月
+     * - WEEK：上一周
+     * - DAY：上一天
+     */
+    fun goToPrevious() {
+        when (_viewType.value) {
+            CalendarViewType.MONTH -> _currentYearMonth.value = shiftMonth(_currentYearMonth.value, -1)
+            CalendarViewType.WEEK -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, -7) } ?: today
+            CalendarViewType.DAY -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, -1) } ?: today
+        }
+    }
+
+    /**
+     * Sub-step 4：通用「下一个」按钮
+     * - MONTH：下个月
+     * - WEEK：下一周
+     * - DAY：下一天
+     */
+    fun goToNext() {
+        when (_viewType.value) {
+            CalendarViewType.MONTH -> _currentYearMonth.value = shiftMonth(_currentYearMonth.value, 1)
+            CalendarViewType.WEEK -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, 7) } ?: today
+            CalendarViewType.DAY -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, 1) } ?: today
+        }
+    }
+
+    /**
+     * Sub-step 4：通用「回到今天」按钮
+     * - MONTH：跳回当前月
+     * - WEEK/DAY：把选中日期设为今天
+     */
+    fun goToCurrent() {
+        _currentYearMonth.value = DateUtils.currentYearMonth()
+        _selectedDate.value = today
     }
 
     // ===== 内部 =====
@@ -181,6 +246,66 @@ class CalendarViewModel @Inject constructor(
             val (year, month) = DateUtils.parseYearMonth(yearMonth)
             val newYm = java.time.YearMonth.of(year, month).plusMonths(deltaMonths.toLong())
             return String.format("%04d-%02d", newYm.year, newYm.monthValue)
+        }
+
+        /**
+         * Sub-step 4：把指定日期加/减 deltaDays 天，返回新的当天 00:00 时间戳。
+         *
+         * 用于周/日视图的「上/下一周」「上/下一天」导航。
+         */
+        internal fun shiftDay(date: Long, deltaDays: Int): Long {
+            val zone = java.time.ZoneId.systemDefault()
+            val localDate = java.time.Instant.ofEpochMilli(date).atZone(zone).toLocalDate()
+            return localDate.plusDays(deltaDays.toLong()).atStartOfDay(zone).toInstant().toEpochMilli()
+        }
+
+        /**
+         * Sub-step 4：计算 date 所在周的 [weekStart, weekEndExclusive)
+         * - weekStart：本周一 00:00 时间戳
+         * - weekEndExclusive：下周一 00:00 时间戳（不包含）
+         *
+         * 周起始日遵循 [DateUtils.WEEK_START_DAY_OF_WEEK] = 周一
+         */
+        internal fun computeWeekRange(date: Long): Pair<Long, Long> {
+            val zone = java.time.ZoneId.systemDefault()
+            val localDate = java.time.Instant.ofEpochMilli(date).atZone(zone).toLocalDate()
+            // dayOfWeek: 1=周一, 7=周日（ISO）
+            val dow = localDate.dayOfWeek.value
+            val weekStart = localDate.minusDays((dow - 1).toLong())
+                .atStartOfDay(zone).toInstant().toEpochMilli()
+            val weekEndExclusive = localDate.plusDays((7 - dow).toLong())
+                .plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            return weekStart to weekEndExclusive
+        }
+
+        /**
+         * Sub-step 4：根据 [anchorDate] 所在周生成 7 个 [CalendarDayCell]
+         *
+         * - 顺序：周一 → 周日
+         * - isCurrentMonth：周视图不分上下月，全设为 true（避免 UI 误判）
+         * - 取 [summary] 里的当日计数作为徽章数据
+         */
+        internal fun generateWeekCells(
+            anchorDate: Long,
+            summary: MonthSummary,
+            today: Long,
+        ): List<CalendarDayCell> {
+            val (weekStart, _) = computeWeekRange(anchorDate)
+            val zone = java.time.ZoneId.systemDefault()
+            val start = java.time.Instant.ofEpochMilli(weekStart).atZone(zone).toLocalDate()
+            return (0 until 7).map { i ->
+                val date = start.plusDays(i.toLong())
+                val dateMillis = date.atStartOfDay(zone).toInstant().toEpochMilli()
+                val daySummary = summary[dateMillis]
+                CalendarDayCell(
+                    date = dateMillis,
+                    isCurrentMonth = true,
+                    isToday = dateMillis == today,
+                    eventCount = daySummary?.eventCount ?: 0,
+                    taskCount = daySummary?.taskCount ?: 0,
+                    courseCount = daySummary?.courseCount ?: 0,
+                )
+            }
         }
     }
 }
