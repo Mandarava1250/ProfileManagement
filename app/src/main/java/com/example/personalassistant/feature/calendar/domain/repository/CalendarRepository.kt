@@ -1,6 +1,8 @@
 package com.example.personalassistant.feature.calendar.domain.repository
 
+import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -87,4 +89,28 @@ interface CalendarRepository {
      * 清理某日期之前的所有事件（维护用，例如清理过期事件）。
      */
     suspend fun deleteEventsBefore(date: Long)
+
+    // ===== 联动聚合（Sub-step 2） =====
+
+    /**
+     * 观察单日详情：当天的事件 + 未完成任务 + 当天的课程（按周次规则过滤）。
+     *
+     * 三个数据源用 [kotlinx.coroutines.flow.combine] 合成单一 Flow<DayDetail>。
+     * UI 层（DayDetailSheet）直接 collect。
+     *
+     * @param date 当天 00:00 时间戳
+     */
+    fun observeDayDetail(date: Long): Flow<DayDetail>
+
+    /**
+     * 观察月范围每日汇总（轻量版，只含计数 + today 标志）。
+     *
+     * UI 层（MonthCalendarGrid）按 date 索引 O(1) 取 badge 数据。
+     * 空日期不会出现在 Map 里。
+     *
+     * @param monthStart 当月第一天 00:00 时间戳（包含）
+     * @param monthEnd 下月第一天 00:00 时间戳（不包含）
+     * @param today 今日 00:00 时间戳（用于 isToday 标志）
+     */
+    fun observeMonthSummary(monthStart: Long, monthEnd: Long, today: Long): Flow<MonthSummary>
 }
