@@ -23,7 +23,6 @@ import com.example.personalassistant.feature.calendar.CalendarScreen
 import com.example.personalassistant.feature.finance.FinanceScreen
 import com.example.personalassistant.feature.settings.SettingsScreen
 import com.example.personalassistant.feature.task.TaskScreen
-import com.example.personalassistant.feature.task.presentation.detail.TaskDetailScreen
 import com.example.personalassistant.feature.task.presentation.edit.TaskEditScreen
 import com.example.personalassistant.feature.timetable.TimetableScreen
 import com.example.personalassistant.feature.timetable.presentation.edit.CourseEditScreen
@@ -84,22 +83,6 @@ fun AppNavHost() {
             ) { entry ->
                 val taskId = entry.arguments?.getLong(Screen.EditTask.ARG_TASK_ID) ?: -1L
                 TaskEditScreen(taskId = taskId, onBack = { navController.popBackStack() })
-            }
-
-            // === Phase 6b 任务详情页 ===
-            composable(
-                route = Screen.DetailTask.route,
-                arguments = listOf(navArgument(Screen.DetailTask.ARG_TASK_ID) {
-                    type = NavType.LongType
-                    defaultValue = -1L
-                }),
-            ) { entry ->
-                val taskId = entry.arguments?.getLong(Screen.DetailTask.ARG_TASK_ID) ?: -1L
-                TaskDetailScreen(
-                    taskId = taskId,
-                    onBack = { navController.popBackStack() },
-                    onEdit = { id -> navController.navigate(Screen.EditTask.build(id)) },
-                )
             }
         }
     }

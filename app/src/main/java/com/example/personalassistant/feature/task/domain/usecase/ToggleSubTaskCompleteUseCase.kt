@@ -4,9 +4,9 @@ import com.example.personalassistant.feature.task.domain.repository.TaskReposito
 import javax.inject.Inject
 
 /** 切换清单项完成状态。 */
-open class ToggleSubTaskCompleteUseCase @Inject constructor(
+class ToggleSubTaskCompleteUseCase @Inject constructor(
     private val repository: TaskRepository,
 ) {
-    open suspend operator fun invoke(id: Long, completed: Boolean) =
+    suspend operator fun invoke(id: Long, completed: Boolean) =
         repository.toggleSubTaskComplete(id, completed)
 }

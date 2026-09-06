@@ -42,9 +42,7 @@ class ReorderableTaskListViewModelTest {
 
         override fun observeActive() = MutableStateFlow<List<Task>>(emptyList())
         override fun observeCompleted() = MutableStateFlow<List<Task>>(emptyList())
-        override fun observeTaskById(id: Long) = MutableStateFlow<Task?>(null)
         override fun observeStandaloneChecklist() = MutableStateFlow<List<SubTask>>(emptyList())
-        override fun observeSubTasks(parentId: Long) = MutableStateFlow<List<SubTask>>(emptyList())
         override fun observeTasks(filter: TaskFilter, sort: TaskSort) =
             MutableStateFlow<List<Task>>(emptyList())
         override suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks? = null
@@ -53,7 +51,6 @@ class ReorderableTaskListViewModelTest {
         override suspend fun toggleTaskComplete(id: Long, completed: Boolean) {}
         override suspend fun toggleSubTaskComplete(id: Long, completed: Boolean) {}
         override suspend fun addStandaloneSubTask(title: String): Long = -1L
-        override suspend fun addSubTaskToTask(parentId: Long, title: String): Long = -1L
         override suspend fun deleteSubTask(subTask: SubTask) {}
         override suspend fun reorderTasks(orderedIds: List<Long>) {
             reorderCalls++

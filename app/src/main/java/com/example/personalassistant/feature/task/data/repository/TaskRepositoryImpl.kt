@@ -45,20 +45,8 @@ class TaskRepositoryImpl @Inject constructor(
     override fun observeCompleted(): Flow<List<Task>> =
         dao.observeCompleted().map { list -> list.map { it.toDomain() } }
 
-    /**
-     * Phase 6b：详情页 task 实时刷新用
-     */
-    override fun observeTaskById(id: Long): Flow<Task?> =
-        dao.observeById(id).map { it?.toDomain() }
-
     override fun observeStandaloneChecklist(): Flow<List<SubTask>> =
         dao.observeStandaloneSubTasks().map { list -> list.map { it.toDomain() } }
-
-    /**
-     * Phase 6b：观察任务下的子清单（详情页 SubTaskSection 用）
-     */
-    override fun observeSubTasks(parentId: Long): Flow<List<SubTask>> =
-        dao.observeSubTasks(parentId).map { list -> list.map { it.toDomain() } }
 
     /**
      * 通用观察入口：filter + sort。
@@ -134,24 +122,6 @@ class TaskRepositoryImpl @Inject constructor(
                 SubTaskEntity(
                     parentTaskId = null,
                     title = title,
-                )
-            )
-        }
-
-    /**
-     * Phase 6b：在指定任务下新增一个子清单项，order 自动追加到末尾
-     *
-     * - 调用方（UseCase）保证 title 已 trim 非空
-     * - parentId 对应 task 不存在时由 FK 报错（应不会发生，详情页 init 时已加载）
-     */
-    override suspend fun addSubTaskToTask(parentId: Long, title: String): Long =
-        withContext(dispatcher) {
-            val maxOrder = dao.getMaxSubTaskOrder(parentId) ?: -1
-            dao.insertSubTask(
-                SubTaskEntity(
-                    parentTaskId = parentId,
-                    title = title,
-                    order = maxOrder + 1,
                 )
             )
         }

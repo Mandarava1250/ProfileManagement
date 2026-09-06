@@ -84,14 +84,6 @@ interface TaskDao {
     @Query("SELECT * FROM sub_tasks WHERE parentTaskId = :parentId ORDER BY `order`, createdAt")
     suspend fun getSubTasks(parentId: Long): List<SubTaskEntity>
 
-    /**
-     * Phase 6b：返回任务下当前最大 order（null = 无子清单）。
-     *
-     * 用于 [addSubTaskToTask] 时自动追加到末尾，避免显示错乱。
-     */
-    @Query("SELECT MAX(`order`) FROM sub_tasks WHERE parentTaskId = :parentId")
-    suspend fun getMaxSubTaskOrder(parentId: Long): Int?
-
     @Query("DELETE FROM sub_tasks WHERE parentTaskId = :parentId")
     suspend fun deleteSubTasksByParent(parentId: Long)
 
