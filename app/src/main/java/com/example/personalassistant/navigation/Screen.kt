@@ -31,6 +31,17 @@ sealed class Screen(val route: String) {
         const val ARG_TASK_ID = "taskId"
     }
 
+    /**
+     * Phase 6b：任务详情页（只读视图，含子任务编辑入口）
+     *
+     * - 任务主页 TasksTab 点击 TaskItem → 跳本页
+     * - 本页右上角"编辑"按钮 → 跳 [EditTask]
+     */
+    data object DetailTask : Screen("tasks/detail/{taskId}") {
+        fun build(taskId: Long? = null) = "tasks/detail/${taskId ?: -1L}"
+        const val ARG_TASK_ID = "taskId"
+    }
+
     data object EditEvent : Screen("calendar/edit/{eventId}") {
         fun build(eventId: Long? = null) = "calendar/edit/${eventId ?: -1L}"
         const val ARG_EVENT_ID = "eventId"

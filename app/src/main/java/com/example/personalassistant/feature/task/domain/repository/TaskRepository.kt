@@ -22,8 +22,24 @@ interface TaskRepository {
     /** 已完成任务（按 dueDate DESC） */
     fun observeCompleted(): Flow<List<Task>>
 
+    /**
+     * Phase 6b：观察单个任务（详情页用，id 不存在时 emit null）
+     *
+     * - 任务被删除时 emit null，UI 监听触发 popBackStack
+     * - 任务被更新（标题/优先级/截止/...）时自动刷新 UI
+     */
+    fun observeTaskById(id: Long): Flow<Task?>
+
     /** 独立清单项（parentTaskId IS NULL） */
     fun observeStandaloneChecklist(): Flow<List<SubTask>>
+
+    /**
+     * Phase 6b：观察某个任务下的子清单（parentTaskId = taskId）
+     *
+     * - 用于详情页子任务 section 实时刷新
+     * - 排序：`order` ASC, `createdAt` ASC（与 DAO 查询一致）
+     */
+    fun observeSubTasks(parentId: Long): Flow<List<SubTask>>
 
     /**
      * 通用观察入口 —— 接 [filter] 和 [sort]，返回过滤+排序后的任务流。
@@ -60,6 +76,15 @@ interface TaskRepository {
 
     /** 添加独立清单项（parentTaskId = null） */
     suspend fun addStandaloneSubTask(title: String): Long
+
+    /**
+     * Phase 6b：在指定任务下新增一个子清单项（parentTaskId = parentId）
+     *
+     * - 自动追加到当前最大 `order` + 1，避免显示错乱
+     * - 空白标题由 UseCase 层拦截校验
+     * - parentId 对应的 task 不存在时由 FK 报错（应不会发生，由 ViewModel 在 init 阶段保证）
+     */
+    suspend fun addSubTaskToTask(parentId: Long, title: String): Long
 
     /** 删除清单项 */
     suspend fun deleteSubTask(subTask: SubTask)
