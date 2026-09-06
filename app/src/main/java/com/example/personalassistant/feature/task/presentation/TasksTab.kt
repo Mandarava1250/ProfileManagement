@@ -34,12 +34,14 @@ import com.example.personalassistant.feature.task.presentation.components.TaskIt
  * 任务 Tab 内容：顶部 FilterBar + P1-P4 + 未排期 分组 + 底部折叠已完成
  *
  * Phase 4b 新增：顶部 FilterBar（filter chips + sort 入口）+ 排序下拉菜单
+ *
+ * Phase 6b：onEditTask 重命名为 onClickTask（语义变为"查看任务详情"，编辑走详情页内编辑按钮）。
  */
 @Composable
 fun TasksTab(
     state: TaskUiState,
     onToggleComplete: (Long, Boolean) -> Unit,
-    onEditTask: (Long) -> Unit,
+    onClickTask: (Long) -> Unit,
     onDelete: (Task) -> Unit,
     onToggleShowCompleted: () -> Unit,
     onFilterChange: (com.example.personalassistant.feature.task.domain.model.TaskFilter) -> Unit,
@@ -98,7 +100,7 @@ fun TasksTab(
                         TaskItem(
                             task = task,
                             onToggleComplete = { onToggleComplete(task.id, it) },
-                            onClick = { onEditTask(task.id) },
+                            onClick = { onClickTask(task.id) },
                             onDelete = { onDelete(task) },
                         )
                     }
@@ -119,7 +121,7 @@ fun TasksTab(
                         TaskItem(
                             task = task,
                             onToggleComplete = { onToggleComplete(task.id, it) },
-                            onClick = { onEditTask(task.id) },
+                            onClick = { onClickTask(task.id) },
                             onDelete = { onDelete(task) },
                         )
                     }

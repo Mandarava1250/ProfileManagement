@@ -92,7 +92,7 @@ fun TaskScreen(
             0 -> TasksTab(
                 state = taskState,
                 onToggleComplete = taskViewModel::toggleComplete,
-                onEditTask = { id -> navController.navigate(Screen.EditTask.build(id)) },
+                onClickTask = { id -> navController.navigate(Screen.DetailTask.build(id)) },
                 onDelete = taskViewModel::deleteTask,
                 onToggleShowCompleted = taskViewModel::toggleShowCompleted,
                 onFilterChange = taskViewModel::setFilter,

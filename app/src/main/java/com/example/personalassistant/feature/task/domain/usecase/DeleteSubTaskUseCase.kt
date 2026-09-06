@@ -5,8 +5,8 @@ import com.example.personalassistant.feature.task.domain.repository.TaskReposito
 import javax.inject.Inject
 
 /** 删除清单项。 */
-class DeleteSubTaskUseCase @Inject constructor(
+open class DeleteSubTaskUseCase @Inject constructor(
     private val repository: TaskRepository,
 ) {
-    suspend operator fun invoke(subTask: SubTask) = repository.deleteSubTask(subTask)
+    open suspend operator fun invoke(subTask: SubTask) = repository.deleteSubTask(subTask)
 }
