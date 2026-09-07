@@ -8,9 +8,11 @@ import com.example.personalassistant.feature.calendar.domain.model.CalendarViewT
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
 import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.CancelEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayDetailUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -49,6 +51,8 @@ class CalendarViewModel @Inject constructor(
     private val addEvent: AddEventUseCase,
     private val updateEvent: UpdateEventUseCase,
     private val deleteEventUseCase: DeleteEventUseCase,
+    private val scheduleEventReminder: ScheduleEventReminderUseCase,
+    private val cancelEventReminder: CancelEventReminderUseCase,
 ) : ViewModel() {
 
     private val _currentYearMonth = MutableStateFlow(DateUtils.currentYearMonth())
@@ -255,18 +259,26 @@ class CalendarViewModel @Inject constructor(
      * 失败时（require 抛 IllegalArgumentException）写 _editorError，成功则清空编辑器。
      *
      * 设计取舍：createdAt / updatedAt 都用 System.currentTimeMillis()。
-     * 更新场景下"保留原 createdAt"会引入额外的 repo 查询，收益小，先简化。
+     * 更新场景下保留原 createdAt 会引入额外的 repo 查询，收益小，先简化。
+     *
+     * ## Phase 8 Sub-step 1：提醒同步
+     * 事件写入成功后，根据 reminderMinutes / startTime 决定：
+     * - 都有效 → schedule 一次（覆盖旧的 PendingIntent）
+     * - 任意无效 → 如果是更新场景（originalId > 0），额外 cancel 一次（清残留）
+     * - 新建场景下无效无需 cancel（本来就没旧提醒）
      */
     fun saveEvent(state: EventEditState) {
         viewModelScope.launch {
             try {
                 val now = System.currentTimeMillis()
-                val event = state.toEvent(createdAt = now, updatedAt = now)
+                var event = state.toEvent(createdAt = now, updatedAt = now)
                 if (state.originalId == 0L) {
-                    addEvent(event)
+                    val newId = addEvent(event)
+                    event = event.copy(id = newId)
                 } else {
                     updateEvent(event)
                 }
+                syncReminder(event, isUpdate = state.originalId > 0L)
                 _editingState.value = null
                 _editorError.value = null
             } catch (e: IllegalArgumentException) {
@@ -276,10 +288,29 @@ class CalendarViewModel @Inject constructor(
     }
 
     /**
+     * 根据 event 当前 reminder 状态与调度器同步。
+     *
+     * - reminder 非空 + startTime 非空 → schedule
+     * - reminder 空 / startTime 空：
+     *   - 更新场景：cancel 一次，清掉可能存在的旧 PendingIntent
+     *   - 新建场景：什么都不做（数据库里没旧记录）
+     */
+    private suspend fun syncReminder(event: Event, isUpdate: Boolean) {
+        val canSchedule = event.reminder != null && event.startTime != null
+        if (canSchedule) {
+            scheduleEventReminder(event)
+        } else if (isUpdate && event.id > 0L) {
+            cancelEventReminder(event.id)
+        }
+    }
+
+    /**
      * 删除当前编辑器里的事件（仅 originalId > 0 的情况下有意义）。
      *
-     * 新建模式下保存失败也可用于「放弃草稿」，但 UseCase 内部会 require id > 0。
+     * 新建模式下保存失败也可用于放弃草稿，但 UseCase 内部会 require id > 0。
      * 失败写 _editorError，成功关闭编辑器。
+     *
+     * 删除时同时取消闹钟（即使 reminder 为 null 也要 cancel，避免旧 PendingIntent 残留）。
      */
     fun deleteEventFromEditor() {
         val current = _editingState.value ?: return
@@ -291,6 +322,7 @@ class CalendarViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 deleteEventUseCase(current.originalId)
+                cancelEventReminder(current.originalId)
                 _editingState.value = null
                 _editorError.value = null
             } catch (e: IllegalArgumentException) {

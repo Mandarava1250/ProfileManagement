@@ -1,16 +1,20 @@
 package com.example.personalassistant.feature.calendar.presentation
 
+import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarRepository
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
 import com.example.personalassistant.feature.calendar.domain.model.DaySummary
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.CancelEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayDetailUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
-import com.example.personalassistant.core.utils.DateUtils
+import com.example.personalassistant.feature.task.domain.reminder.ReminderInfo
+import com.example.personalassistant.feature.task.domain.reminder.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -41,24 +45,59 @@ import org.junit.Test
  * - onDateClick / dismissDayDetail 更新 selectedDate
  * - setViewType 更新 viewType
  * - shiftMonth 正确跨年（12月+1月 → 次年1月）
+ *
+ * Phase 8 Sub-step 1 增量：
+ * - 注入 FakeScheduleEventReminderUseCase / FakeCancelEventReminderUseCase
+ * - 验证 saveEvent 在 reminder 非空时触发 schedule，reminder 清空/删除时触发 cancel
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CalendarViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var repo: FakeCalendarRepository
+    private lateinit var scheduleEventReminder: FakeScheduleEventReminderUseCase
+    private lateinit var cancelEventReminder: FakeCancelEventReminderUseCase
     private lateinit var vm: CalendarViewModel
+
+    /** Phase 8 Sub-step 1：用于 CalendarViewModel 接线测试，统计调用次数。 */
+    private class FakeScheduleEventReminderUseCase : ScheduleEventReminderUseCase(NoopReminderScheduler) {
+        var calls: Int = 0; private set
+        var lastEvent: Event? = null; private set
+        override suspend fun invoke(event: Event) {
+            calls++
+            lastEvent = event
+        }
+    }
+
+    private class FakeCancelEventReminderUseCase : CancelEventReminderUseCase(NoopReminderScheduler) {
+        var calls: Int = 0; private set
+        var lastEventId: Long? = null; private set
+        override suspend fun invoke(eventId: Long) {
+            calls++
+            lastEventId = eventId
+        }
+    }
+
+    private object NoopReminderScheduler : ReminderScheduler {
+        override suspend fun schedule(info: ReminderInfo) = Unit
+        override suspend fun cancel(eventId: Long) = Unit
+        override suspend fun cancelAll() = Unit
+    }
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         repo = FakeCalendarRepository()
+        scheduleEventReminder = FakeScheduleEventReminderUseCase()
+        cancelEventReminder = FakeCancelEventReminderUseCase()
         vm = CalendarViewModel(
             observeMonthSummary = ObserveMonthSummaryUseCase(repo),
             observeDayDetail = ObserveDayDetailUseCase(repo),
             addEvent = AddEventUseCase(repo),
             updateEvent = UpdateEventUseCase(repo),
             deleteEventUseCase = DeleteEventUseCase(repo),
+            scheduleEventReminder = scheduleEventReminder,
+            cancelEventReminder = cancelEventReminder,
         )
     }
 
@@ -385,5 +424,108 @@ class CalendarViewModelTest {
         advanceUntilIdle()
         assertEquals(0, repo.deleteCount)
         assertNull(vm.editingState.value)
+    }
+
+    // ===== Phase 8 Sub-step 1：提醒同步接线 =====
+
+    /**
+     * 构造带 reminder 的 EventEditState。reminder 非空 + startTime 非空时，
+     * EventEditState.toEvent() 会得到一个 hasTime=true 的 Event，
+     * 这样 ScheduleEventReminderUseCase 能正确算 triggerAt。
+     */
+    private fun reminderDraft(
+        originalId: Long = 0L,
+        title: String = "周会",
+        date: Long = DateUtils.todayStartMillis(),
+        reminderMinutes: Int? = 15,
+        hasTime: Boolean = true,
+        startHour: Int? = if (hasTime) 10 else null,
+        startMinute: Int? = if (hasTime) 0 else null,
+        endHour: Int? = if (hasTime) 11 else null,
+        endMinute: Int? = if (hasTime) 0 else null,
+    ) = EventEditState(
+        originalId = originalId,
+        title = title,
+        date = date,
+        isAllDay = !hasTime,
+        hasTime = hasTime,
+        startHour = startHour,
+        startMinute = startMinute,
+        endHour = endHour,
+        endMinute = endMinute,
+        reminderMinutes = reminderMinutes,
+    )
+
+    @Test
+    fun `saveEvent new event with reminder triggers scheduleEventReminder`() = runTest(testDispatcher) {
+        vm.saveEvent(reminderDraft(reminderMinutes = 15))
+        advanceUntilIdle()
+
+        assertEquals(1, scheduleEventReminder.calls)
+        val event = scheduleEventReminder.lastEvent!!
+        assertEquals(15, event.reminder)
+        assertNotNull("new event should have id assigned", event.id)
+        assertTrue(event.id > 0)
+        // cancel 不会被调用（新建场景且 reminder 非空）
+        assertEquals(0, cancelEventReminder.calls)
+    }
+
+    @Test
+    fun `saveEvent new event without reminder does not schedule or cancel`() = runTest(testDispatcher) {
+        vm.saveEvent(reminderDraft(reminderMinutes = null))
+        advanceUntilIdle()
+
+        assertEquals(0, scheduleEventReminder.calls)
+        assertEquals(0, cancelEventReminder.calls)
+    }
+
+    @Test
+    fun `saveEvent update with reminder triggers schedule not cancel`() = runTest(testDispatcher) {
+        val date = DateUtils.todayStartMillis()
+        val id = repo.seedEvent(title = "原事件", date = date)
+        vm.saveEvent(reminderDraft(originalId = id, reminderMinutes = 30))
+        advanceUntilIdle()
+
+        assertEquals(1, scheduleEventReminder.calls)
+        // update 场景下 reminder 非空时只 schedule，不 cancel
+        assertEquals(0, cancelEventReminder.calls)
+        assertEquals(id, scheduleEventReminder.lastEvent!!.id)
+    }
+
+    @Test
+    fun `saveEvent update with reminder cleared triggers cancel`() = runTest(testDispatcher) {
+        val date = DateUtils.todayStartMillis()
+        val id = repo.seedEvent(title = "原事件", date = date)
+        // 原事件本来有 reminder，现在改成 null（清空提醒）
+        vm.saveEvent(reminderDraft(originalId = id, reminderMinutes = null))
+        advanceUntilIdle()
+
+        // reminder 空 + startTime 空（hasTime=false 时）→ 走 cancel 分支
+        assertEquals(0, scheduleEventReminder.calls)
+        assertEquals(1, cancelEventReminder.calls)
+        assertEquals(id, cancelEventReminder.lastEventId)
+    }
+
+    @Test
+    fun `deleteEventFromEditor triggers cancelEventReminder`() = runTest(testDispatcher) {
+        val date = DateUtils.todayStartMillis()
+        val id = repo.seedEvent(title = "待删", date = date)
+        vm.updateEditingState(reminderDraft(originalId = id, reminderMinutes = null))
+        vm.deleteEventFromEditor()
+        advanceUntilIdle()
+
+        assertEquals(1, repo.deleteCount)
+        // 即使 reminderMinutes=null 也要 cancel（清残留 PendingIntent）
+        assertEquals(1, cancelEventReminder.calls)
+        assertEquals(id, cancelEventReminder.lastEventId)
+    }
+
+    @Test
+    fun `deleteEventFromEditor on draft does not trigger cancel`() = runTest(testDispatcher) {
+        vm.startAddEvent()
+        vm.deleteEventFromEditor()
+        advanceUntilIdle()
+
+        assertEquals(0, cancelEventReminder.calls)
     }
 }
