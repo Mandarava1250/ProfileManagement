@@ -83,6 +83,36 @@ class TaskSortComparatorTest {
         assertEquals(listOf(3L, 2L, 1L), sorted)
     }
 
+    // ===== Phase 8 Sub-step 2：5 档优先级权重排序 =====
+
+    @Test
+    fun `PRIORITY_DUE_ASC 5 档权重排序 URGENT_HIGH_MEDIUM_NORMAL_LOW`() {
+        val comparator = TaskSort.PRIORITY_DUE_ASC.toComparator()
+        val tasks = listOf(
+            task(id = 1, priority = TaskPriority.LOW, dueDate = 100),
+            task(id = 2, priority = TaskPriority.NORMAL, dueDate = 100),
+            task(id = 3, priority = TaskPriority.MEDIUM, dueDate = 100),
+            task(id = 4, priority = TaskPriority.HIGH, dueDate = 100),
+            task(id = 5, priority = TaskPriority.URGENT, dueDate = 100),
+        )
+        val sorted = tasks.sortedWith(comparator).map { it.id }
+        assertEquals(listOf(5L, 4L, 3L, 2L, 1L), sorted)
+    }
+
+    @Test
+    fun `PRIORITY_DUE_ASC 5 档同档内按 dueDate 升序兜底`() {
+        val comparator = TaskSort.PRIORITY_DUE_ASC.toComparator()
+        val tasks = listOf(
+            task(id = 1, priority = TaskPriority.URGENT, dueDate = 1000),
+            task(id = 2, priority = TaskPriority.URGENT, dueDate = 100),
+            task(id = 3, priority = TaskPriority.LOW, dueDate = 500),
+            task(id = 4, priority = TaskPriority.LOW, dueDate = 200),
+        )
+        val sorted = tasks.sortedWith(comparator).map { it.id }
+        // URGENT (2 → 1) > LOW (4 → 3)
+        assertEquals(listOf(2L, 1L, 4L, 3L), sorted)
+    }
+
     @Test
     fun `TITLE_ASC 大小写不敏感`() {
         val comparator = TaskSort.TITLE_ASC.toComparator()

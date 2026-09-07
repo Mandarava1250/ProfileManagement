@@ -49,9 +49,17 @@ fun TaskItem(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Phase 8 Sub-step 2：5 档颜色映射（浅灰/灰/蓝/橙/红）
+    // - LOW → outline (浅灰)
+    // - NORMAL → outlineVariant (灰)
+    // - MEDIUM → tertiary (蓝)
+    // - HIGH → secondary (橙)
+    // - URGENT → error (红)
     val priorityColor = when (task.priority) {
-        TaskPriority.HIGH -> MaterialTheme.colorScheme.error
+        TaskPriority.URGENT -> MaterialTheme.colorScheme.error
+        TaskPriority.HIGH -> MaterialTheme.colorScheme.secondary
         TaskPriority.MEDIUM -> MaterialTheme.colorScheme.tertiary
+        TaskPriority.NORMAL -> MaterialTheme.colorScheme.outlineVariant
         TaskPriority.LOW -> MaterialTheme.colorScheme.outline
     }
 

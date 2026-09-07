@@ -114,9 +114,12 @@ fun BasicInfoSection(
 
 @Composable
 private fun PriorityDot(priority: TaskPriority) {
+    // Phase 8 Sub-step 2：5 档颜色映射（与 TaskItem 保持一致）
     val color = when (priority) {
-        TaskPriority.HIGH -> MaterialTheme.colorScheme.error
+        TaskPriority.URGENT -> MaterialTheme.colorScheme.error
+        TaskPriority.HIGH -> MaterialTheme.colorScheme.secondary
         TaskPriority.MEDIUM -> MaterialTheme.colorScheme.tertiary
+        TaskPriority.NORMAL -> MaterialTheme.colorScheme.outlineVariant
         TaskPriority.LOW -> MaterialTheme.colorScheme.outline
     }
     Spacer(Modifier.size(10.dp).clip(CircleShape).background(color))

@@ -45,11 +45,13 @@ class ObserveTasksByQuadrantUseCase @Inject constructor(
             val due = task.dueDate ?: return TaskQuadrant.UNSCHEDULED
             val isUrgent = due <= todayEndMillis
             return when (task.priority) {
-                TaskPriority.HIGH ->
+                // Phase 8 Sub-step 2：URGENT 与 HIGH 同象限（紧急 = 重要）
+                TaskPriority.URGENT, TaskPriority.HIGH ->
                     if (isUrgent) TaskQuadrant.P1 else TaskQuadrant.P2
                 TaskPriority.MEDIUM ->
                     if (isUrgent) TaskQuadrant.P2 else TaskQuadrant.P3
-                TaskPriority.LOW ->
+                // Phase 8 Sub-step 2：NORMAL 与 LOW 同象限（普通 = 不重要）
+                TaskPriority.NORMAL, TaskPriority.LOW ->
                     if (isUrgent) TaskQuadrant.P3 else TaskQuadrant.P4
             }
         }
