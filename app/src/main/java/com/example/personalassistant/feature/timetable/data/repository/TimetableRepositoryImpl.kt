@@ -101,4 +101,9 @@ class TimetableRepositoryImpl @Inject constructor(
         }
         Unit
     }
+
+    // ===== Phase 8 Sub-step 3 全局搜索 =====
+
+    override fun searchCourses(keyword: String): Flow<List<Course>> =
+        courseDao.searchCourses(keyword).map { list -> list.map { it.toDomain() } }
 }

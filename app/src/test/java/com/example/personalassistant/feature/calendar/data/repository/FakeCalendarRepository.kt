@@ -100,6 +100,24 @@ class FakeCalendarRepository : CalendarRepository {
     override fun observeMonthSummary(monthStart: Long, monthEnd: Long, today: Long): Flow<MonthSummary> =
         eventsState.map { _ -> emptyMap() }
 
+    // ===== Phase 8 Sub-step 3 全局搜索 =====
+
+    /**
+     * Phase 8 Sub-step 3：测试用搜索实现。
+     *
+     * - :keyword 形如 `%xxx%`，去掉首尾 `%` 后在 title / note / category 三字段子串匹配
+     * - 区分大小写
+     */
+    override fun searchEvents(keyword: String): Flow<List<Event>> =
+        eventsState.map { list ->
+            val needle = keyword.removePrefix("%").removeSuffix("%")
+            list.filter { event ->
+                event.title.contains(needle, ignoreCase = false) ||
+                    (event.note?.contains(needle, ignoreCase = false) == true) ||
+                    (event.category?.contains(needle, ignoreCase = false) == true)
+            }
+        }
+
     // ===== 测试辅助 helpers =====
 
     /** 直接注入一条带 id 的事件（跳过自增），便于测试 */

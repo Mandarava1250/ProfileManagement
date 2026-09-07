@@ -244,6 +244,11 @@ class CalendarRepositoryImpl @Inject constructor(
     companion object {
         const val ONE_DAY_MILLIS: Long = 24L * 60L * 60L * 1000L
     }
+
+    // ===== Phase 8 Sub-step 3 全局搜索 =====
+
+    override fun searchEvents(keyword: String): Flow<List<Event>> =
+        eventDao.searchEvents(keyword).map { list -> list.map { it.toDomain() } }
 }
 
 // ===== 跨模块 Entity → Domain 映射（轻量版，定义在这里避免污染 task/timetable） =====

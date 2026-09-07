@@ -206,6 +206,11 @@ class TaskRepositoryImpl @Inject constructor(
         }
     }
 
+    // ===== Phase 8 Sub-step 3 全局搜索 =====
+
+    override fun searchTasks(keyword: String): Flow<List<Task>> =
+        dao.searchTasks(keyword).map { list -> list.map { it.toDomain() } }
+
     // ===== filter 辅助 =====
     // Phase 6c：[FilterExpression] 的评估函数（matches / 等））
     // 已上提到 domain/model/FilterExpression.kt（internal 扩展函数），

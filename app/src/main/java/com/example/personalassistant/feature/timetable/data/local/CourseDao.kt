@@ -70,6 +70,25 @@ interface CourseDao {
 
     @Query("SELECT COUNT(*) FROM courses WHERE semester = :semester")
     suspend fun countBySemester(semester: String): Int
+
+    /**
+     * Phase 8 Sub-step 3：全局搜索 — 在 courses 表 name / teacher / location / note 任一字段 LIKE 匹配。
+     *
+     * - :keyword 为已包好 `%...%` 的字符串
+     * - 大小写敏感
+     * - 排序：dayOfWeek ASC, startTime ASC
+     */
+    @Query(
+        """
+        SELECT * FROM courses
+        WHERE name LIKE :keyword
+           OR teacher LIKE :keyword
+           OR location LIKE :keyword
+           OR note LIKE :keyword
+        ORDER BY dayOfWeek ASC, startTime ASC
+        """
+    )
+    fun searchCourses(keyword: String): Flow<List<CourseEntity>>
 }
 
 /**

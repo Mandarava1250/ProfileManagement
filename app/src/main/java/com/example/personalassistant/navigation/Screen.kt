@@ -49,6 +49,9 @@ sealed class Screen(val route: String) {
 
     data object AddTransaction : Screen("finance/add")
     data object MonthlyBudget : Screen("finance/budget")
+
+    /** Phase 8 Sub-step 3：全局搜索（点击命中项后跳对应详情页） */
+    data object GlobalSearch : Screen("globalsearch")
 }
 
 /**

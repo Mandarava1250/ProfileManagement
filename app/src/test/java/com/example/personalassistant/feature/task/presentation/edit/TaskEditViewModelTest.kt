@@ -67,6 +67,10 @@ class TaskEditViewModelTest {
         override suspend fun addSubTaskToTask(parentId: Long, title: String): Long = -1L
         override suspend fun deleteSubTask(subTask: SubTask) {}
         override suspend fun reorderTasks(orderedIds: List<Long>) {}
+
+        // Phase 8 Sub-step 3 全局搜索（占位实现 — 这些 VM 测试不关心搜索）
+        override fun searchTasks(keyword: String) =
+            MutableStateFlow<List<Task>>(emptyList())
     }
 
     private object NoopReminderScheduler : ReminderScheduler {
