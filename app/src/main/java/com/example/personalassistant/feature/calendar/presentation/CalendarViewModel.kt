@@ -5,9 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
+import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
+import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayDetailUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +23,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -41,6 +46,9 @@ import javax.inject.Inject
 class CalendarViewModel @Inject constructor(
     private val observeMonthSummary: ObserveMonthSummaryUseCase,
     private val observeDayDetail: ObserveDayDetailUseCase,
+    private val addEvent: AddEventUseCase,
+    private val updateEvent: UpdateEventUseCase,
+    private val deleteEventUseCase: DeleteEventUseCase,
 ) : ViewModel() {
 
     private val _currentYearMonth = MutableStateFlow(DateUtils.currentYearMonth())
@@ -51,6 +59,18 @@ class CalendarViewModel @Inject constructor(
 
     private val _selectedDate = MutableStateFlow<Long?>(null)
     val selectedDate: StateFlow<Long?> = _selectedDate.asStateFlow()
+
+    /**
+     * Sub-step 5：编辑状态（null = 关闭 EditEventSheet）
+     */
+    private val _editingState = MutableStateFlow<EventEditState?>(null)
+    val editingState: StateFlow<EventEditState?> = _editingState.asStateFlow()
+
+    /**
+     * Sub-step 5：保存/删除事件时的瞬时错误（Snackbar 用）
+     */
+    private val _editorError = MutableStateFlow<String?>(null)
+    val editorError: StateFlow<String?> = _editorError.asStateFlow()
 
     private val today: Long = DateUtils.todayStartMillis()
 
@@ -178,6 +198,105 @@ class CalendarViewModel @Inject constructor(
     fun goToCurrent() {
         _currentYearMonth.value = DateUtils.currentYearMonth()
         _selectedDate.value = today
+    }
+
+    // ===== Sub-step 5：事件编辑动作 =====
+
+    /**
+     * 启动「新建事件」编辑器，初始日期 = [date]（当天 00:00 时间戳）。
+     *
+     * - date = 0L 时使用 selectedDate，再没有就回退到今天
+     * - 默认时长 9:00-10:00（避免「未填时段」歧义）
+     */
+    fun startAddEvent(date: Long = 0L) {
+        val resolvedDate = when {
+            date > 0L -> date
+            _selectedDate.value != null -> _selectedDate.value!!
+            else -> today
+        }
+        _editingState.value = EventEditState.newOnDate(resolvedDate)
+    }
+
+    /**
+     * 启动「编辑已有事件」编辑器。
+     */
+    fun startEditEvent(event: Event) {
+        _editingState.value = EventEditState.fromEvent(event)
+    }
+
+    /**
+     * 关闭编辑器（取消/保存/删除后调用）。
+     */
+    fun clearEditor() {
+        _editingState.value = null
+        _editorError.value = null
+    }
+
+    /**
+     * 直接修改编辑状态（表单字段变更用）。
+     */
+    fun updateEditingState(state: EventEditState) {
+        _editingState.value = state
+    }
+
+    /**
+     * 清除错误状态（Snackbar 显示后调用）。
+     */
+    fun clearError() {
+        _editorError.value = null
+    }
+
+    /**
+     * 保存事件（新建 or 更新）
+     *
+     * - originalId == 0 → 走 AddEventUseCase
+     * - originalId > 0 → 走 UpdateEventUseCase
+     *
+     * 失败时（require 抛 IllegalArgumentException）写 _editorError，成功则清空编辑器。
+     *
+     * 设计取舍：createdAt / updatedAt 都用 System.currentTimeMillis()。
+     * 更新场景下"保留原 createdAt"会引入额外的 repo 查询，收益小，先简化。
+     */
+    fun saveEvent(state: EventEditState) {
+        viewModelScope.launch {
+            try {
+                val now = System.currentTimeMillis()
+                val event = state.toEvent(createdAt = now, updatedAt = now)
+                if (state.originalId == 0L) {
+                    addEvent(event)
+                } else {
+                    updateEvent(event)
+                }
+                _editingState.value = null
+                _editorError.value = null
+            } catch (e: IllegalArgumentException) {
+                _editorError.value = e.message ?: "保存失败"
+            }
+        }
+    }
+
+    /**
+     * 删除当前编辑器里的事件（仅 originalId > 0 的情况下有意义）。
+     *
+     * 新建模式下保存失败也可用于「放弃草稿」，但 UseCase 内部会 require id > 0。
+     * 失败写 _editorError，成功关闭编辑器。
+     */
+    fun deleteEventFromEditor() {
+        val current = _editingState.value ?: return
+        if (current.originalId == 0L) {
+            // 新建草稿 → 直接关闭编辑器
+            _editingState.value = null
+            return
+        }
+        viewModelScope.launch {
+            try {
+                deleteEventUseCase(current.originalId)
+                _editingState.value = null
+                _editorError.value = null
+            } catch (e: IllegalArgumentException) {
+                _editorError.value = e.message ?: "删除失败"
+            }
+        }
     }
 
     // ===== 内部 =====

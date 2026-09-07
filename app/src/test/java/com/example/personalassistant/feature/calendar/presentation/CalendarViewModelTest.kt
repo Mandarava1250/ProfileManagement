@@ -4,8 +4,12 @@ import com.example.personalassistant.feature.calendar.data.repository.FakeCalend
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
 import com.example.personalassistant.feature.calendar.domain.model.DaySummary
+import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayDetailUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
 import com.example.personalassistant.core.utils.DateUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,6 +56,9 @@ class CalendarViewModelTest {
         vm = CalendarViewModel(
             observeMonthSummary = ObserveMonthSummaryUseCase(repo),
             observeDayDetail = ObserveDayDetailUseCase(repo),
+            addEvent = AddEventUseCase(repo),
+            updateEvent = UpdateEventUseCase(repo),
+            deleteEventUseCase = DeleteEventUseCase(repo),
         )
     }
 
@@ -245,5 +252,138 @@ class CalendarViewModelTest {
             today = DateUtils.todayStartMillis(),
         )
         assertFalse(state.isShowingCurrentMonth)
+    }
+
+    // ===== Sub-step 5：事件编辑动作 =====
+
+    private fun draftState(
+        originalId: Long = 0L,
+        title: String = "新事件",
+        date: Long = DateUtils.todayStartMillis(),
+    ) = EventEditState(
+        originalId = originalId,
+        title = title,
+        date = date,
+        isAllDay = true,
+        hasTime = false,
+    )
+
+    @Test
+    fun `editingState is null initially`() = runTest(testDispatcher) {
+        assertNull(vm.editingState.value)
+        assertNull(vm.editorError.value)
+    }
+
+    @Test
+    fun `startAddEvent falls back to today when nothing selected`() = runTest(testDispatcher) {
+        vm.startAddEvent()
+        val state = vm.editingState.value
+        assertNotNull(state)
+        assertTrue(state!!.isNew)
+        assertEquals(DateUtils.todayStartMillis(), state.date)
+    }
+
+    @Test
+    fun `startAddEvent uses explicit date`() = runTest(testDispatcher) {
+        val date = 1_700_000_000_000L
+        vm.startAddEvent(date)
+        assertEquals(date, vm.editingState.value!!.date)
+    }
+
+    @Test
+    fun `startAddEvent uses selectedDate when no explicit date`() = runTest(testDispatcher) {
+        val date = 1_700_000_000_000L
+        vm.onDateClick(date)
+        vm.startAddEvent()
+        assertEquals(date, vm.editingState.value!!.date)
+    }
+
+    @Test
+    fun `startEditEvent maps existing event into edit state`() = runTest(testDispatcher) {
+        val date = 1_700_000_000_000L
+        vm.startEditEvent(Event(id = 7L, title = "组会", date = date, isAllDay = true))
+        val state = vm.editingState.value
+        assertNotNull(state)
+        assertEquals(7L, state!!.originalId)
+        assertEquals("组会", state.title)
+        assertFalse(state.isNew)
+    }
+
+    @Test
+    fun `clearEditor resets editingState and error`() = runTest(testDispatcher) {
+        vm.startAddEvent()
+        vm.clearEditor()
+        assertNull(vm.editingState.value)
+        assertNull(vm.editorError.value)
+    }
+
+    @Test
+    fun `saveEvent creates new event and closes editor`() = runTest(testDispatcher) {
+        vm.saveEvent(draftState(title = "晨跑"))
+        advanceUntilIdle()
+        assertEquals(1, repo.addCount)
+        assertNull(vm.editingState.value)
+        assertNull(vm.editorError.value)
+    }
+
+    @Test
+    fun `saveEvent with blank title surfaces error and keeps editor open`() = runTest(testDispatcher) {
+        vm.startAddEvent()
+        vm.saveEvent(draftState(title = "   "))
+        advanceUntilIdle()
+        assertEquals(0, repo.addCount)
+        assertNotNull(vm.editingState.value)
+        assertTrue(vm.editorError.value!!.contains("标题不能为空"))
+    }
+
+    @Test
+    fun `saveEvent with originalId updates instead of adding`() = runTest(testDispatcher) {
+        val date = DateUtils.todayStartMillis()
+        val id = repo.seedEvent(title = "旧标题", date = date)
+        vm.saveEvent(draftState(originalId = id, title = "新标题", date = date))
+        advanceUntilIdle()
+        assertEquals(0, repo.addCount)
+        assertEquals(1, repo.updateCount)
+        assertEquals("新标题", repo.getEventById(id)!!.title)
+    }
+
+    @Test
+    fun `clearError only clears error`() = runTest(testDispatcher) {
+        vm.startAddEvent()
+        vm.saveEvent(draftState(title = ""))
+        advanceUntilIdle()
+        assertNotNull(vm.editorError.value)
+        vm.clearError()
+        assertNull(vm.editorError.value)
+        assertNotNull(vm.editingState.value)
+    }
+
+    @Test
+    fun `deleteEventFromEditor removes persisted event`() = runTest(testDispatcher) {
+        val date = DateUtils.todayStartMillis()
+        val id = repo.seedEvent(title = "待删", date = date)
+        vm.updateEditingState(draftState(originalId = id, title = "待删", date = date))
+        vm.deleteEventFromEditor()
+        advanceUntilIdle()
+        assertEquals(1, repo.deleteCount)
+        assertNull(repo.getEventById(id))
+        assertNull(vm.editingState.value)
+    }
+
+    @Test
+    fun `deleteEventFromEditor on draft just closes editor`() = runTest(testDispatcher) {
+        vm.startAddEvent()
+        vm.deleteEventFromEditor()
+        advanceUntilIdle()
+        assertEquals(0, repo.deleteCount)
+        assertNull(vm.editingState.value)
+    }
+
+    @Test
+    fun `deleteEventFromEditor without editor is a no-op`() = runTest(testDispatcher) {
+        vm.deleteEventFromEditor()
+        advanceUntilIdle()
+        assertEquals(0, repo.deleteCount)
+        assertNull(vm.editingState.value)
     }
 }

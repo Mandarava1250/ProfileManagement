@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.calendar.presentation.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +52,8 @@ import java.time.ZoneId
  * - 课程/任务/事件按 section 分组，每条带颜色块和元数据
  *
  * 涟宝保留接口：每个列表项都是 Composable，未来加"跳转到编辑页"只需在 onClick 回调里接 nav route。
+ *
+ * Sub-step 5：onEventClick 让事件项可点击触发 EditEventSheet
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +62,7 @@ fun DayDetailSheet(
     dayDetail: DayDetail?,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    onEventClick: (Event) -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val zone = remember { ZoneId.systemDefault() }
@@ -165,7 +169,7 @@ fun DayDetailSheet(
                             )
                         }
                         items(dayDetail.events, key = { "event-${it.id}" }) { event ->
-                            SheetEventRow(event = event)
+                            SheetEventRow(event = event, onClick = { onEventClick(event) })
                         }
                     }
                 }
@@ -199,7 +203,7 @@ private fun SheetSectionHeader(
 }
 
 @Composable
-private fun SheetEventRow(event: Event) {
+private fun SheetEventRow(event: Event, onClick: () -> Unit = {}) {
     val timeText = when {
         event.isEffectivelyAllDay -> "全天"
         event.startTime != null -> {
@@ -210,7 +214,10 @@ private fun SheetEventRow(event: Event) {
         else -> ""
     }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(

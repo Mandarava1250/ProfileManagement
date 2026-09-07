@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -17,9 +19,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -30,9 +35,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
+import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.presentation.CalendarViewModel
+import com.example.personalassistant.feature.calendar.presentation.EventEditState
 import com.example.personalassistant.feature.calendar.presentation.components.DayCalendarView
 import com.example.personalassistant.feature.calendar.presentation.components.DayDetailSheet
+import com.example.personalassistant.feature.calendar.presentation.components.EditEventSheet
 import com.example.personalassistant.feature.calendar.presentation.components.MonthCalendarGrid
 import com.example.personalassistant.feature.calendar.presentation.components.WeekCalendarView
 import java.time.Instant
@@ -40,13 +48,15 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Phase 7c Sub-step 4：日历主页（三视图切换 + DayDetailSheet）
+ * Phase 7c Sub-step 4+5：日历主页（三视图切换 + DayDetailSheet + EditEventSheet + FAB 新建）
  *
  * 涟宝解读：
  * - 顶部 TopAppBar：左/右按 viewType 切换单位（MONTH=月 / WEEK=周 / DAY=日） + 中间标题 + "回到今天"
  * - 中间：SingleChoiceSegmentedButtonRow（月/周/日切换）
  * - 主区：根据 viewType 渲染 MonthCalendarGrid / WeekCalendarView / DayCalendarView
  * - 底部：用户点击日期 → 弹出 DayDetailSheet（仅 MONTH/WEEK 视图触发）
+ * - 浮动操作按钮（FAB）：点击 → 启动 EditEventSheet 新建事件（按 selectedDate/今天）
+ * - DayDetailSheet 内事件项点击 → 启动 EditEventSheet 编辑
  *
  * @param navController 保留参数供 Phase 8 导航使用（暂时 unused）
  */
@@ -61,6 +71,17 @@ fun CalendarScreen(
     val selectedDate by viewModel.selectedDate.collectAsStateWithLifecycle()
     val selectedDayDetail by viewModel.selectedDayDetail.collectAsStateWithLifecycle()
     val weekCells by viewModel.weekCells.collectAsStateWithLifecycle()
+    val editingState by viewModel.editingState.collectAsStateWithLifecycle()
+    val editorError by viewModel.editorError.collectAsStateWithLifecycle()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(editorError) {
+        editorError?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearError()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -80,6 +101,12 @@ fun CalendarScreen(
                     }
                 },
             )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { viewModel.startAddEvent() }) {
+                Icon(Icons.Filled.Add, contentDescription = "新建事件")
+            }
         },
     ) { padding ->
         Column(
@@ -145,6 +172,52 @@ fun CalendarScreen(
                 date = selectedDate!!,
                 dayDetail = selectedDayDetail,
                 onDismiss = { viewModel.dismissDayDetail() },
+                onEventClick = { event ->
+                    viewModel.dismissDayDetail()
+                    viewModel.startEditEvent(event)
+                },
+            )
+        }
+
+        // Sub-step 5：EditEventSheet（事件编辑器）
+        editingState?.let { state ->
+            EditEventSheet(
+                state = state,
+                onTitleChange = { newTitle ->
+                    viewModel.updateEditingState(state.copy(title = newTitle))
+                },
+                onToggleAllDay = { newAllDay ->
+                    viewModel.updateEditingState(state.copy(isAllDay = newAllDay))
+                },
+                onToggleHasTime = { newHasTime ->
+                    viewModel.updateEditingState(
+                        state.copy(
+                            hasTime = newHasTime,
+                            startHour = if (newHasTime && state.startHour == null) 9 else state.startHour,
+                            startMinute = if (newHasTime && state.startMinute == null) 0 else state.startMinute,
+                            endHour = if (newHasTime && state.endHour == null) 10 else state.endHour,
+                            endMinute = if (newHasTime && state.endMinute == null) 0 else state.endMinute,
+                        ),
+                    )
+                },
+                onStartTimeChange = { h, m ->
+                    viewModel.updateEditingState(state.copy(startHour = h, startMinute = m))
+                },
+                onEndTimeChange = { h, m ->
+                    viewModel.updateEditingState(state.copy(endHour = h, endMinute = m))
+                },
+                onCategoryChange = { newCat ->
+                    viewModel.updateEditingState(state.copy(category = newCat))
+                },
+                onNoteChange = { newNote ->
+                    viewModel.updateEditingState(state.copy(note = newNote))
+                },
+                onReminderChange = { newReminder ->
+                    viewModel.updateEditingState(state.copy(reminderMinutes = newReminder))
+                },
+                onSave = { viewModel.saveEvent(state) },
+                onDelete = { viewModel.deleteEventFromEditor() },
+                onDismiss = { viewModel.clearEditor() },
             )
         }
     }
