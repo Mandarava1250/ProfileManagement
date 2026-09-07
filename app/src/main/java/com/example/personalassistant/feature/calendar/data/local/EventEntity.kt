@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * 日历事件实体
@@ -19,6 +20,7 @@ import androidx.room.PrimaryKey
         Index(value = ["date", "startTime"])
     ]
 )
+@Serializable
 data class EventEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,

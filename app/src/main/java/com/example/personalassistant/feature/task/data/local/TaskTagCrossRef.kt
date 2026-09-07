@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
+import kotlinx.serialization.Serializable
 
 /**
  * Phase 6c：任务 ↔ 标签 多对多关联表
@@ -37,6 +38,7 @@ import androidx.room.Index
         ),
     ]
 )
+@Serializable
 data class TaskTagCrossRef(
     @ColumnInfo(name = "taskId")
     val taskId: Long,

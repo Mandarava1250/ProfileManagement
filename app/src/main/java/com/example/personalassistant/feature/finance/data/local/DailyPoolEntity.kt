@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * 每日零钱池实体（核心特色功能）
@@ -24,6 +25,7 @@ import androidx.room.PrimaryKey
         Index(value = ["date"], unique = true)
     ]
 )
+@Serializable
 data class DailyPoolEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,

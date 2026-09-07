@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * 子任务实体（任务清单项）
@@ -27,6 +28,7 @@ import androidx.room.PrimaryKey
         )
     ]
 )
+@Serializable
 data class SubTaskEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,

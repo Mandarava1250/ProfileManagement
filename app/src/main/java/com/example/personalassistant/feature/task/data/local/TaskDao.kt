@@ -113,6 +113,14 @@ interface TaskDao {
     @Query("DELETE FROM sub_tasks WHERE parentTaskId = :parentId")
     suspend fun deleteSubTasksByParent(parentId: Long)
 
+    // ===== Phase 8 Sub-step 4：备份导出快照 =====
+
+    @Query("SELECT * FROM tasks")
+    suspend fun getAllTasks(): List<TaskEntity>
+
+    @Query("SELECT * FROM sub_tasks")
+    suspend fun getAllSubTasks(): List<SubTaskEntity>
+
     // ===== 统计查询 =====
 
     /** 今日完成率：[0.0, 1.0] */

@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * 分类实体（支出/收入分类）
@@ -19,6 +20,7 @@ import androidx.room.PrimaryKey
         Index(value = ["type", "sortOrder"])
     ]
 )
+@Serializable
 data class CategoryEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,

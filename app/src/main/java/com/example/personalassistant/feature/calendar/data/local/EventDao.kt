@@ -70,4 +70,9 @@ interface EventDao {
         """
     )
     fun searchEvents(keyword: String): Flow<List<EventEntity>>
+
+    // ===== Phase 8 Sub-step 4：备份导出快照 =====
+
+    @Query("SELECT * FROM events")
+    suspend fun getAllEvents(): List<EventEntity>
 }

@@ -137,6 +137,31 @@ interface FinanceDao {
     )
     suspend fun addIncomeToPool(date: Long, amount: Double, now: Long)
 
+    // ==================== Phase 8 Sub-step 4：备份导出快照 ====================
+
+    @Query("SELECT * FROM transactions")
+    suspend fun getAllTransactions(): List<TransactionEntity>
+
+    @Query("SELECT * FROM categories")
+    suspend fun getAllCategories(): List<CategoryEntity>
+
+    @Query("SELECT * FROM monthly_budgets")
+    suspend fun getAllMonthlyBudgets(): List<MonthlyBudgetEntity>
+
+    @Query("SELECT * FROM daily_pools")
+    suspend fun getAllDailyPools(): List<DailyPoolEntity>
+
+    // ===== Phase 8 Sub-step 4：按 id 删除（导入时清理旧数据）=====
+
+    @Query("DELETE FROM categories WHERE id = :id")
+    suspend fun deleteCategoryById(id: Long)
+
+    @Query("DELETE FROM monthly_budgets WHERE id = :id")
+    suspend fun deleteMonthlyBudgetById(id: Long)
+
+    @Query("DELETE FROM daily_pools WHERE id = :id")
+    suspend fun deleteDailyPoolById(id: Long)
+
     // ==================== 统计查询 ====================
 
     @Query("SELECT SUM(amount) FROM transactions WHERE type = 0 AND date >= :monthStart AND date < :monthEnd")

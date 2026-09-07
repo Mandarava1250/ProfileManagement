@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * 学期实体
@@ -18,6 +19,7 @@ import androidx.room.PrimaryKey
         Index(value = ["isCurrent"])
     ]
 )
+@Serializable
 data class SemesterEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,

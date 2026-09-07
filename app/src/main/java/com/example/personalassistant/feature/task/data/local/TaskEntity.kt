@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * 任务实体
@@ -23,6 +24,7 @@ import androidx.room.PrimaryKey
         Index(value = ["dueDate", "isCompleted"])
     ]
 )
+@Serializable
 data class TaskEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,

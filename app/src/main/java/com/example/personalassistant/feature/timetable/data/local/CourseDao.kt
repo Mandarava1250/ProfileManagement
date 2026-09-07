@@ -89,6 +89,11 @@ interface CourseDao {
         """
     )
     fun searchCourses(keyword: String): Flow<List<CourseEntity>>
+
+    // ===== Phase 8 Sub-step 4：备份导出快照 =====
+
+    @Query("SELECT * FROM courses")
+    suspend fun getAllCourses(): List<CourseEntity>
 }
 
 /**
@@ -120,6 +125,11 @@ interface SemesterDao {
 
     @Query("SELECT * FROM semesters WHERE isCurrent = 1 LIMIT 1")
     fun observeCurrent(): Flow<SemesterEntity?>
+
+    // ===== Phase 8 Sub-step 4：按 id 删除（导入时清理旧数据）=====
+
+    @Query("DELETE FROM semesters WHERE id = :id")
+    suspend fun deleteById(id: Long)
 
     /**
      * 切换当前学期：在事务内先把所有 isCurrent 设为 false，再把目标设为 true
