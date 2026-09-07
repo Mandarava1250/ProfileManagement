@@ -15,23 +15,13 @@ import javax.inject.Singleton
  * 设置仓库（DataStore 封装）
  *
  * 当前承载：
- * - 主题模式（"light" | "dark" | "system"）
+ * - 主题偏好已迁移至 [com.example.personalassistant.feature.settings.theme.ThemeRepository]（Phase 8 Sub-step 6）
  * - Phase 8 Sub-step 4：自动备份开关、备份目录 URI、上次备份时间
  */
 @Singleton
 class SettingsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>
 ) {
-    val themeMode: Flow<String> = dataStore.data.map { prefs ->
-        prefs[KEY_THEME_MODE] ?: "system"
-    }
-
-    suspend fun setThemeMode(mode: String) {
-        dataStore.edit { prefs ->
-            prefs[KEY_THEME_MODE] = mode
-        }
-    }
-
     // ========== Phase 8 Sub-step 4：备份偏好 ==========
 
     /** 自动备份开关（默认 false） */
@@ -68,7 +58,6 @@ class SettingsRepository @Inject constructor(
     }
 
     companion object {
-        val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         val KEY_AUTO_BACKUP_ENABLED = booleanPreferencesKey("auto_backup_enabled")
         val KEY_BACKUP_FOLDER_URI = stringPreferencesKey("backup_folder_uri")
         val KEY_LAST_BACKUP_AT = longPreferencesKey("last_backup_at")

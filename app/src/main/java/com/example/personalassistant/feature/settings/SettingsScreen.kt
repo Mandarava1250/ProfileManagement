@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.example.personalassistant.feature.settings.theme.ThemeMode
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -63,7 +64,7 @@ fun SettingsScreen(
     navController: NavHostController,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
-    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val themePreferences by viewModel.themePreferences.collectAsStateWithLifecycle()
     val backupState by viewModel.backupState.collectAsStateWithLifecycle()
     val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
 
@@ -141,25 +142,44 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // ===== 主题 =====
+            // ===== 主题（Phase 8 Sub-step 6：ThemeMode + dynamicColor 持久化）=====
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("主题", style = MaterialTheme.typography.titleMedium)
                     Spacer8()
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        listOf("light" to "浅色", "dark" to "深色", "system" to "跟随系统")
-                            .forEach { (key, label) ->
-                                Row(
-                                    modifier = Modifier.padding(end = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    androidx.compose.material3.RadioButton(
-                                        selected = themeMode == key,
-                                        onClick = { viewModel.setThemeMode(key) },
-                                    )
-                                    Text(label)
-                                }
+                        ThemeMode.entries.forEach { mode ->
+                            Row(
+                                modifier = Modifier.padding(end = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                androidx.compose.material3.RadioButton(
+                                    selected = themePreferences.themeMode == mode,
+                                    onClick = { viewModel.setThemeMode(mode) },
+                                )
+                                Text(themeModeLabel(mode))
                             }
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                    // 动态色开关（Android 12+ Material You）
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("动态配色", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "Android 12+ 使用系统强调色，关闭后回到 App 自带色板",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Switch(
+                            checked = themePreferences.dynamicColor,
+                            onCheckedChange = viewModel::setDynamicColor,
+                        )
                     }
                 }
             }
@@ -277,4 +297,17 @@ private fun Spacer8() {
 private fun formatTimestamp(timestamp: Long): String {
     val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     return formatter.format(Date(timestamp))
+}
+
+/**
+ * 主题模式 → 显示文案（Phase 8 Sub-step 6）
+ *
+ * 之所以放在 Composable 文件而不是 ThemeMode 枚举本身，
+ * 是为了遵守"枚举本身与 Android string resource 解耦"的实践：
+ * 主题 enum 是 domain 模型，文案归 UI 层。
+ */
+private fun themeModeLabel(mode: ThemeMode): String = when (mode) {
+    ThemeMode.LIGHT -> "浅色"
+    ThemeMode.DARK -> "深色"
+    ThemeMode.SYSTEM -> "跟随系统"
 }
