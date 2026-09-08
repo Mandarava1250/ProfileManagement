@@ -11,6 +11,7 @@ import com.example.personalassistant.core.database.AppDatabase
 import com.example.personalassistant.core.database.DatabaseCallback
 import com.example.personalassistant.core.database.DatabaseCallbackHolder
 import com.example.personalassistant.core.holiday.data.HolidayDao
+import com.example.personalassistant.feature.calendar.data.local.EventCategoryDao
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.task.data.local.TagDao
@@ -112,6 +113,12 @@ object CoreModule {
      */
     @Provides
     fun provideHolidayDao(db: AppDatabase): HolidayDao = db.holidayDao()
+
+    /**
+     * Phase 8 Sub-step 9：事件分类 DAO 绑定（与其它 DAO 模式一致）。
+     */
+    @Provides
+    fun provideEventCategoryDao(db: AppDatabase): EventCategoryDao = db.eventCategoryDao()
 
     // ========== DataStore（SettingsRepository 用）==========
 

@@ -39,6 +39,13 @@ data class EventEditState(
     val startMinute: Int? = null,
     val endHour: Int? = null,
     val endMinute: Int? = null,
+    /**
+     * Phase 8 Sub-step 9：分类 ID（替代旧 category String）
+     *
+     * - null → 无分类
+     * - 保存时同时写 categoryId，旧 [category] 字段保留（只读兼容，可空）
+     */
+    val categoryId: Long? = null,
     val category: String = "",
     val note: String = "",
     val reminderMinutes: Int? = null,
@@ -102,6 +109,8 @@ data class EventEditState(
             color = color,
             reminder = reminderMinutes,
             note = note.ifBlank { null },
+            // Phase 8 Sub-step 9：保存 categoryId，旧 category 字符串保留（只读兼容）
+            categoryId = categoryId,
             category = category.ifBlank { null },
             linkedTaskId = linkedTaskId,
             createdAt = createdAt,
@@ -135,6 +144,8 @@ data class EventEditState(
                 startMinute = start?.minute,
                 endHour = end?.hour,
                 endMinute = end?.minute,
+                // Phase 8 Sub-step 9：categoryId 优先；旧 category 字符串作为后备
+                categoryId = event.categoryId,
                 category = event.category.orEmpty(),
                 note = event.note.orEmpty(),
                 reminderMinutes = event.reminder,

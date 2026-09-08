@@ -6,14 +6,18 @@ import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
 import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.calendar.domain.model.EventCategory
 import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
 import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.CancelEventReminderUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventCategoryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayDetailUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.ObserveEventCategoriesUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.UpsertEventCategoryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +57,10 @@ class CalendarViewModel @Inject constructor(
     private val deleteEventUseCase: DeleteEventUseCase,
     private val scheduleEventReminder: ScheduleEventReminderUseCase,
     private val cancelEventReminder: CancelEventReminderUseCase,
+    // Phase 8 Sub-step 9：事件分类管理
+    private val observeEventCategories: ObserveEventCategoriesUseCase,
+    private val upsertEventCategory: UpsertEventCategoryUseCase,
+    private val deleteEventCategory: DeleteEventCategoryUseCase,
 ) : ViewModel() {
 
     private val _currentYearMonth = MutableStateFlow(DateUtils.currentYearMonth())
@@ -75,6 +83,31 @@ class CalendarViewModel @Inject constructor(
      */
     private val _editorError = MutableStateFlow<String?>(null)
     val editorError: StateFlow<String?> = _editorError.asStateFlow()
+
+    /**
+     * Phase 8 Sub-step 9：事件分类列表（Flow）
+     *
+     * - 由 EventCategoryRepository.observeAll() 提供
+     * - UI 用：EditEventSheet 里的 CategorySelectorRow + CategoryManagementDialog
+     */
+    val eventCategories: StateFlow<List<EventCategory>> = observeEventCategories()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
+    /**
+     * Phase 8 Sub-step 9：分类管理 Dialog 显示状态
+     */
+    private val _showCategoryManager = MutableStateFlow(false)
+    val showCategoryManager: StateFlow<Boolean> = _showCategoryManager.asStateFlow()
+
+    /**
+     * Phase 8 Sub-step 9：分类管理错误信息
+     */
+    private val _categoryManagerError = MutableStateFlow<String?>(null)
+    val categoryManagerError: StateFlow<String?> = _categoryManagerError.asStateFlow()
 
     private val today: Long = DateUtils.todayStartMillis()
 
@@ -241,6 +274,74 @@ class CalendarViewModel @Inject constructor(
      */
     fun updateEditingState(state: EventEditState) {
         _editingState.value = state
+    }
+
+    /**
+     * Phase 8 Sub-step 9：分类选择变化（EditEventSheet 内的 Chip 切换）
+     *
+     * - [categoryId] = null → 无分类
+     * - [categoryId] != null → 关联到该分类
+     *
+     * 只修改 [editingState] 的 categoryId，不持久化（等 saveEvent 才落库）
+     */
+    fun onEventCategoryChange(categoryId: Long?) {
+        _editingState.value?.let { current ->
+            _editingState.value = current.copy(categoryId = categoryId)
+        }
+    }
+
+    /**
+     * Phase 8 Sub-step 9：打开分类管理 Dialog
+     */
+    fun openCategoryManager() {
+        _categoryManagerError.value = null
+        _showCategoryManager.value = true
+    }
+
+    /**
+     * Phase 8 Sub-step 9：关闭分类管理 Dialog
+     */
+    fun closeCategoryManager() {
+        _showCategoryManager.value = false
+        _categoryManagerError.value = null
+    }
+
+    /**
+     * Phase 8 Sub-step 9：upsert 分类（新建/编辑）
+     *
+     * - 失败时写 [_categoryManagerError]，Dialog 显示
+     * - 成功时 Flow 自动 emit 新列表（eventCategories 自动更新）
+     */
+    fun upsertCategory(category: EventCategory) {
+        viewModelScope.launch {
+            try {
+                upsertEventCategory(category)
+                _categoryManagerError.value = null
+            } catch (e: IllegalArgumentException) {
+                _categoryManagerError.value = e.message ?: "保存分类失败"
+            }
+        }
+    }
+
+    /**
+     * Phase 8 Sub-step 9：删除分类
+     */
+    fun deleteCategory(id: Long) {
+        viewModelScope.launch {
+            try {
+                deleteEventCategory(id)
+                _categoryManagerError.value = null
+            } catch (e: IllegalArgumentException) {
+                _categoryManagerError.value = e.message ?: "删除分类失败"
+            }
+        }
+    }
+
+    /**
+     * Phase 8 Sub-step 9：清除分类管理错误状态（Dialog 关闭时调用）
+     */
+    fun clearCategoryManagerError() {
+        _categoryManagerError.value = null
     }
 
     /**

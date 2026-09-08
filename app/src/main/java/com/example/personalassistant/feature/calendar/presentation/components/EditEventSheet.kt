@@ -1,6 +1,8 @@
 package com.example.personalassistant.feature.calendar.presentation.components
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,10 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,9 +40,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.calendar.presentation.EventEditState
+import com.example.personalassistant.feature.calendar.domain.model.EventCategory
 import com.example.personalassistant.core.utils.DateUtils
 import java.time.Instant
 import java.time.ZoneId
@@ -70,13 +79,15 @@ fun EditEventSheet(
     onToggleHasTime: (Boolean) -> Unit,
     onStartTimeChange: (hour: Int, minute: Int) -> Unit,
     onEndTimeChange: (hour: Int, minute: Int) -> Unit,
-    onCategoryChange: (String) -> Unit,
+    onCategoryChange: (Long?) -> Unit,
+    onManageCategories: () -> Unit = {},
     onNoteChange: (String) -> Unit,
     onReminderChange: (Int?) -> Unit,
     onSave: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    availableCategories: List<EventCategory> = emptyList(),
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -167,13 +178,12 @@ fun EditEventSheet(
             HorizontalDivider()
             Spacer(Modifier.height(12.dp))
 
-            // ===== 分类 =====
-            OutlinedTextField(
-                value = state.category,
-                onValueChange = onCategoryChange,
-                label = { Text("分类（可选）") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+            // ===== 分类选择 =====
+            // Phase 8 Sub-step 9：从 TextField 改为 Chip 风格选择器 + “管理分类”入口
+            CategorySelectorRow(
+                selectedCategoryId = state.categoryId,
+                onSelect = onCategoryChange,
+                onManageCategories = onManageCategories,
             )
             Spacer(Modifier.height(12.dp))
 
@@ -244,6 +254,106 @@ private fun ToggleRow(
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge)
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/**
+ * Phase 8 Sub-step 9：分类选择行（Chip + 「管理」按钮）
+ *
+ * - 水平滚动展示所有预置 + 自定义分类（按 sortOrder）
+ * - 选中状态用边框 + 填充色高亮
+ * - 「管理」按钮跳到 [CategoryManagementDialog]
+ */
+@Composable
+fun CategorySelectorRow(
+    selectedCategoryId: Long?,
+    onSelect: (Long?) -> Unit,
+    onManageCategories: () -> Unit,
+    availableCategories: List<EventCategory> = emptyList(),
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("分类", style = MaterialTheme.typography.bodyLarge)
+            TextButton(
+                onClick = onManageCategories,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.size(4.dp))
+                Text("管理", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Spacer(Modifier.size(6.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CategoryChip(
+                label = "无",
+                color = MaterialTheme.colorScheme.outline,
+                selected = selectedCategoryId == null,
+                onClick = { onSelect(null) },
+            )
+            availableCategories.forEach { category ->
+                CategoryChip(
+                    label = category.name,
+                    color = Color(category.color),
+                    selected = selectedCategoryId == category.id,
+                    onClick = { onSelect(category.id) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 单个分类 Chip
+ */
+@Composable
+private fun CategoryChip(
+    label: String,
+    color: Color,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val containerColor = if (selected) color.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = containerColor,
+        border = if (selected) androidx.compose.foundation.BorderStroke(2.dp, color) else null,
+        modifier = Modifier
+            .heightIn(min = 36.dp)
+            .padding(vertical = 4.dp),
+    ) {
+        TextButton(
+            onClick = onClick,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            androidx.compose.foundation.layout.Box(modifier = Modifier.size(10.dp)) {
+                androidx.compose.material3.Surface(
+                    color = color,
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {}
+            }
+            Spacer(Modifier.size(6.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            )
+        }
     }
 }
 

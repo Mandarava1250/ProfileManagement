@@ -73,6 +73,9 @@ fun CalendarScreen(
     val weekCells by viewModel.weekCells.collectAsStateWithLifecycle()
     val editingState by viewModel.editingState.collectAsStateWithLifecycle()
     val editorError by viewModel.editorError.collectAsStateWithLifecycle()
+    val eventCategories by viewModel.eventCategories.collectAsStateWithLifecycle()
+    val showCategoryManager by viewModel.showCategoryManager.collectAsStateWithLifecycle()
+    val categoryManagerError by viewModel.categoryManagerError.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -183,6 +186,7 @@ fun CalendarScreen(
         editingState?.let { state ->
             EditEventSheet(
                 state = state,
+                availableCategories = eventCategories,
                 onTitleChange = { newTitle ->
                     viewModel.updateEditingState(state.copy(title = newTitle))
                 },
@@ -206,9 +210,11 @@ fun CalendarScreen(
                 onEndTimeChange = { h, m ->
                     viewModel.updateEditingState(state.copy(endHour = h, endMinute = m))
                 },
-                onCategoryChange = { newCat ->
-                    viewModel.updateEditingState(state.copy(category = newCat))
+                onCategoryChange = { categoryId ->
+                    // Phase 8 Sub-step 9：传入 Long? categoryId（不再是 String 名称）
+                    viewModel.onEventCategoryChange(categoryId)
                 },
+                onManageCategories = viewModel::openCategoryManager,
                 onNoteChange = { newNote ->
                     viewModel.updateEditingState(state.copy(note = newNote))
                 },
@@ -218,6 +224,18 @@ fun CalendarScreen(
                 onSave = { viewModel.saveEvent(state) },
                 onDelete = { viewModel.deleteEventFromEditor() },
                 onDismiss = { viewModel.clearEditor() },
+            )
+        }
+
+        // ===== Phase 8 Sub-step 9：事件分类管理 Dialog =====
+        if (showCategoryManager) {
+            com.example.personalassistant.feature.calendar.presentation.components.CategoryManagementDialog(
+                categories = eventCategories,
+                onDismiss = { viewModel.closeCategoryManager() },
+                onUpsert = { viewModel.upsertCategory(it) },
+                onDelete = { viewModel.deleteCategory(it) },
+                errorMessage = categoryManagerError,
+                onClearError = { viewModel.clearCategoryManagerError() },
             )
         }
     }

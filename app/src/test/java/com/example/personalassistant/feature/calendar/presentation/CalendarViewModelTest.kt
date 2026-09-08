@@ -2,17 +2,21 @@ package com.example.personalassistant.feature.calendar.presentation
 
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarRepository
+import com.example.personalassistant.feature.calendar.data.repository.FakeEventCategoryRepository
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
 import com.example.personalassistant.feature.calendar.domain.model.DaySummary
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.CancelEventReminderUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventCategoryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayDetailUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.ObserveEventCategoriesUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.UpsertEventCategoryUseCase
 import com.example.personalassistant.feature.task.domain.reminder.ReminderInfo
 import com.example.personalassistant.feature.task.domain.reminder.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +59,7 @@ class CalendarViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var repo: FakeCalendarRepository
+    private lateinit var categoryRepo: FakeEventCategoryRepository
     private lateinit var scheduleEventReminder: FakeScheduleEventReminderUseCase
     private lateinit var cancelEventReminder: FakeCancelEventReminderUseCase
     private lateinit var vm: CalendarViewModel
@@ -91,6 +96,7 @@ class CalendarViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         repo = FakeCalendarRepository()
+        categoryRepo = FakeEventCategoryRepository()
         scheduleEventReminder = FakeScheduleEventReminderUseCase()
         cancelEventReminder = FakeCancelEventReminderUseCase()
         vm = CalendarViewModel(
@@ -101,6 +107,10 @@ class CalendarViewModelTest {
             deleteEventUseCase = DeleteEventUseCase(repo),
             scheduleEventReminder = scheduleEventReminder,
             cancelEventReminder = cancelEventReminder,
+            // Phase 8 Sub-step 9：事件分类管理
+            observeEventCategories = ObserveEventCategoriesUseCase(categoryRepo),
+            upsertEventCategory = UpsertEventCategoryUseCase(categoryRepo),
+            deleteEventCategory = DeleteEventCategoryUseCase(categoryRepo),
         )
     }
 
