@@ -135,6 +135,9 @@ dependencies {
     // ---- Material Components（仅用于 Splash / Snackbar 等少数 Compose 未覆盖的场景）----
     implementation(libs.google.material)
 
+    // ---- Lunar Calendar (农历日期转换，驱动月视图角标) ----
+    implementation(libs.lunar)
+
     // ---- Test ----
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

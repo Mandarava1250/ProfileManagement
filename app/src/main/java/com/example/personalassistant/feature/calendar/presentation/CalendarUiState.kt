@@ -36,7 +36,27 @@ data class CalendarUiState(
     val selectedDayDetail: DayDetail? = null,
     val liveConflictInfo: EventConflictInfo? = null,
     val savedConflictsByEventId: Map<Long, EventConflictInfo> = emptyMap(),
+    /**
+     * Phase 8 Sub-step 9 Step 5：月视图农历角标
+     *
+     * key = [CalendarDayCell.date]（当天 00:00 时间戳），value = 该格的农历展示信息。
+     * 上下月占位格也包含（让月视图跨月过渡自然）。
+     *
+     * 生成端在 [CalendarViewModel] 里通过 [com.example.personalassistant.core.lunar.LunarCalendar] 计算。
+     */
+    val monthLunarLabels: Map<Long, LunarCellLabel> = emptyMap(),
 ) {
+
+    /**
+     * Phase 8 Sub-step 9 Step 5：单个 cell 的农历角标内容。
+     *
+     * @param text UI 要显示的字串（节日名 > 月份 > 日）
+     * @param isFestival 是否节日（农历节日或公历节日），决定用 tertiary 高亮 vs onSurfaceVariant 弱化
+     */
+    data class LunarCellLabel(
+        val text: String,
+        val isFestival: Boolean,
+    )
     /**
      * 月份展示标题（如 "2024 年 12 月"）
      */

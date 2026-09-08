@@ -23,6 +23,8 @@ captures/
 # OS
 .DS_Store
 Thumbs.db
+# Windows reserved device name "nul" — 某些脚本意外创建的空文件，无法用常规命令删除
+/nul
 
 # Log
 *.log

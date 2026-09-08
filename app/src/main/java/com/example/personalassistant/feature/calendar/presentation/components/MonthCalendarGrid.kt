@@ -11,11 +11,11 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
+import com.example.personalassistant.feature.calendar.presentation.CalendarUiState
 
 /**
  * Phase 7c：月视图网格（6×7）
@@ -24,6 +24,10 @@ import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCe
  * - 顶部 7 个 weekday 标题（一/二/.../日）
  * - LazyVerticalGrid 6 行 × 7 列 = 42 个 cell
  * - selectedDate 高亮 + click 通过 onDateClick 回调上抛
+ *
+ * Phase 8 Sub-step 9 Step 5：每个 cell 携带农历角标
+ * - [lunarLabels] 的 key = [CalendarDayCell.date]（当天 00:00 millis）
+ * - 找不到时不渲染（兼容旧 caller / 测试）
  */
 @Composable
 fun MonthCalendarGrid(
@@ -31,6 +35,7 @@ fun MonthCalendarGrid(
     selectedDate: Long?,
     onDateClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    lunarLabels: Map<Long, CalendarUiState.LunarCellLabel> = emptyMap(),
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
         // 顶部周标题
@@ -59,10 +64,13 @@ fun MonthCalendarGrid(
             modifier = Modifier.fillMaxWidth(),
         ) {
             items(cells, key = { it.date }) { cell ->
+                val label = lunarLabels[cell.date]
                 MonthDayCell(
                     cell = cell,
                     isSelected = cell.date == selectedDate,
                     onClick = onDateClick,
+                    lunarLabel = label?.text,
+                    isLunarFestival = label?.isFestival == true,
                 )
             }
         }

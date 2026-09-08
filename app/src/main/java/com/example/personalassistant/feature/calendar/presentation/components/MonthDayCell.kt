@@ -19,7 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import java.time.Instant
 import java.time.ZoneId
@@ -32,6 +34,11 @@ import java.time.ZoneId
  * - 当日：圆形 primaryContainer 高亮
  * - 选中：圆形 primary 描边
  * - 内容 badge：3 个小圆点（event / task / course）
+ *
+ * Phase 8 Sub-step 9 Step 5：右下角加农历角标
+ * - 默认不显示（lunarLabel = null 时跳过）
+ * - 节日：tertiary 色（与 task badge 一致，保持色系协调）
+ * - 普通日期：onSurfaceVariant + alpha 0.6，避免抢数字主体
  */
 @Composable
 fun MonthDayCell(
@@ -39,6 +46,8 @@ fun MonthDayCell(
     isSelected: Boolean,
     onClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    lunarLabel: String? = null,
+    isLunarFestival: Boolean = false,
 ) {
     val dayOfMonth = remember(cell.date) {
         Instant.ofEpochMilli(cell.date).atZone(ZoneId.systemDefault()).dayOfMonth
@@ -94,6 +103,25 @@ fun MonthDayCell(
                     if (cell.hasCourses) BadgeDot(MaterialTheme.colorScheme.secondary)
                 }
             }
+        }
+
+        // 农历角标：右下，与 badge 区不冲突（badge 在数字下方居中，lunar 在右下）
+        if (lunarLabel != null) {
+            Text(
+                text = lunarLabel,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 4.dp, bottom = 2.dp),
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 9.sp,
+                fontWeight = if (isLunarFestival) FontWeight.Medium else FontWeight.Normal,
+                color = when {
+                    isLunarFestival -> MaterialTheme.colorScheme.tertiary
+                    // 上下月占位：跟着 cell 透明度一起降一档
+                    !cell.isCurrentMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                },
+            )
         }
     }
 }

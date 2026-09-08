@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.calendar.presentation
 
 import com.example.personalassistant.core.utils.DateUtils
+import com.example.personalassistant.core.lunar.DefaultLunarCalendar
 import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarRepository
 import com.example.personalassistant.feature.calendar.data.repository.FakeEventCategoryRepository
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
@@ -183,6 +184,8 @@ class CalendarViewModelTest {
             // 用 Noop* 探测"调用一次 = 默认空结果"，不影响 month/event/category 相关断言）
             detectLiveConflict = NoopDetectEventLiveConflictsUseCase,
             detectSavedConflict = NoopDetectEventSavedConflictsUseCase,
+            // Phase 8 Sub-step 9 Step 5：lunar 是纯函数库，直接用真实现即可
+            lunarCalendar = DefaultLunarCalendar(),
         )
     }
 

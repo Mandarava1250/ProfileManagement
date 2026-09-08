@@ -144,6 +144,8 @@ fun CalendarScreen(
                         cells = uiState.monthCells,
                         selectedDate = selectedDate,
                         onDateClick = viewModel::onDateClick,
+                        // Phase 8 Sub-step 9 Step 5：农历角标 map（key = cell.date）
+                        lunarLabels = uiState.monthLunarLabels,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     CalendarViewType.WEEK -> WeekCalendarView(

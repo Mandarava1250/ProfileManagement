@@ -2,6 +2,7 @@ package com.example.personalassistant.feature.calendar.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.personalassistant.core.lunar.LunarCalendar
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
@@ -73,6 +74,8 @@ class CalendarViewModel @Inject constructor(
     // Phase 8 Sub-step 9 Step 4.2：事件冲突检测
     private val detectLiveConflict: DetectEventLiveConflictsUseCase,
     private val detectSavedConflict: DetectEventSavedConflictsUseCase,
+    // Phase 8 Sub-step 9 Step 5：农历日期转换（用于月视图角标）
+    private val lunarCalendar: LunarCalendar,
 ) : ViewModel() {
 
     private val _currentYearMonth = MutableStateFlow(DateUtils.currentYearMonth())
@@ -510,6 +513,10 @@ class CalendarViewModel @Inject constructor(
     ): CalendarUiState {
         val yearMonth = _currentYearMonth.value
         val cells = generateMonthCells(yearMonth, summary, today)
+        // Phase 8 Sub-step 9 Step 5：农历角标一次性生成 42 格的 label
+        val lunarLabels = cells.associate { cell ->
+            cell.date to buildLunarLabel(cell.date)
+        }
         return CalendarUiState(
             yearMonth = yearMonth,
             monthCells = cells,
@@ -519,6 +526,22 @@ class CalendarViewModel @Inject constructor(
             selectedDate = _selectedDate.value,
             liveConflictInfo = liveConflict,
             savedConflictsByEventId = savedConflicts,
+            monthLunarLabels = lunarLabels,
+        )
+    }
+
+    /**
+     * Phase 8 Sub-step 9 Step 5：计算单个 cell 的农历角标。
+     *
+     * - 用 [LunarCalendar.displayLabel] 拿到最终要显示的字符串
+     * - 用 [LunarCalendar.toLunarDate] 看是否有节日，决定是否走 tertiary 高亮
+     */
+    private fun buildLunarLabel(dateMillis: Long): CalendarUiState.LunarCellLabel {
+        val lunarDate = lunarCalendar.toLunarDate(dateMillis)
+        val isFestival = lunarDate.festivals.isNotEmpty() || lunarDate.solarFestivals.isNotEmpty()
+        return CalendarUiState.LunarCellLabel(
+            text = lunarCalendar.displayLabel(lunarDate),
+            isFestival = isFestival,
         )
     }
 

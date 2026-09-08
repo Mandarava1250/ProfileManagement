@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.calendar.presentation
 
+import com.example.personalassistant.core.lunar.DefaultLunarCalendar
 import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarRepository
 import com.example.personalassistant.feature.calendar.data.repository.FakeEventCategoryRepository
 import com.example.personalassistant.feature.calendar.domain.model.Event
@@ -183,6 +184,8 @@ class CalendarViewModelConflictTest {
             deleteEventCategory = DeleteEventCategoryUseCase(categoryRepo),
             detectLiveConflict = detectLiveConflict,
             detectSavedConflict = detectSavedConflict,
+            // Phase 8 Sub-step 9 Step 5：lunar 是纯函数库，直接用真实现
+            lunarCalendar = DefaultLunarCalendar(),
         )
     }
 

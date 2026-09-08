@@ -41,6 +41,9 @@ kotlinx-serialization = "1.6.2"
 # Material
 material = "1.11.0"
 
+# Lunar Calendar (cn.6tail:lunar — 已发布到 Maven Central)
+lunar = "1.7.5"
+
 # Test
 junit = "4.13.2"
 junit-android = "1.1.5"
@@ -100,6 +103,9 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 
 # Material
 google-material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+
+# Lunar Calendar
+lunar = { group = "cn.6tail", name = "lunar", version.ref = "lunar" }
 
 # Test
 junit = { group = "junit", name = "junit", version.ref = "junit" }
