@@ -71,7 +71,7 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
         // 节假日（Phase 8 Sub-step 7）
         HolidayEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -102,6 +102,7 @@ abstract class AppDatabase : RoomDatabase() {
                 Migration_4_5,
                 Migration_5_6,
                 Migration_6_7,
+                Migration_7_8,
             )
     }
 }

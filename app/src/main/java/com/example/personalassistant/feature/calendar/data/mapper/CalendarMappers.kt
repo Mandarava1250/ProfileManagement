@@ -2,6 +2,7 @@ package com.example.personalassistant.feature.calendar.data.mapper
 
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.calendar.domain.recurrence.RecurrenceRule
 
 /**
  * Phase 7c：EventEntity ↔ Event 双向映射
@@ -26,6 +27,8 @@ internal fun EventEntity.toDomain(): Event = Event(
     categoryId = categoryId,
     category = category,
     linkedTaskId = linkedTaskId,
+    // Phase 8 Sub-step 9 Step 3：rrule（RFC 5545 字符串）→ RecurrenceRule（强类型）
+    recurrence = rrule?.let { RecurrenceRule.fromRfcString(it) },
     createdAt = createdAt,
     updatedAt = updatedAt,
 )
@@ -44,6 +47,8 @@ internal fun Event.toEntity(): EventEntity = EventEntity(
     categoryId = categoryId,
     category = category,
     linkedTaskId = linkedTaskId,
+    // Phase 8 Sub-step 9 Step 3：RecurrenceRule → rrule（RFC 5545 字符串），null 时存 null
+    rrule = recurrence?.toRfcString(),
     createdAt = createdAt,
     updatedAt = System.currentTimeMillis(),
 )

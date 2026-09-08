@@ -72,6 +72,16 @@ data class EventEntity(
     @ColumnInfo(name = "linkedTaskId")
     val linkedTaskId: Long? = null,
 
+    /**
+     * Phase 8 Sub-step 9 Step 3：RRULE 重复规则（RFC 5545 字符串）
+     *
+     * - null → 不重复（单次事件）
+     * - 非 null → 存的是 RRULE 序列化字符串（如 "FREQ=WEEKLY;BYDAY=MO,WE"）
+     * - 首次发生日期用 [date] 字段，展开逻辑由 [com.example.personalassistant.feature.calendar.domain.recurrence.RecurrenceExpander] 处理
+     */
+    @ColumnInfo(name = "rrule")
+    val rrule: String? = null,
+
     @ColumnInfo(name = "createdAt")
     val createdAt: Long = System.currentTimeMillis(),
 

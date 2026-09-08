@@ -1,5 +1,7 @@
 package com.example.personalassistant.feature.calendar.domain.model
 
+import com.example.personalassistant.feature.calendar.domain.recurrence.RecurrenceRule
+
 /**
  * Phase 7c：日历事件（Domain 模型）
  *
@@ -36,6 +38,17 @@ data class Event(
     val categoryId: Long? = null,
     val category: String? = null,
     val linkedTaskId: Long? = null,
+    /**
+     * Phase 8 Sub-step 9 Step 3：RRULE 重复规则
+     *
+     * - null → 不重复（单次事件）
+     * - 非 null → 首次发生日期是 [date]，后续 occurrence 由 [com.example.personalassistant.feature.calendar.domain.recurrence.RecurrenceExpander] 按规则展开
+     *
+     * 涟宝设计取舍：
+     * - DB 存的是 RFC 5545 字符串（[rrule]）；domain 层用 [RecurrenceRule] 对象（强类型）
+     * - mapper 层做 toString ↔ RecurrenceRule 互转
+     */
+    val recurrence: RecurrenceRule? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 ) {
