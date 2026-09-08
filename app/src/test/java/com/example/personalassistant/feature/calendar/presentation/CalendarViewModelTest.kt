@@ -59,8 +59,11 @@ class CalendarViewModelTest {
     private lateinit var cancelEventReminder: FakeCancelEventReminderUseCase
     private lateinit var vm: CalendarViewModel
 
-    /** Phase 8 Sub-step 1：用于 CalendarViewModel 接线测试，统计调用次数。 */
-    private class FakeScheduleEventReminderUseCase : ScheduleEventReminderUseCase(NoopReminderScheduler) {
+    /** Phase 8 Sub-step 7：用于 CalendarViewModel 接线测试，统计调用次数。 */
+    private class FakeScheduleEventReminderUseCase : ScheduleEventReminderUseCase(
+        NoopReminderScheduler,
+        com.example.personalassistant.core.holiday.usecase.IsHolidayUseCase { false },
+    ) {
         var calls: Int = 0; private set
         var lastEvent: Event? = null; private set
         override suspend fun invoke(event: Event) {

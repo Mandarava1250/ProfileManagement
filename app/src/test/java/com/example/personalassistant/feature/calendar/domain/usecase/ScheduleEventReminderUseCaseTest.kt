@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.calendar.domain.usecase
 
+import com.example.personalassistant.core.holiday.usecase.IsHolidayUseCase
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.task.domain.reminder.ReminderInfo
 import com.example.personalassistant.feature.task.domain.reminder.ReminderScheduler
@@ -8,11 +9,20 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDate
 
 /**
  * ScheduleEventReminderUseCase 单测 —— 验证 triggerAt 计算和调度条件。
+ *
+ * Phase 8 Sub-step 7：测试注入 AlwaysFalseIsHolidayUseCase，让现有测试保持「节假日不避让」行为。
  */
 class ScheduleEventReminderUseCaseTest {
+
+    /**
+     * Phase 8 Sub-step 7：测试 stub——永远返回 false（不避让），保持原测试行为。
+     * fun interface 允许用 lambda 实例化。
+     */
+    private val alwaysFalseHoliday = com.example.personalassistant.core.holiday.usecase.IsHolidayUseCase { false }
 
     /**
      * 用于捕获最近一次 schedule() 调用的 Fake。
@@ -34,7 +44,7 @@ class ScheduleEventReminderUseCaseTest {
     @Test
     fun `event with reminder and startTime triggers schedule with triggerAt = startTime minus reminder minutes`() = runTest {
         val scheduler = CapturingScheduler()
-        val useCase = ScheduleEventReminderUseCase(scheduler)
+        val useCase = ScheduleEventReminderUseCase(scheduler, alwaysFalseHoliday)
 
         val startMillis = Instant.parse("2026-12-01T10:00:00Z").toEpochMilli()
         val event = Event(
@@ -62,7 +72,7 @@ class ScheduleEventReminderUseCaseTest {
     @Test
     fun `event without reminder is a no-op`() = runTest {
         val scheduler = CapturingScheduler()
-        val useCase = ScheduleEventReminderUseCase(scheduler)
+        val useCase = ScheduleEventReminderUseCase(scheduler, alwaysFalseHoliday)
 
         val startMillis = Instant.parse("2026-12-01T10:00:00Z").toEpochMilli()
         val event = Event(
@@ -82,7 +92,7 @@ class ScheduleEventReminderUseCaseTest {
     @Test
     fun `all-day event without startTime is a no-op`() = runTest {
         val scheduler = CapturingScheduler()
-        val useCase = ScheduleEventReminderUseCase(scheduler)
+        val useCase = ScheduleEventReminderUseCase(scheduler, alwaysFalseHoliday)
 
         val dateMillis = Instant.parse("2026-12-01T00:00:00Z").toEpochMilli()
         val event = Event(
@@ -103,7 +113,7 @@ class ScheduleEventReminderUseCaseTest {
     @Test
     fun `reminder zero means fire at startTime itself`() = runTest {
         val scheduler = CapturingScheduler()
-        val useCase = ScheduleEventReminderUseCase(scheduler)
+        val useCase = ScheduleEventReminderUseCase(scheduler, alwaysFalseHoliday)
 
         val startMillis = Instant.parse("2026-12-01T10:00:00Z").toEpochMilli()
         val event = Event(
@@ -124,7 +134,7 @@ class ScheduleEventReminderUseCaseTest {
     @Test
     fun `large reminder minutes still produces valid triggerAt`() = runTest {
         val scheduler = CapturingScheduler()
-        val useCase = ScheduleEventReminderUseCase(scheduler)
+        val useCase = ScheduleEventReminderUseCase(scheduler, alwaysFalseHoliday)
 
         val startMillis = Instant.parse("2026-12-01T10:00:00Z").toEpochMilli()
         val event = Event(

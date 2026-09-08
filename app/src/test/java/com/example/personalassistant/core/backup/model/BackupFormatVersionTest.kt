@@ -37,8 +37,9 @@ class BackupFormatVersionTest {
     }
 
     @Test
-    fun `DB_VERSION 应等于当前 schema version 5`() {
-        assertEquals(5, BackupFormatVersion.DB_VERSION)
+    fun `DB_VERSION 应等于当前 schema version 6`() {
+        // Phase 8 Sub-step 7：新增 holidays 表 + tasks 表新增 holidayStrategy 列 → schema 升到 v6
+        assertEquals(6, BackupFormatVersion.DB_VERSION)
     }
 
     @Test

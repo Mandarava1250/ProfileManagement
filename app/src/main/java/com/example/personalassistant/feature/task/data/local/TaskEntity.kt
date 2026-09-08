@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.example.personalassistant.core.holiday.model.HolidayStrategy
 import kotlinx.serialization.Serializable
 
 /**
@@ -14,6 +15,7 @@ import kotlinx.serialization.Serializable
  * - repeatEndDate: 重复截止日期（null=无限）
  * - repeatDays: Phase 4b 自定义星期几存储，格式 "MONDAY,WEDNESDAY"（可选；与 repeatType 配合解读）
  *           为 null 时 repeatType 即为最终语义；非 null 时即使 repeatType 落库为 DAILY 也按自定义星期解读
+ * - holidayStrategy: Phase 8 Sub-step 7，重复任务遇到 HOLIDAY 时的处理策略
  */
 @Entity(
     tableName = "tasks",
@@ -83,4 +85,13 @@ data class TaskEntity(
      */
     @ColumnInfo(name = "manualOrder")
     val manualOrder: Long? = null,
+
+    /**
+     * Phase 8 Sub-step 7：节假日处理策略（仅对重复任务生效）。
+     *
+     * 默认 [HolidayStrategy.SKIP]（遇到节假日跳过本次）。
+     * 非重复任务（repeatType == null）该字段无效,保留默认值。
+     */
+    @ColumnInfo(name = "holidayStrategy")
+    val holidayStrategy: HolidayStrategy = HolidayStrategy.SKIP,
 )

@@ -3,6 +3,8 @@ package com.example.personalassistant.core.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
+import com.example.personalassistant.core.holiday.data.HolidayDao
+import com.example.personalassistant.core.holiday.model.HolidayEntity
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
@@ -25,7 +27,7 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 /**
  * App 主数据库
  *
- * 11 张表：
+ * 12 张表：
  * 1. courses          - 课程
  * 2. semesters        - 学期
  * 3. tasks            - 任务
@@ -37,6 +39,7 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
  * 9. categories       - 记账分类
  * 10. monthly_budgets  - 月度预算
  * 11. daily_pools      - 每日零钱池
+ * 12. holidays        - 节假日（Phase 8 Sub-step 7 新增）
  *
  * ⚠️ schema 变更必须按以下流程：
  *   1. 修改对应 Entity
@@ -60,9 +63,11 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
         TransactionEntity::class,
         CategoryEntity::class,
         MonthlyBudgetEntity::class,
-        DailyPoolEntity::class
+        DailyPoolEntity::class,
+        // 节假日（Phase 8 Sub-step 7）
+        HolidayEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -73,6 +78,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun taskTagDao(): TaskTagDao
     abstract fun eventDao(): EventDao
     abstract fun financeDao(): FinanceDao
+    abstract fun holidayDao(): HolidayDao
 
     companion object {
         const val DATABASE_NAME = "personal_assistant.db"
@@ -89,6 +95,7 @@ abstract class AppDatabase : RoomDatabase() {
                 Migration_2_3,
                 Migration_3_4,
                 Migration_4_5,
+                Migration_5_6,
             )
     }
 }

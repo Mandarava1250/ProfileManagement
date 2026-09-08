@@ -7,6 +7,8 @@ import com.example.personalassistant.core.backup.model.BackupResult
 import com.example.personalassistant.core.backup.validator.BackupValidator
 import com.example.personalassistant.core.backup.validator.ValidationBundle
 import com.example.personalassistant.core.database.AppDatabase
+import com.example.personalassistant.core.holiday.data.HolidayDao
+import com.example.personalassistant.core.holiday.model.HolidayEntity
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
@@ -47,7 +49,7 @@ import javax.inject.Singleton
  *
  * 关键不变量：
  * - 整个写入过程是原子的（要么全成功，要么全回滚）
- * - 外键依赖顺序：semesters → tasks → sub_tasks → tags → cross_ref → events → categories → monthly_budgets → daily_pools → transactions → courses
+ * - 外键依赖顺序：semesters → tasks → sub_tasks → tags → cross_ref → events → categories → monthly_budgets → daily_pools → transactions → courses → holidays
  */
 @Singleton
 class BackupImporter @Inject constructor(
@@ -125,6 +127,11 @@ class BackupImporter @Inject constructor(
                     bundle.tableBytes["transactions"],
                     ListSerializer(TransactionEntity.serializer()),
                 ),
+                // Phase 8 Sub-step 7：节假日表
+                holidays = decodeTable(
+                    bundle.tableBytes["holidays"],
+                    ListSerializer(HolidayEntity.serializer()),
+                ),
             )
         } catch (t: Throwable) {
             return BackupResult.Failure(
@@ -147,8 +154,10 @@ class BackupImporter @Inject constructor(
                     val taskTagDao: TaskTagDao = database.taskTagDao()
                     val eventDao: EventDao = database.eventDao()
                     val financeDao: FinanceDao = database.financeDao()
+                    val holidayDao: HolidayDao = database.holidayDao()
 
                     // ===== 清空所有表（按 manifest.DEFAULT_TABLES 反序）=====
+                    clearTable { holidayDao.clearAll() }
                     clearTable { financeDao.getAllTransactions().forEach { financeDao.deleteTransactionById(it.id) } }
                     clearTable { financeDao.getAllDailyPools().forEach { financeDao.deleteDailyPoolById(it.id) } }
                     clearTable { financeDao.getAllMonthlyBudgets().forEach { financeDao.deleteMonthlyBudgetById(it.id) } }
@@ -194,6 +203,9 @@ class BackupImporter @Inject constructor(
                     }
                     if (payload.transactions.isNotEmpty()) {
                         payload.transactions.forEach { financeDao.insertTransaction(it) }
+                    }
+                    if (payload.holidays.isNotEmpty()) {
+                        holidayDao.insertAll(payload.holidays)
                     }
                 } finally {
                     database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")

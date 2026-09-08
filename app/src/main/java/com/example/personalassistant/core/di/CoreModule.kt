@@ -10,6 +10,7 @@ import androidx.room.Room
 import com.example.personalassistant.core.database.AppDatabase
 import com.example.personalassistant.core.database.DatabaseCallback
 import com.example.personalassistant.core.database.DatabaseCallbackHolder
+import com.example.personalassistant.core.holiday.data.HolidayDao
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.task.data.local.TagDao
@@ -105,6 +106,12 @@ object CoreModule {
 
     @Provides
     fun provideFinanceDao(db: AppDatabase): FinanceDao = db.financeDao()
+
+    /**
+     * Phase 8 Sub-step 7：节假日 DAO 绑定（与其它 DAO 模式一致）。
+     */
+    @Provides
+    fun provideHolidayDao(db: AppDatabase): HolidayDao = db.holidayDao()
 
     // ========== DataStore（SettingsRepository 用）==========
 

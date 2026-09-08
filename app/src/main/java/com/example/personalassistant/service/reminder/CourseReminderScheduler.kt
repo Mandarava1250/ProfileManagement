@@ -6,11 +6,14 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import com.example.personalassistant.core.holiday.usecase.IsHolidayUseCase
 import com.example.personalassistant.feature.timetable.domain.model.Course
+import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
+import javax.inject.Inject
 
 /**
  * 课程提醒调度器
@@ -25,9 +28,10 @@ import java.time.ZoneId
  *  - 应用启动 / 课程增删改后调用 rescheduleAll 重建闹钟
  *  - 闹钟 requestCode 用 (courseId.toInt() * 10 + dayOfWeek)，同课程同天幂等
  */
-class CourseReminderScheduler(
+class CourseReminderScheduler @Inject constructor(
     private val context: Context,
     private val alarmManager: AlarmManager,
+    private val isHolidayUseCase: IsHolidayUseCase,
 ) {
 
     /**
@@ -58,6 +62,13 @@ class CourseReminderScheduler(
         targetDate: LocalDate,
         semesterStartMillis: Long,
     ) {
+        // ===== Phase 8 Sub-step 7：节假日避让 =====
+        // 用 runBlocking 是因为 AlarmManager 是同步 API；节假日判断是轻量 Room 查询
+        if (runBlocking { isHolidayUseCase(targetDate) }) {
+            Log.i(TAG, "[HolidayAware] skip course=${course.id} date=$targetDate (HOLIDAY)")
+            return
+        }
+
         // 计算 targetDate 是第几周（基于学期开始日期）
         val semesterStart = java.time.Instant.ofEpochMilli(semesterStartMillis)
             .atZone(ZoneId.systemDefault()).toLocalDate()

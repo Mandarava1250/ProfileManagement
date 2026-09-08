@@ -110,7 +110,10 @@ class TaskEditViewModelTest {
         override suspend operator fun invoke(task: Task) { calls++ }
     }
 
-    private class FakeScheduleReminderUseCase : ScheduleReminderUseCase(scheduler = NoopReminderScheduler) {
+    private class FakeScheduleReminderUseCase : ScheduleReminderUseCase(
+        scheduler = NoopReminderScheduler,
+        isHolidayUseCase = com.example.personalassistant.core.holiday.usecase.IsHolidayUseCase { false },
+    ) {
         var calls: Int = 0; private set
         var lastTask: Task? = null; private set
         override suspend operator fun invoke(task: Task) {

@@ -39,6 +39,8 @@ data class BackupManifest(
             "monthly_budgets",
             "daily_pools",
             "transactions",
+            // Phase 8 Sub-step 7：节假日表（v6 新增）
+            "holidays",
         )
     }
 }

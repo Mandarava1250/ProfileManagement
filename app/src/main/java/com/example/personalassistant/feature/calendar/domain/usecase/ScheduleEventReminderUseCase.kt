@@ -1,9 +1,11 @@
 package com.example.personalassistant.feature.calendar.domain.usecase
 
+import com.example.personalassistant.core.holiday.usecase.IsHolidayUseCase
 import com.example.personalassistant.feature.calendar.di.CalendarModule
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.task.domain.reminder.ReminderInfo
 import com.example.personalassistant.feature.task.domain.reminder.ReminderScheduler
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Named
 
@@ -31,11 +33,21 @@ import javax.inject.Named
  */
 open class ScheduleEventReminderUseCase @Inject constructor(
     @Named(CalendarModule.NAMED_EVENT) private val scheduler: ReminderScheduler,
+    private val isHolidayUseCase: IsHolidayUseCase,
 ) {
     open suspend operator fun invoke(event: Event) {
         val reminder = event.reminder ?: return
         val startTime = event.startTime ?: return
         val triggerMillis = startTime - reminder * 60_000L
+        val triggerDate = java.time.Instant.ofEpochMilli(triggerMillis)
+            .atZone(ZoneId.systemDefault()).toLocalDate()
+        if (isHolidayUseCase(triggerDate)) {
+            android.util.Log.i(
+                TAG,
+                "[HolidayAware] skip event=${event.id} trigger=$triggerDate (HOLIDAY)",
+            )
+            return
+        }
         scheduler.schedule(
             ReminderInfo(
                 taskId = event.id,
@@ -44,5 +56,9 @@ open class ScheduleEventReminderUseCase @Inject constructor(
                 triggerAt = java.time.Instant.ofEpochMilli(triggerMillis),
             )
         )
+    }
+
+    companion object {
+        private const val TAG = "EventReminder"
     }
 }

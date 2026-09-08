@@ -3,6 +3,7 @@ package com.example.personalassistant.core.backup.serializer
 import com.example.personalassistant.core.backup.model.BackupError
 import com.example.personalassistant.core.backup.model.BackupPayload
 import com.example.personalassistant.core.backup.model.BackupResult
+import com.example.personalassistant.core.holiday.data.HolidayDao
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.task.data.local.TagDao
@@ -16,11 +17,11 @@ import javax.inject.Singleton
 /**
  * Phase 8 Sub-step 4：备份序列化器（Room → 内存快照）
  *
- * 单一职责：把 Room 11 张表全量拉出，组装成 [BackupPayload]。
+ * 单一职责：把 Room 12 张表全量拉出，组装成 [BackupPayload]。
  * 不涉及 IO / ZIP / 偏好。导出侧的 [BackupExporter] 负责把它写到 ZIP，
  * 导入侧的 [BackupImporter] 负责把 ZIP 数据写回 Room。
  *
- * 测试策略：mock 全部 7 个 DAO（task 模块 4 个 + 课程 2 个 + 财务 1 个 + 日历 1 个），
+ * 测试策略：mock 全部 8 个 DAO（task 模块 4 个 + 课程 2 个 + 财务 1 个 + 日历 1 个 + 节假日 1 个），
  * 验证 snapshot() 正确返回各表数据。
  */
 @Singleton
@@ -32,9 +33,10 @@ class BackupSerializer @Inject constructor(
     private val taskTagDao: TaskTagDao,
     private val eventDao: EventDao,
     private val financeDao: FinanceDao,
+    private val holidayDao: HolidayDao,
 ) {
     /**
-     * 全量快照：从 Room 拉出 11 张表全部数据
+     * 全量快照：从 Room 拉出 12 张表全部数据
      */
     suspend fun snapshot(): BackupResult<BackupPayload> = try {
         val payload = BackupPayload(
@@ -49,6 +51,7 @@ class BackupSerializer @Inject constructor(
             monthlyBudgets = financeDao.getAllMonthlyBudgets(),
             dailyPools = financeDao.getAllDailyPools(),
             transactions = financeDao.getAllTransactions(),
+            holidays = holidayDao.getAll(),
         )
         BackupResult.Success(payload)
     } catch (t: Throwable) {

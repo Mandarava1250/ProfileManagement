@@ -7,6 +7,7 @@ import com.example.personalassistant.core.backup.model.BackupFormatVersion
 import com.example.personalassistant.core.backup.model.BackupManifest
 import com.example.personalassistant.core.backup.model.BackupPayload
 import com.example.personalassistant.core.backup.model.BackupResult
+import com.example.personalassistant.core.holiday.model.HolidayEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
@@ -56,6 +57,7 @@ class BackupExporter @Inject constructor(
                 writeMonthlyBudgets(zipOut, payload.monthlyBudgets, checksums)
                 writeDailyPools(zipOut, payload.dailyPools, checksums)
                 writeTransactions(zipOut, payload.transactions, checksums)
+                writeHolidays(zipOut, payload.holidays, checksums)
 
                 val manifest = BackupManifest(
                     application = BackupFormatVersion.APPLICATION,
@@ -84,7 +86,7 @@ class BackupExporter @Inject constructor(
         }
     }
 
-    // 11 张表分别 dispatch（用唯一方法名避免 JVM signature clash）
+    // 12 张表分别 dispatch（用唯一方法名避免 JVM signature clash）
     private fun writeSemesters(zipOut: ZipOutputStream, data: List<SemesterEntity>, checksums: MutableMap<String, String>) =
         writeBytes(zipOut, "semesters",
             json.encodeToString(ListSerializer(SemesterEntity.serializer()), data).toByteArray(Charsets.UTF_8),
@@ -138,6 +140,11 @@ class BackupExporter @Inject constructor(
     private fun writeTransactions(zipOut: ZipOutputStream, data: List<TransactionEntity>, checksums: MutableMap<String, String>) =
         writeBytes(zipOut, "transactions",
             json.encodeToString(ListSerializer(TransactionEntity.serializer()), data).toByteArray(Charsets.UTF_8),
+            checksums)
+
+    private fun writeHolidays(zipOut: ZipOutputStream, data: List<HolidayEntity>, checksums: MutableMap<String, String>) =
+        writeBytes(zipOut, "holidays",
+            json.encodeToString(ListSerializer(HolidayEntity.serializer()), data).toByteArray(Charsets.UTF_8),
             checksums)
 
     private fun writeBytes(

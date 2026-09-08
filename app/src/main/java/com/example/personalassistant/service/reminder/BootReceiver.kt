@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.example.personalassistant.core.holiday.di.HolidayReminderScheduler
 import com.example.personalassistant.feature.task.domain.reminder.ReminderScheduler
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -22,12 +23,17 @@ import javax.inject.Inject
  *
  * Phase 7a 增量：
  * - 调度下一日的 [DailyPoolRefreshWorker]（WorkManager 被国产 ROM 杀掉后，重启时需重设）
+ *
+ * Phase 8 Sub-step 7 增量：
+ * - 重设 [HolidayReminderScheduler]（提前通知 Worker），用用户在 Settings 里设置的时间
+ * - 不主动设置 hour/minute（默认值 21:00 由 [HolidayReminderSchedulerImpl] 内部处理）
  */
 @AndroidEntryPoint
 class BootReceiver : BroadcastReceiver() {
 
     @Inject lateinit var reminderScheduler: ReminderScheduler
     @Inject lateinit var dailyPoolScheduler: DailyPoolRefreshScheduler
+    @Inject lateinit var holidayReminderScheduler: HolidayReminderScheduler
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -41,6 +47,8 @@ class BootReceiver : BroadcastReceiver() {
                     try {
                         reminderScheduler.cancelAll()
                         dailyPoolScheduler.scheduleNext()
+                        // 重新调度节假日提前通知 Worker，使用 Settings 里的默认时间
+                        holidayReminderScheduler.scheduleEveningReminder()
                     } catch (e: Exception) {
                         Log.w(TAG, "BootReceiver action failed: ${e.message}")
                     } finally {
