@@ -73,6 +73,16 @@ interface EventDao {
 
     // ===== Phase 8 Sub-step 4：备份导出快照 =====
 
-    @Query("SELECT * FROM events")
+    @Query("SELECT * FROM events ORDER BY date ASC, startTime ASC")
     suspend fun getAllEvents(): List<EventEntity>
+
+    // ===== Phase 8 Sub-step 9：按分类查询 =====
+
+    /** 按 categoryId 观察事件列表 */
+    @Query("SELECT * FROM events WHERE categoryId = :categoryId ORDER BY date ASC, startTime ASC")
+    fun observeByCategory(categoryId: Long): Flow<List<EventEntity>>
+
+    /** 按 categoryId 一次性查询 */
+    @Query("SELECT * FROM events WHERE categoryId = :categoryId ORDER BY date ASC, startTime ASC")
+    suspend fun getByCategory(categoryId: Long): List<EventEntity>
 }

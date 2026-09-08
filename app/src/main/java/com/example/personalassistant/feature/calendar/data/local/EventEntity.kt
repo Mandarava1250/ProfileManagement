@@ -32,6 +32,16 @@ data class EventEntity(
     @ColumnInfo(name = "date")
     val date: Long,
 
+    /**
+     * 关联分类 ID（Phase 8 Sub-step 9 新增）
+     *
+     * - null 表示未分类
+     * - 外键 reference：event_categories.id（ON DELETE SET NULL）
+     * - 旧字段 [category] 保留只读兼容（sub-step 9 之前的数据迁移用，后续可弃用）
+     */
+    @ColumnInfo(name = "categoryId", index = true)
+    val categoryId: Long? = null,
+
     @ColumnInfo(name = "isAllDay")
     val isAllDay: Boolean = false,
 

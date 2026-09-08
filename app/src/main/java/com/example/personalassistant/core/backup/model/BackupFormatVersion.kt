@@ -32,7 +32,7 @@ object BackupFormatVersion {
     const val FORMAT_VERSION: Int = 1
 
     /** App 数据库 schema version（备份时的 schema 版本）*/
-    const val DB_VERSION: Int = 6
+    const val DB_VERSION: Int = 7
 
     /** 应用包名（写入 manifest 用于跨应用保护）*/
     const val APPLICATION: String = "com.example.personalassistant"

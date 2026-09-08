@@ -3,6 +3,7 @@ package com.example.personalassistant.core.database
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.personalassistant.core.holiday.model.PresetHolidays
+import com.example.personalassistant.feature.calendar.data.seed.DefaultEventCategories
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.finance.data.seed.DefaultCategories
 import kotlinx.coroutines.CoroutineScope
@@ -50,6 +51,7 @@ class DatabaseCallback @Inject constructor() : RoomDatabase.Callback() {
         // 数据库首次创建时，异步插入默认数据
         scope.launch {
             seedDefaultCategories()
+            seedEventCategories()
             seedHolidays()
         }
     }
@@ -68,6 +70,18 @@ class DatabaseCallback @Inject constructor() : RoomDatabase.Callback() {
         DefaultCategories.build().forEach { entity ->
             financeDao.insertCategory(entity)
         }
+    }
+
+    /**
+     * Phase 8 Sub-step 9：日历事件分类预置数据 seed。
+     *
+     * - [DefaultEventCategories.build] 含 8 个内置分类（工作/学习/生活/健康/财务/社交/生日/其他）
+     * - EventCategoryDao 用 OnConflictStrategy.IGNORE，迁移场景安全
+     * - 首次安装时 event_categories 表为空 → 全部插入
+     */
+    private suspend fun seedEventCategories() {
+        val db = database ?: return
+        db.eventCategoryDao().insertAll(DefaultEventCategories.build())
     }
 
     /**

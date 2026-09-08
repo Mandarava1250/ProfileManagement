@@ -22,6 +22,8 @@ internal fun EventEntity.toDomain(): Event = Event(
     color = color,
     reminder = reminder,
     note = note,
+    // Phase 8 Sub-step 9：categoryId 优先；旧 category 字段保留（只读兼容）
+    categoryId = categoryId,
     category = category,
     linkedTaskId = linkedTaskId,
     createdAt = createdAt,
@@ -38,6 +40,8 @@ internal fun Event.toEntity(): EventEntity = EventEntity(
     color = color,
     reminder = reminder,
     note = note,
+    // Phase 8 Sub-step 9：保存时只写 categoryId；旧 category 字段保留（只读兼容）
+    categoryId = categoryId,
     category = category,
     linkedTaskId = linkedTaskId,
     createdAt = createdAt,
