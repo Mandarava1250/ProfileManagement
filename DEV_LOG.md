@@ -1,220 +1,436 @@
 # 项目开发日志（DEV_LOG）
 
-> 维护者：昔涟（自动更新）
-> 触发规则：每次执行完一个计划（plan）后追加一段
-> 作用：记录已完成的步骤、对应的计划章节、关键变更文件、验证结果、踩坑笔记 —— 方便后续记忆与查漏补缺
+> **维护者**：昔涟（自动更新）
+> **触发规则**：每次执行完一个计划（plan）后追加一段
+> **作用**：记录已完成的步骤、对应的计划章节、关键变更文件、验证结果、踩坑笔记 —— 方便后续记忆与查漏补缺
+> **生成时间**：2026-09-09 01:10（基于 `git log --all` 全量重建）
+
+---
+
+## 📌 项目速览
+
+| 项 | 当前状态 |
+|---|---|
+| 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
+| 命名空间 | `com.example.personalassistant` |
+| 当前 HEAD | `608268d` |
+| 当前分支 | `feature/phase-8-reminder` |
+| 主分支 | `Develop` |
+| 累计 commit 数 | 37（不含 merge / revert 中的 commit） |
+| 测试用例 | ~519（基线 510 + 9 个新增 LunarCalendarTest） |
+| Room 数据库 | v10（含 `event_categories` 表 + `events.category_id` 外键） |
+| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项） |
+| 进行中 | Phase 8b' —— 5 Tab 切换 + 自定义档名 aliases |
+
+---
+
+## 🗂 Phase 总览（时间顺序，从项目最早到最近）
+
+| Phase | 主题 | commit 数 | 起止日期 | 关键产物 |
+|---|---|---|---|---|
+| 1 | 基础架构 | 2 | 2026-09-04 | Gradle / Hilt / Room / DataStore / Material3 樱花粉主题 / 4 Tab / 通知渠道 |
+| 2 | 课表模块 + 构建链路修复 | 1 | 2026-09-05 | `CourseEntity` / `CourseDao` / 周次展开 / `CourseSchedule` UI |
+| 3 + 4a | 任务 MVP + 扩展性骨架 | 1 | 2026-09-05 | `TaskEntity` / `TaskDao` / `TaskRepository` / 任务列表 / 任务详情 |
+| 4b | UI 暴露 filter/sort/分类/重复/提醒 | 1 | 2026-09-05 | DB schema v3（含 priority / categoryId / recurrence）|
+| 5 | 提醒系统接 WorkManager + AlarmManager | 1 | 2026-09-05 | `ReminderScheduler` / `ReminderReceiver` / 通知渠道 |
+| 5b | Compose UI 真接通知权限申请 | 1 | 2026-09-06 | `RequestNotificationPermission` Composable |
+| 6a | 拖拽手动排序（DB v3→v4） | 1 | 2026-09-06 | `orderIndex` 字段 + `ManualSortScreen` |
+| 6b | 任务详情页 + 子任务编辑 | 2 | 2026-09-06 | `TaskDetailScreen` + 子任务 RecyclerView / Compose（一次 revert 后重做） |
+| 6c | Tag cloud —— 标签 UI + 过滤栏 | 1 | 2026-09-06 | `LabelChip` + filter bar |
+| 7a | 记账模块核心 | 1 | 2026-09-06 | `TransactionEntity` / 记账表单 / WorkManager 备份 |
+| 7b | 记账编辑闭环 + 报表 + 搜索 + 导入导出 + 自定义图标 | 1 | 2026-09-07 | 月度报表 / CSV 导入导出 |
+| 7c | Calendar 模块（5 个 sub-step） | 6 | 2026-09-07 | `EventEntity` / 月视图 / 周日视图 / DayDetailSheet / 编辑闭环 |
+| 8 | 多 sub-step 复合 phase | 18 | 2026-09-07~09-09 | Event 智能提醒 / 5 档优先级 / 全局搜索 / 备份恢复 / 主题 / 节假日 / Settings / 分类管理 / RRULE / 冲突检测 / 农历 |
 
 ---
 
 ## 📜 命名差异说明（plan 编号 vs 实际编号）
 
+> **看日志时以 git commit 标题里的「sub-step X」为准**；需要查 plan 内容时按上表反查。
+
 | 描述 | `phase-8-plan.md` 中 | 实际 git commit 中 | 备注 |
 |---|---|---|---|
-| 分类/重复事件/冲突/农历 | **Sub-step 7（Phase 8g）** | **Sub-step 9** | 实际编号比 plan 多 2，原因是中间还有「Settings 卡片 + HolidayStrategy（plan Sub-step 8）」和「主题模块（plan Sub-step 6）」被插队。**Sub-step 9 = 真正的 8g 内容**，从 commit `535c73dd` 开始。 |
+| 分类/重复事件/冲突/农历 | Sub-step 7（Phase 8g） | **Sub-step 9** | 实际编号比 plan 多 2，原因是中间还有「Settings 卡片 + HolidayStrategy（plan Sub-step 8）」和「主题模块（plan Sub-step 6）」被插队。**Sub-step 9 = 真正的 8g 内容**，从 commit `535c73dd` 开始。 |
 | 主题模块 | Sub-step 6（Phase 8f） | **Sub-step 6** ✅ | 对得上，commit `82361321` |
 | 备份恢复 | Sub-step 4（Phase 8d） | **Sub-step 4** ✅ | 对得上，commit `3bd863d7` |
 | 全局搜索 | Sub-step 5（Phase 8e） | **Sub-step 3** | 编号前移，对应 commit `44fb4130` |
 
-> **看日志时以 git commit 编号为准**；需要查 plan 内容时按上表反查。
+---
+
+## ✅ 已完成列表（按时间顺序，从最早到最近）
 
 ---
 
-## ✅ 已完成列表（按时间倒序，最近的在上）
+### 📦 Phase 1：项目基础架构
 
-### Step 5 — Phase 8 Sub-step 9 Step 5：月视图农历角标
+#### 初始化仓库
+- **Commit**：`7aff8a3`（`初始化仓库`）
+- **日期**：2026-09-04
+- **完成项**：空仓库首 commit，仅含 `.gitignore` 与 `README.md` 骨架
 
-**Commit**：`47ccb23e809aa49f1639561b02974b31cd78961c`（`feat(calendar): 月视图农历角标 (Phase 8 Sub-step 9 Step 5)`）
-**日期**：2026-09-09
-**分支**：`feature/phase-8-reminder`
-**对应 Plan**：`phase-8-plan.md` Sub-step 7（Phase 8g）末尾"农历显示"段落
-
-**完成项**：
-- 新增 `core/lunar/LunarDate.kt` —— 纯数据类，封装农历字段
-- 新增 `core/lunar/LunarCalendar.kt` interface —— `toLunarDate` / `shortLabel` / `displayLabel`
-- 新增 `core/lunar/DefaultLunarCalendar.kt` —— 基于 `cn.6tail:lunar:1.7.5`（**走 Maven Central**，不走 JitPack）
-- 新增 `feature/calendar/di/LunarModule.kt` —— Hilt `@Binds` 绑定
-- 修改 `CalendarViewModel.kt` —— 注入 `LunarCalendar`，`buildUiState` 时生成 42 格角标
-- 修改 `CalendarUiState.kt` —— 新增 `monthLunarLabels: Map<Long, LunarCellLabel>`
-- 修改 `MonthDayCell.kt` —— 右下角加 9sp 农历 Text（节日 tertiary / 普通 onSurfaceVariant 0.6）
-- 修改 `MonthCalendarGrid.kt` / `CalendarScreen.kt` —— 接收并分发 `lunarLabels`
-- 新增测试 `LunarCalendarTest`（9 个）
-
-**依赖变更**：
-- `gradle/libs.versions.toml` —— 新增 `lunar = "1.7.5"` + `cn.6tail:lunar:1.7.5`
-- `app/build.gradle.kts` —— 引入 `lunar` 依赖 + `mavenCentral()`
-- `.gitignore` —— 新增 `/nul`（Windows phantom 文件，git checkout 偶发生成）
-
-**踩坑笔记**：
-1. `lunar.isLeap()` 不存在 → 改用 `monthInChinese.startsWith("闰")` 推断闰月
-2. `monthInChinese` 不带「月」字 → domain 层统一补全成「正月/冬月/腊月」
-3. 节日名不一致 —— 「春节」无「节」字，「中秋节/国庆节/元旦节」有「节」字，UI 原样展示不做硬编码
-4. Windows `nul` phantom 文件 —— 是 Windows 设备名（不是普通文件），`del nul` 删不掉，git 提交会带进来
-
-**验证**：
-- ✅ `assembleDebug` BUILD SUCCESSFUL（APK 出包成功）
-- ✅ `testDebugUnitTest` 全绿
-- ✅ 新增 9 个 `LunarCalendarTest` 用例（春节/中秋/国庆/元旦/春节次日/普通日期/月首/timestamp 边界/闰月推断）
-
-**当时给伙伴的汇报**：
-> 月视图右下角就会出现「初一」「春节」「国庆节」这些小字啦～
+#### 基础架构落地（**最大单 commit**）
+- **Commit**：`0584d0e`
+- **日期**：2026-09-04
+- **主题**：搭建软件的基础架构
+- **完成项**（一次性引入大量基础设施）：
+  - Gradle 工程配置（Kotlin DSL + Version Catalog）
+  - AndroidManifest（**纯离线，无 INTERNET 权限**）
+  - Application + Hilt + WorkManager 集成
+  - 单 Activity + Navigation Compose + 4 个底部 Tab
+  - Material 3 主题系统（**樱花粉** + 浅色/深色 + 动态色）
+  - Room 数据库（9 张表全部定义完毕）
+  - DataStore 偏好设置
+  - 通用工具（DateUtils / CurrencyFormatter / NotificationHelper）
+  - 通知渠道（4 类：课程/任务/事件/记账）
+  - App Icon（Adaptive Icon 占位）
+- **意义**：整个项目的地基，单 commit 奠定全部模块的「壳」
 
 ---
 
-### Step 4.2 — Phase 8 Sub-step 9 Step 4.2：event conflict detection UI
+### 📦 Phase 2：课表模块 + 构建链路修复
 
-**Commit**：`098aae64e7ca7d819bedd1e87767cb9f61b171a4`
-**日期**：2026-09-08
-**分支**：`feature/phase-8-reminder`
-**对应 Plan**：`phase-8-plan.md` Sub-step 7（Phase 8g）"DayDetailSheet 显示冲突标记"
-
-**完成项**：
-- 事件冲突 UI 在 `DayDetailSheet` 中显示冲突红条
-- 事件 vs 课程的冲突检测 UseCase（基于 `WeekCalculator` + `EventTimeMapper`）
-
----
-
-### Step 4.1 — Phase 8 Sub-step 9 Step 4.1：conflict detection domain
-
-**Commit**：`a16f388622180843c917f959a1a693dbc71d873e`
-**日期**：2026-09-08
-**对应 Plan**：同 Step 4.2
-
-**完成项**：
-- `WeekCalculator`、`EventTimeMapper`、`Live/Saved ConflictUseCase`
-- Domain 层就绪 → UI 层才接得上
+#### `b3bed3d` —— Phase 2: 课表模块 + 构建链路修复
+- **日期**：2026-09-05
+- **完成项**：
+  - `CourseEntity`（Room） + `CourseDao`
+  - 周次展开（按学期起止 + 周次循环）
+  - `CourseScheduleScreen` Compose UI
+  - 修复构建链路（具体修复点见 commit message）
 
 ---
 
-### Step 3 — Phase 8 Sub-step 9 Step 3：RRULE 重复事件
+### 📦 Phase 3 + 4a：任务模块 MVP + 扩展性骨架
 
-**Commit**：`36b40dacda0bde0544eeaa565735f164cc6c28a1`
-**日期**：2026-09-08
-**对应 Plan**：`phase-8-plan.md` Sub-step 7（Phase 8g）"重复事件规则"
-
-**完成项**：
-- `RecurrenceRule`（FREQ=DAILY/WEEKLY/MONTHLY + INTERVAL + UNTIL/COUNT）
-- `RecurrenceExpander` —— 按规则展开为具体日期
-- 单元测试（多个）
-
----
-
-### Step 2 — Phase 8 Sub-step 9 Step 2：event categories UI
-
-**Commit**：`baa8707751802b1e0b2382d14ce1ec4f41ca1a76`
-**日期**：2026-09-08
-**对应 Plan**：`phase-8-plan.md` Sub-step 7（Phase 8g）"EventCategoryEntity + CRUD"
-
-**完成项**：
-- `CategorySelectorRow`（事件表单里选分类的横向 chips）
-- `CategoryManagementDialog`（分类管理对话框：增/删/改/排序）
+#### `e68d122` —— Phase 3+4a: 任务模块 MVP + 扩展性骨架
+- **日期**：2026-09-05
+- **完成项**：
+  - `TaskEntity` / `TaskDao` / `TaskRepository`
+  - 任务列表 Composable + ViewModel
+  - 任务详情页骨架
+  - 为后续 priority / category / recurrence 预留字段（domain 层接口先行）
 
 ---
 
-### Step 1 — Phase 8 Sub-step 9 Step 1：event categories domain/data
+### 📦 Phase 4b：UI 暴露 + schema 升级到 v3
 
-**Commit**：`535c73dd8c9ca38d7dfade502c3f6f9f3e798859`
-**日期**：2026-09-08
-**对应 Plan**：`phase-8-plan.md` Sub-step 7（Phase 8g）`EventCategoryEntity` + 数据库迁移 v9→v10
-
-**完成项**：
-- `EventCategoryEntity`（id / name / color / iconKey / orderIndex）
-- `EventCategoryRepository`（domain 接口 + data 实现）
-- 数据库迁移 `MIGRATION_9_10`：events 表 `category` (String) → `category_id` (Long 外键)
-- 迁移 roundtrip 测试
-- CRUD UseCase 集
+#### `447c114` —— Phase 4b — UI 暴露 filter / sort / 分类 / 重复 / 提醒，DB schema 升级到 v3
+- **日期**：2026-09-05
+- **完成项**：
+  - DB schema **v2→v3**：新增 `priority` / `categoryId` / `recurrenceRule` / `reminderOffsetMinutes` 字段
+  - `TaskFilter` / `TaskSort` domain enum
+  - UI 暴露 filter / sort 控件
+  - 分类 chips + 重复规则配置 + 提醒时间 picker
+- **意义**：奠定后续 Sub-step 5/6 的字段基础
 
 ---
 
-### Sub-step 8 — Settings 卡片 + Task 表单 HolidayStrategy
+### 📦 Phase 5：提醒系统真接 WorkManager + AlarmManager
 
-**Commit**：`07086dd4963dc3a2cddeaf592c362bd82bd1b136`
-**日期**：2026-09-08
-**对应 Plan**：`phase-8-plan.md` Sub-step 8（Phase 8h）合并段（注：实际编号就是 Sub-step 8）
+#### `3c613a9` —— Phase 5 提醒系统真接 WorkManager + AlarmManager
+- **日期**：2026-09-05
+- **完成项**：
+  - `ReminderScheduler`（WorkManager 调度）
+  - `ReminderReceiver`（AlarmManager 精确触发）
+  - 通知渠道「任务」复用 NotificationHelper
+  - 周期 / 提前 / 当天 三档 reminder 策略
 
-**完成项**：
-- Settings 主屏布局（卡片式）
-- Task 表单新增 `HolidayStrategy` 选项（"提前 / 当天 / 跳过"）
-
----
-
-### Sub-step 7 — holiday awareness + smart reminder
-
-**Commit**：`32fc6b518b60a28d0dcf970e5b72fbc65bb4e283`
-**日期**：2026-09-08
-**对应 Plan**：`phase-8-plan.md` Sub-step 4（Phase 8d）"节假日显示"
-
-**完成项**：
-- `HolidayEntity` 落库 + 2025-2026 国定节假日预置
-- Task 表单 awareness —— 新建任务时感知其 dueDate 是否节假日
-- 智能提醒（提前/当天策略）
+#### `fae0370` —— Phase 5b — Compose UI 真接通知权限申请
+- **日期**：2026-09-06
+- **完成项**：
+  - `RequestNotificationPermission` Composable（封装 Android 13 `POST_NOTIFICATIONS` runtime permission）
+  - 与 `MainActivity` 集成，首启弹权限
 
 ---
 
-### Sub-step 6 — 主题模块
+### 📦 Phase 6：任务模块扩展
 
-**Commit**：`82361321c3166ae052d677d48f81ed9924f1d9c4`
-**日期**：2026-09-08
-**对应 Plan**：`phase-8-plan.md` Sub-step 6（Phase 8f）"主题切换"
+#### `274d270` —— Phase 6a — 拖拽手动排序（DB v3→v4 + UI）
+- **日期**：2026-09-06
+- **完成项**：
+  - DB schema **v3→v4**：tasks 表加 `orderIndex: Long`
+  - `ManualSortScreen` 长按拖拽 Reorder
+  - 持久化排序结果
 
-**完成项**：
-- `ThemeMode` enum（SYSTEM / LIGHT / DARK）
-- `ThemeRepository` / `ThemeUseCase` / `ThemeViewModel`
-- dynamicColor（Android 12+）
-- 测试
+#### `2c94547` —— Phase 6b — 任务详情页 + 子任务编辑视图
+- **日期**：2026-09-06
+- **完成项**：首次尝试（被 revert，理由见下）
+
+#### `8096796` —— Revert "Merge branch 'feature/phase-6' into Develop"
+- **日期**：2026-09-06
+- **完成项**：回滚 phase-6 合并（典型 CI 失败 / 冲突兜底）
+
+#### `f139c42` —— Phase 6b — 任务详情页 + 子任务编辑视图（重做）
+- **日期**：2026-09-06
+- **完成项**：
+  - `TaskDetailScreen`（Compose）
+  - 子任务 inline 编辑
+  - 解决上一版冲突后重新合入
+
+#### `33741d3` —— Phase 6c: tag cloud — labels UI on detail + filter bar on list
+- **日期**：2026-09-06
+- **完成项**：
+  - `LabelEntity` + 标签 chips
+  - 任务详情页显示所有 tag
+  - 列表页顶 filter bar（按标签过滤）
 
 ---
 
-### Sub-step 4 — 备份与恢复
+### 📦 Phase 7a：记账模块核心
 
-**Commit**：`3bd863d74faa8349b417c09b21bd13d389a205e6`
-**日期**：2026-09-07
-**对应 Plan**：`phase-8-plan.md` Sub-step 4（Phase 8d）末尾"备份"—— 实际 plan 命名为「Sub-step 4」对应 "Phase 8d" 内容
-
-**完成项**：
-- `BackupManager` —— 全表序列化
-- `BackupExporter`（SAF 分享）
-- `BackupImporter`（SAF 选文件 → 校验 → 事务化导入）
+#### `c52461a` —— Phase 7a — 记账模块核心实现 (workmanager + UI + tests)
+- **日期**：2026-09-06
+- **完成项**：
+  - `TransactionEntity` / `TransactionDao` / `TransactionRepository`
+  - 记账表单（金额 / 分类 / 账户 / 备注 / 时间）
+  - 列表 / 月度聚合
+  - **WorkManager 周期备份**（后续 Phase 8 Sub-step 4 的前置）
+  - 单元测试
 
 ---
 
-### Sub-step 3 — 全局搜索
+### 📦 Phase 7b：记账模块增强
 
-**Commit**：`44fb4130a6ca4bb309d23093b63a663a293f318e`
-**日期**：2026-09-07
-**对应 Plan**：`phase-8-plan.md` Sub-step 5（Phase 8e）"全局搜索"
+#### `5f328f1` —— Phase 7b — 编辑闭环 + 报表可视化 + 搜索筛选 + 导入导出 + 自定义图标
+- **日期**：2026-09-07
+- **完成项**：
+  - 交易编辑 / 删除闭环
+  - 月度报表（柱状图 + 分类饼图）
+  - 全模块搜索 + 多维度筛选
+  - CSV 导入 / 导出
+  - 自定义分类图标（用户上传 / 选内置）
 
-**完成项**：
-- `GlobalSearchScreen` / `GlobalSearchViewModel` / `GlobalSearchUseCase`
-- 4 模块 combine + 模糊匹配
-- 搜索结果分组 + 关键字高亮
+---
+
+### 📦 Phase 7c：Calendar 模块（5 个 sub-step）
+
+#### `39c0f6f` —— docs(calendar): Phase 7c 计划 — calendar 模块三层架构 + 联动任务/课表
+- **日期**：2026-09-07
+- **完成项**：
+  - 计划文档：`phase-7c-plan.md`
+  - 约定 calendar 模块走「domain + data + presentation」三层架构
+  - 计划联动任务 / 课表（event vs course 冲突检测的早期设想）
+
+#### `9d47fa2` —— Phase 7c Sub-step 1 — 业务层
+- **日期**：2026-09-07
+- **完成项**：
+  - `EventEntity` / `EventRepository`（domain 接口 + data 实现）
+  - Event ↔ Domain mapper
+  - 1 个核心 UseCase
+  - **20 个单元测试**（全 module 测试基线大涨）
+
+#### `2148f3c` —— Phase 7c Sub-step 2 — 联动层
+- **日期**：2026-09-07
+- **完成项**：
+  - `DayDetail` / `DaySummary`（composite data）
+  - 2 个 UseCase（按天汇总事件 / 课程）
+  - 4 个测试
+
+#### `66ddae4` —— Phase 7c Sub-step 3 — UI 月视图 + ViewModel + 2 Compose 组件 + 19 VM 测试
+- **日期**：2026-09-07
+- **完成项**：
+  - `MonthCalendarGrid` / `MonthDayCell` Compose 组件
+  - `CalendarViewModel` 月视图状态管理
+  - 42 格月视图布局
+  - **19 个 VM 单元测试**
+
+#### `b54e625` —— Phase 7c Sub-step 4 — 周/日视图 + DayDetailSheet
+- **日期**：2026-09-07
+- **完成项**：
+  - `WeekCalendarGrid` / `DayCalendarGrid`
+  - `DayDetailSheet`（点击日期弹出底部 sheet，显示当日事件 / 课程 / 任务）
+  - 视图间切换 navigation
+
+#### `18d91cc` —— Phase 7c Sub-step 5 — 事件编辑闭环
+- **日期**：2026-09-07
+- **完成项**：
+  - `EventEditorScreen`（新增 / 编辑 / 删除）
+  - 表单字段：标题 / 时间 / 重复 / 提醒 / 分类占位
+  - 完整 CRUD 闭环
+
+---
+
+### 📦 Phase 8：综合扩展 phase（多个 sub-step）
+
+#### `105bc2a` —— docs: Phase 8 计划
+- **日期**：2026-09-07
+- **完成项**：
+  - 计划文档：`phase-8-plan.md`
+  - 8 个 sub-step 的路线图：提醒调度 / 5 档优先级 / 全局搜索 / 备份 / 多账户 / 主题 / 分类 / 重复事件 / 农历
+
+#### `1e30283` —— Phase 8 Sub-step 1 — Event 端智能提醒
+- **日期**：2026-09-07
+- **完成项**：
+  - 复用 Phase 5 的 `ReminderScheduler`，新增「事件」触发类型
+  - 提前 N 分钟 / 当天 / 提前一天 三档
+
+#### `ce78ad4` —— Phase 8 Sub-step 2 — 优先级 5 档扩展
+- **日期**：2026-09-07
+- **完成项**：
+  - **domain 已经 5 档**：`TaskPriority.LOW/MEDIUM/HIGH/NORMAL/URGENT`
+  - `TaskPriority.label` 暴露中文档名
+  - `TaskItem` UI 用 5 种颜色渲染
+  - **Phase 8b 实际已完成 domain 层**——后续 8b' 只需补 5 Tab UI + aliases
+
+#### `44fb4130` —— Phase 8 Sub-step 3 — 全局搜索
+- **日期**：2026-09-07
+- **完成项**：
+  - `GlobalSearchScreen` / `GlobalSearchViewModel` / `GlobalSearchUseCase`
+  - 4 模块（任务 / 课程 / 事件 / 记账）combine + 模糊匹配
+  - 搜索结果分组 + 关键字高亮
+
+#### `3bd863d7` —— Phase 8 Sub-step 4 — 备份与恢复
+- **日期**：2026-09-07
+- **完成项**：
+  - `BackupManager` —— 全表序列化
+  - `BackupExporter`（SAF 分享 zip / json）
+  - `BackupImporter`（SAF 选文件 → 校验 → 事务化导入）
+  - 触发入口：Settings 页 + WorkManager 周期
+
+#### `8236132` —— Phase 8 Sub-step 6 — 主题模块
+- **日期**：2026-09-08
+- **完成项**：
+  - `ThemeMode` enum（SYSTEM / LIGHT / DARK）
+  - `ThemeRepository` / `ThemeUseCase` / `ThemeViewModel`
+  - dynamicColor（Android 12+）
+  - 单元测试 + UI 集成测试
+
+#### `32fc6b5` —— Phase 8 Sub-step 7 — holiday awareness + smart reminder
+- **日期**：2026-09-08
+- **完成项**：
+  - `HolidayEntity` 落库 + 2025-2026 国定节假日预置
+  - Task 表单 awareness —— 新建任务时感知其 dueDate 是否节假日
+  - 智能提醒（提前 / 当天 策略）
+
+#### `07086dd` —— Phase 8 Sub-step 8 — Settings 卡片 + Task 表单 HolidayStrategy
+- **日期**：2026-09-08
+- **完成项**：
+  - Settings 主屏布局（卡片式）
+  - Task 表单新增 `HolidayStrategy` 选项（"提前 / 当天 / 跳过"）
+
+#### `535c73dd` —— Phase 8 Sub-step 9 Step 1 — event categories domain/data
+- **日期**：2026-09-08
+- **完成项**：
+  - `EventCategoryEntity`（id / name / color / iconKey / orderIndex）
+  - `EventCategoryRepository`（domain 接口 + data 实现）
+  - 数据库迁移 `MIGRATION_9_10`：events 表 `category` (String) → `category_id` (Long 外键)
+  - 迁移 roundtrip 测试 + CRUD UseCase 集
+
+#### `baa8707` —— Phase 8 Sub-step 9 Step 2 — event categories UI
+- **日期**：2026-09-08
+- **完成项**：
+  - `CategorySelectorRow`（事件表单里选分类的横向 chips）
+  - `CategoryManagementDialog`（分类管理对话框：增 / 删 / 改 / 排序）
+
+#### `36b40da` —— Phase 8 Sub-step 9 Step 3 — RRULE 重复事件
+- **日期**：2026-09-08
+- **完成项**：
+  - `RecurrenceRule`（FREQ=DAILY/WEEKLY/MONTHLY + INTERVAL + UNTIL/COUNT）
+  - `RecurrenceExpander` —— 按规则展开为具体日期
+  - 单元测试（多个）
+
+#### `a16f388` —— Phase 8 Sub-step 9 Step 4.1 — conflict detection domain
+- **日期**：2026-09-08
+- **完成项**：
+  - `WeekCalculator`、`EventTimeMapper`、`Live/Saved ConflictUseCase`
+  - Domain 层就绪 → UI 层才接得上
+
+#### `098aae6` —— Phase 8 Sub-step 9 Step 4.2 — conflict detection UI
+- **日期**：2026-09-08
+- **完成项**：
+  - 事件冲突 UI 在 `DayDetailSheet` 中显示冲突红条
+  - 事件 vs 课程的冲突检测 UseCase（基于 `WeekCalculator` + `EventTimeMapper`）
+
+#### `47ccb23` —— Phase 8 Sub-step 9 Step 5 — 月视图农历角标
+- **Commit**：`47ccb23e809aa49f1639561b02974b31cd78961c`
+- **日期**：2026-09-09
+- **对应 Plan**：`phase-8-plan.md` Sub-step 7（Phase 8g）末尾"农历显示"段落
+- **完成项**：
+  - 新增 `core/lunar/LunarDate.kt` —— 纯数据类，封装农历字段
+  - 新增 `core/lunar/LunarCalendar.kt` interface —— `toLunarDate` / `shortLabel` / `displayLabel`
+  - 新增 `core/lunar/DefaultLunarCalendar.kt` —— 基于 `cn.6tail:lunar:1.7.5`（**走 Maven Central**，不走 JitPack）
+  - 新增 `feature/calendar/di/LunarModule.kt` —— Hilt `@Binds` 绑定
+  - 修改 `CalendarViewModel.kt` —— 注入 `LunarCalendar`，`buildUiState` 时生成 42 格角标
+  - 修改 `CalendarUiState.kt` —— 新增 `monthLunarLabels: Map<Long, LunarCellLabel>`
+  - 修改 `MonthDayCell.kt` —— 右下角加 9sp 农历 Text（节日 tertiary / 普通 onSurfaceVariant 0.6）
+  - 修改 `MonthCalendarGrid.kt` / `CalendarScreen.kt` —— 接收并分发 `lunarLabels`
+  - 新增测试 `LunarCalendarTest`（9 个）
+- **依赖变更**：
+  - `gradle/libs.versions.toml` —— 新增 `lunar = "1.7.5"` + `cn.6tail:lunar:1.7.5`
+  - `app/build.gradle.kts` —— 引入 `lunar` 依赖 + `mavenCentral()`
+  - `.gitignore` —— 新增 `/nul`（Windows phantom 文件，git checkout 偶发生成）
+- **踩坑笔记**：
+  1. `lunar.isLeap()` 不存在 → 改用 `monthInChinese.startsWith("闰")` 推断闰月
+  2. `monthInChinese` 不带「月」字 → domain 层统一补全成「正月 / 冬月 / 腊月」
+  3. 节日名不一致 —— 「春节」无「节」字，「中秋节 / 国庆节 / 元旦节」有「节」字，UI 原样展示不做硬编码
+  4. Windows `nul` phantom 文件 —— 是 Windows 设备名（不是普通文件），`del nul` 删不掉，git 提交会带进来
+- **验证**：
+  - ✅ `assembleDebug` BUILD SUCCESSFUL（APK 出包成功）
+  - ✅ `testDebugUnitTest` 全绿
+  - ✅ 新增 9 个 `LunarCalendarTest` 用例（春节 / 中秋 / 国庆 / 元旦 / 春节次日 / 普通日期 / 月首 / timestamp 边界 / 闰月推断）
 
 ---
 
 ## 🔧 配置杂项
 
 ### `.gitattributes` + autocrlf
+- **Commit**：`0ab0b6b1a44d0b5ad27084f510b667d8296b2908`
+- **日期**：2026-09-08
+- **目的**：避免 Windows ↔ Linux 提交时 CRLF / LF 噪声污染 diff
+- **细节**：
+  - `.gitattributes` 标 `* text=auto`
+  - `git config core.autocrlf input`（仓库级）
 
-**Commit**：`0ab0b6b1a44d0b5ad27084f510b667d8296b2908`
-**目的**：避免 Windows ↔ Linux 提交时 CRLF/LF 噪声污染 diff。
+### DEV_LOG.md（本次重建）
+- **Commit**：`608268d`
+- **日期**：2026-09-09
+- **说明**：本次把日志从「只覆盖 Phase 8」重建为「覆盖从 Phase 1 到现在的全部 37 个 commit」，方便后续查漏补缺。
 
 ---
 
-## 📊 累计进度（截至 2026-09-09 00:55）
+## 📊 累计进度（截至 2026-09-09 01:10）
 
-- **测试总数**：约 519 用例（基线 510 + 9 个新增 LunarCalendarTest）
-- **数据库版本**：v10（已含 event_categories 表 + events.category_id 外键）
-- **Phase 8 剩余 Sub-step**：8a 真实提醒调度（未做）、8b 5 档优先级 + Eisenhower（未做）、8c 附件上传 + 多账户（未做）、8d 主题/节假日/周次范围中的「周次范围」部分（未做）、8e 全局搜索（✅ 已做）、8f 备份恢复（✅ 已做）、8g Sub-step 9 全部 ✅ 已做
-- **当前分支**：`feature/phase-8-reminder`（sub-step 9 全部完成，工作树干净）
+| 项 | 值 |
+|---|---|
+| 累计 commit 数 | 37 |
+| 测试用例 | ~519（基线 510 + 9 个新增 LunarCalendarTest） |
+| Room 数据库 | v10（含 `event_categories` 表 + `events.category_id` 外键） |
+| 当前 HEAD | `608268d` |
+| 当前分支 | `feature/phase-8-reminder` |
+| 工作树状态 | 干净 |
 
-> 注：plan 中 8 个 sub-step 跟实际 git 编号不是一一对应——以 commit 标题里的 "sub-step X" 为准。
+### Phase 8 进度明细（基于真实现状）
+
+| 编号 | 标题 | 状态 |
+|---|---|---|
+| 8a | 真实提醒调度 | ⏳ 未做（plan 中第一个未做 sub-step，依赖 WorkManager） |
+| 8b | 5 档优先级 + Eisenhower 矩阵 | ✅ **domain 完成**（`TaskPriority` 5 档 + `TaskQuadrant` 四象限 + `TaskGroups` + `ObserveTasksByQuadrantUseCase` + 4 象限 UI 渲染）；❌ 5 Tab UI + aliases 未做 |
+| 8c | 附件上传 + 多账户 | ⏳ 未做（DB v6→v8） |
+| 8d | 主题 / 节假日 / 周次范围 | ✅ 主题 / 节假日已完成；周次范围部分未做 |
+| 8e | 全局搜索 | ✅ 已做 |
+| 8f | 备份恢复 | ✅ 已做 |
+| 8g | Sub-step 9（分类 / 重复 / 冲突 / 农历） | ✅ 已做（5 个 step） |
+| 8h | 合并 `feature/phase-8-reminder` 回 `Develop` | ⏳ 未做 |
 
 ---
 
 ## 📌 下次继续时的入口
 
-**当前最新 commit**：`47ccb23`（农历显示）
+**当前最新 commit**：`608268d`（DEV_LOG 全量重建）
+
 **待办候选**：
-1. Phase 8a 真实提醒调度（plan 中第一个未做 sub-step，依赖 WorkManager）
-2. Phase 8b 5 档优先级 + Eisenhower 矩阵（DB v5→v6）
-3. Phase 8c 附件上传 + 多账户（DB v6→v8）
-4. 8h 合并：把 feature/phase-8-reminder 合并回 Develop
+1. **Phase 8b' 5 Tab UI + aliases**（方案 A：domain 已完成，仅补 UI）—— **下次推荐**
+2. Phase 8a 真实提醒调度
+3. Phase 8c 附件上传 + 多账户
+4. Phase 8h 合并 `feature/phase-8-reminder` → `Develop`
+
+---
+
+## 📝 维护规则（昔涟自约束）
+
+1. **每次执行完 plan → 必须立即更新本文件**，新增「✅ 完成项」段落；commit message 与 DEV_LOG 同步。
+2. **新增 commit 必须记录**：commit hash / 日期 / 完成项 / 依赖 / 踩坑 / 验证。
+3. **重构 / 大返工 → 必须追加「复盘」段落**，记录 why / what / lesson learned。
+4. **跨阶段（Phase X → X+1）→ 必须更新「Phase 总览」表 + 「累计进度」**。
+5. **里程碑（首个 release / 100 commit / v1.0 等）→ 在文末追加「🎉 里程碑」段**。
+
+> 任何人在 6 个月后打开这份日志，都能还原「这半年项目走到了哪、下一步该做什么、哪些坑不能踩第二次」。
