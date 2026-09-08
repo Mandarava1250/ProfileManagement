@@ -8,15 +8,14 @@ import com.example.personalassistant.feature.calendar.domain.model.DaySummary
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
 import com.example.personalassistant.feature.calendar.domain.repository.CalendarRepository
+import com.example.personalassistant.feature.calendar.domain.util.WeekCalculator
 import com.example.personalassistant.feature.task.data.local.TaskDao
 import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.timetable.data.local.CourseDao
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
-import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
-import com.example.personalassistant.feature.timetable.domain.model.Course
-import com.example.personalassistant.feature.timetable.domain.model.Semester
+import com.example.personalassistant.feature.timetable.data.mapper.toDomain
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -101,7 +100,7 @@ class CalendarRepositoryImpl @Inject constructor(
             courseDao.observeByDayOfWeek(dayOfWeek),
             semesterFlow,
         ) { courses, semester ->
-            val weekNumber = semester?.let { calculateWeekNumber(date, it) }
+            val weekNumber = semester?.let { WeekCalculator.weekNumber(date, it.startDate, it.endDate) }
             courses
                 .filter { course ->
                     weekNumber == null || course.toDomain().appliesToWeek(weekNumber)
@@ -110,7 +109,7 @@ class CalendarRepositoryImpl @Inject constructor(
         }
 
         return combine(eventsFlow, tasksFlow, coursesFlow, semesterFlow) { events, tasks, courses, semester ->
-            val weekNumber = semester?.let { calculateWeekNumber(date, it) }
+            val weekNumber = semester?.let { WeekCalculator.weekNumber(date, it.startDate, it.endDate) }
             DayDetail(
                 date = date,
                 dayOfWeek = dayOfWeek,
@@ -133,7 +132,7 @@ class CalendarRepositoryImpl @Inject constructor(
         // 课表：先按 dayOfWeek 分桶（DAO 拿所有 dayOfWeek 一次性拿）
         // 简化策略：单次拉所有 Course，客户端按 dayOfWeek + weekNumber 分组
         val coursesFlow = semesterDao.observeCurrent().map { semester ->
-            semester?.let { calculateWeekNumber(today, it) }
+            semester?.let { WeekCalculator.weekNumber(today, it.startDate, it.endDate) }
         }
 
         // 因为 CourseDao.observeByDayOfWeek 需要 dayOfWeek 参数，
@@ -209,20 +208,6 @@ class CalendarRepositoryImpl @Inject constructor(
     }
 
     /**
-     * 计算当天在当前学期的「第几周」
-     *
-     * - 学期开始日视为第 1 周的第一天
-     * - 无学期信息 → null
-     * - 当天早于 startDate → null（学期未开始）
-     */
-    private fun calculateWeekNumber(dateMillis: Long, semester: SemesterEntity): Int? {
-        val startMillis = semester.startDate
-        if (dateMillis < startMillis) return null
-        val daysDiff = (dateMillis - startMillis) / ONE_DAY_MILLIS
-        return (daysDiff / 7).toInt() + 1
-    }
-
-    /**
      * 列出月范围内 dayOfWeek = dow 的所有日期（00:00 时间戳）
      */
     private fun enumerateDatesForDayOfWeek(monthStart: Long, monthEnd: Long, dow: Int): List<Long> {
@@ -252,6 +237,9 @@ class CalendarRepositoryImpl @Inject constructor(
 }
 
 // ===== 跨模块 Entity → Domain 映射（轻量版，定义在这里避免污染 task/timetable） =====
+// Phase 8 Sub-step 9 Step 4：CourseEntity / SemesterEntity 的 toDomain 已迁到
+// com.example.personalassistant.feature.timetable.data.mapper.CourseMappers，
+// 这里只保留 TaskEntity.toDomain（calendar 不依赖 task/data/mapper 以避免循环）。
 
 internal fun TaskEntity.toDomain(): Task = Task(
     id = id,
@@ -268,30 +256,4 @@ internal fun TaskEntity.toDomain(): Task = Task(
     repeatEndDate = repeatEndDate,
     repeatDays = repeatDays,
     manualOrder = manualOrder,
-)
-
-internal fun CourseEntity.toDomain(): Course = Course(
-    id = id,
-    name = name,
-    teacher = teacher,
-    location = location,
-    dayOfWeek = dayOfWeek,
-    startTime = startTime,
-    endTime = endTime,
-    color = color,
-    semester = semester,
-    weeks = weeks,
-    reminderMinutes = reminderMinutes,
-    note = note,
-    createdAt = createdAt,
-    updatedAt = updatedAt,
-)
-
-@Suppress("unused")
-internal fun SemesterEntity.toDomain(): Semester = Semester(
-    name = name,
-    startDate = startDate,
-    endDate = endDate,
-    isCurrent = isCurrent,
-    createdAt = createdAt,
 )
