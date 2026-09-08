@@ -3,6 +3,7 @@ package com.example.personalassistant.feature.task.presentation.edit
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.personalassistant.core.holiday.model.HolidayStrategy
 import com.example.personalassistant.core.notification.NotificationPermissionRequester
 import com.example.personalassistant.feature.task.domain.model.RepeatRule
 import com.example.personalassistant.feature.task.domain.model.RepeatType
@@ -107,6 +108,8 @@ open class TaskEditViewModel @Inject constructor(
                             customDays = RepeatRule.parseDaysString(result.task.repeatDays),
                         ),
                         reminderTime = result.task.reminderTime,
+                        // Phase 8 Sub-step 8：节假日策略落库字段加载
+                        holidayStrategy = result.task.holidayStrategy,
                     )
                 }
             }
@@ -179,6 +182,18 @@ open class TaskEditViewModel @Inject constructor(
         _uiState.update { it.copy(showReminderPicker = !it.showReminderPicker) }
     }
 
+    // ===== Phase 8 Sub-step 8：节假日策略 =====
+
+    /**
+     * 用户在 UI 上 4 选 1 切换 [HolidayStrategy]
+     *
+     * 注意：当 [TaskEditUiState.isHolidayStrategyEnabled] == false（非重复任务）时,
+     * UI 应当禁用控件,这里仍允许设置值,但不会影响实际行为。
+     */
+    fun onHolidayStrategyChange(strategy: HolidayStrategy) {
+        _uiState.update { it.copy(holidayStrategy = strategy) }
+    }
+
     // ===== 子清单 =====
 
     fun onNewSubTaskInputChange(value: String) {
@@ -239,6 +254,8 @@ open class TaskEditViewModel @Inject constructor(
                     repeatType = repeatType,
                     // Phase 4b：把 CustomWeekdays 序列化为 "MON,..." 字符串，让自定义星期真持久化
                     repeatDays = RepeatRule.formatDaysString(customDays),
+                    // Phase 8 Sub-step 8：节假日处理策略落库
+                    holidayStrategy = state.holidayStrategy,
                 )
                 val newRowId = upsertTask(task, state.subTasks)
                 val savedTask = task.copy(id = newRowId)

@@ -16,7 +16,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,12 +34,17 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -52,11 +60,12 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 设置页（Phase 8 Sub-step 4 完整版）
+ * 设置页（Phase 8 Sub-step 4+6+8 完整版）
  *
  * 内容：
  * - 主题切换（浅色/深色/系统）
- * - 数据备份（新增）：自动备份开关 + 备份目录 + 立即备份 / 立即恢复
+ * - 智能提醒（新增 Sub-step 8）：节假日避让 / 提前通知 / 时间 / 同步
+ * - 数据备份（Sub-step 4）：自动备份开关 + 备份目录 + 立即备份 / 立即恢复
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +75,8 @@ fun SettingsScreen(
 ) {
     val themePreferences by viewModel.themePreferences.collectAsStateWithLifecycle()
     val backupState by viewModel.backupState.collectAsStateWithLifecycle()
+    val holidayState by viewModel.holidayState.collectAsStateWithLifecycle()
+    val syncPromptYear by viewModel.syncPromptYear.collectAsStateWithLifecycle()
     val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -120,6 +131,9 @@ fun SettingsScreen(
             }
         }
     }
+
+    // ===== Phase 8 Sub-step 8：提前通知 TimePicker 状态 =====
+    var showEveningTimePicker by remember { mutableStateOf(false) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -180,6 +194,102 @@ fun SettingsScreen(
                             checked = themePreferences.dynamicColor,
                             onCheckedChange = viewModel::setDynamicColor,
                         )
+                    }
+                }
+            }
+
+            // ===== 智能提醒（Phase 8 Sub-step 8）=====
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.NotificationsActive, contentDescription = null)
+                        Spacer8()
+                        Text("智能提醒", style = MaterialTheme.typography.titleMedium)
+                    }
+                    Spacer8()
+                    Text(
+                        text = "节假日避让 + 每日 21:00 提前通知明天/后天的节假日与调休。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                    // 节假日避让总开关
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("节假日避让", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "重复任务遇到法定节假日按各自策略避让",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Switch(
+                            checked = holidayState.avoidEnabled,
+                            onCheckedChange = viewModel::setHolidayAvoidEnabled,
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                    // 提前通知开关 + 时间选择
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("每日提前通知", style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                if (holidayState.eveningEnabled) {
+                                    "每天 ${holidayState.eveningTimeLabel} 提醒明日节假日"
+                                } else {
+                                    "已关闭,不发送提前通知"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Switch(
+                            checked = holidayState.eveningEnabled,
+                            onCheckedChange = viewModel::setHolidayEveningEnabled,
+                        )
+                    }
+
+                    if (holidayState.eveningEnabled) {
+                        Spacer8()
+                        OutlinedButton(
+                            onClick = { showEveningTimePicker = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("调整时间（当前 ${holidayState.eveningTimeLabel}）")
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                    // 数据范围 + 同步入口
+                    Text(
+                        text = if (holidayState.maxYear != null) {
+                            "节假日数据覆盖：${holidayState.maxYear} 年及之前"
+                        } else {
+                            "节假日数据为空,请联系开发者"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer8()
+                    OutlinedButton(
+                        onClick = viewModel::triggerHolidaySync,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.Sync, contentDescription = null)
+                        Spacer8()
+                        Text("立即同步节假日")
                     }
                 }
             }
@@ -287,6 +397,66 @@ fun SettingsScreen(
             }
         }
     }
+
+    // ===== Phase 8 Sub-step 8：弹窗 =====
+    if (showEveningTimePicker) {
+        EveningTimePickerDialog(
+            initialHour = holidayState.eveningHour,
+            initialMinute = holidayState.eveningMinute,
+            onConfirm = { h, m ->
+                viewModel.setHolidayEveningTime(h, m)
+                showEveningTimePicker = false
+            },
+            onDismiss = { showEveningTimePicker = false },
+        )
+    }
+
+    val syncYear = syncPromptYear
+    if (syncYear != null) {
+        HolidaySyncPromptDialog(
+            year = syncYear,
+            maxYear = holidayState.maxYear,
+            onSyncNow = { viewModel.triggerHolidaySync() },
+            onDismiss = { viewModel.dismissHolidaySyncPrompt() },
+        )
+    }
+}
+
+// ===== Phase 8 Sub-step 8：弹窗组件 =====
+
+/**
+ * 提前通知时间选择对话框（material3 TimePicker）。
+ *
+ * 确认时调 viewModel.setHolidayEveningTime(hour, minute) 持久化并重新调度 Worker。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EveningTimePickerDialog(
+    initialHour: Int,
+    initialMinute: Int,
+    onConfirm: (Int, Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val state = rememberTimePickerState(
+        initialHour = initialHour,
+        initialMinute = initialMinute,
+        is24Hour = true,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("调整提前通知时间") },
+        text = {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                TimePicker(state = state)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(state.hour, state.minute) }) { Text("确定") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
 }
 
 @Composable
@@ -310,4 +480,38 @@ private fun themeModeLabel(mode: ThemeMode): String = when (mode) {
     ThemeMode.LIGHT -> "浅色"
     ThemeMode.DARK -> "深色"
     ThemeMode.SYSTEM -> "跟随系统"
+}
+
+/**
+ * 节假日数据过期 → 联网同步授权弹窗（Phase 8 Sub-step 8）。
+ *
+ * 每年触发一次：当前年份 > 本地数据最大年份时在 init {} 期间被 ViewModel 设置 [syncPromptYear]。
+ * 当前 Stub Gateway 不会真去联网，所以「立即同步」会回到 Toast「已同步」;后续 sub-step 替换为真实 API。
+ */
+@Composable
+private fun HolidaySyncPromptDialog(
+    year: Int,
+    maxYear: Int?,
+    onSyncNow: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("节假日数据即将过期") },
+        text = {
+            Text(
+                buildString {
+                    append("当前年份（$year）已超过本地预置数据范围（")
+                    if (maxYear != null) append(maxYear) else append("无数据")
+                    append("）。是否联网同步 $year 年的节假日？")
+                }
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onSyncNow) { Text("立即同步") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("稍后") }
+        },
+    )
 }

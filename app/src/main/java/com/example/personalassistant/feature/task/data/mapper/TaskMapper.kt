@@ -30,6 +30,7 @@ internal fun TaskEntity.toDomain(): Task = Task(
     repeatEndDate = repeatEndDate,
     repeatDays = repeatDays,
     manualOrder = manualOrder,
+    holidayStrategy = holidayStrategy,
 )
 
 internal fun Task.toEntity(): TaskEntity = TaskEntity(
@@ -47,4 +48,5 @@ internal fun Task.toEntity(): TaskEntity = TaskEntity(
     repeatEndDate = repeatEndDate,
     repeatDays = repeatDays,
     manualOrder = manualOrder,
+    holidayStrategy = holidayStrategy,
 )

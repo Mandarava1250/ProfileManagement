@@ -30,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.personalassistant.core.holiday.model.HolidayStrategy
 import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.presentation.edit.components.CategoryPickerSheet
@@ -218,6 +220,13 @@ fun TaskEditScreen(
                 label = "重复",
                 value = state.repeatRuleLabel,
                 onClick = viewModel::toggleRepeatRuleSheet,
+            )
+
+            // ===== 节假日策略（Phase 8 Sub-step 8，重复任务才生效）=====
+            HolidayStrategyPicker(
+                current = state.holidayStrategy,
+                enabled = state.isHolidayStrategyEnabled,
+                onChange = viewModel::onHolidayStrategyChange,
             )
 
             // ===== 提醒时间（点击弹出 ReminderTimePickerSheet）=====
@@ -392,4 +401,72 @@ private fun SubTaskRow(
         }
     }
     HorizontalDivider()
+}
+
+/**
+ * Phase 8 Sub-step 8：节假日策略 RadioButton 组（4 选 1）。
+ *
+ * - 仅当 [enabled] == true 时（即任务是重复任务），控件可点击
+ * - 整体非重复任务时仍渲染控件,但 alpha 偏低 + onChange 不响应,保证"已存在的策略字段"用户能看见
+ */
+@Composable
+private fun HolidayStrategyPicker(
+    current: HolidayStrategy,
+    enabled: Boolean,
+    onChange: (HolidayStrategy) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    ) {
+        Text(
+            text = "遇到节假日",
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = if (enabled) {
+                "重复任务在法定节假日当天的提醒方式"
+            } else {
+                "非重复任务不生效,设置仅作保留"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        HolidayStrategy.entries.forEach { strategy ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = enabled) { onChange(strategy) }
+                    .padding(vertical = 4.dp),
+            ) {
+                RadioButton(
+                    selected = current == strategy,
+                    onClick = if (enabled) ({ onChange(strategy) }) else null,
+                    enabled = enabled,
+                )
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    text = holidayStrategyLabel(strategy),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * HolidayStrategy 显示文案（与 [TaskEditUiState.holidayStrategyLabel] 等价，
+ * 拆出独立函数便于复用与单测）。
+ */
+private fun holidayStrategyLabel(strategy: HolidayStrategy): String = when (strategy) {
+    HolidayStrategy.SKIP -> "跳过本次提醒"
+    HolidayStrategy.ADVANCE -> "提前到上一个工作日"
+    HolidayStrategy.POSTPONE -> "推迟到下一个工作日"
+    HolidayStrategy.KEEP_NORMAL -> "照常提醒(不休假)"
 }

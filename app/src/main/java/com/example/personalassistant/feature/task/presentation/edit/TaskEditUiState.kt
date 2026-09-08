@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.task.presentation.edit
 
+import com.example.personalassistant.core.holiday.model.HolidayStrategy
 import com.example.personalassistant.feature.task.domain.model.RepeatRule
 import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.TaskCategory
@@ -52,6 +53,16 @@ data class TaskEditUiState(
     val isSaved: Boolean = false,
     val errorMessage: String? = null,
 
+    // ===== Phase 8 Sub-step 8 新增 =====
+    /**
+     * 节假日处理策略（仅对重复任务生效）。
+     *
+     * - 默认 [HolidayStrategy.SKIP]（遇到节假日跳过本次提醒）
+     * - 用户在 UI 上 4 选 1:SKIP / ADVANCE / POSTPONE / KEEP_NORMAL
+     * - 当 [repeatRule] == [RepeatRule.None] 时,该字段不影响行为,但仍会落库
+     */
+    val holidayStrategy: HolidayStrategy = HolidayStrategy.SKIP,
+
     // ===== Phase 5b 新增 =====
     /**
      * 一次性信号：UI 层订阅这个布尔位，触发 [androidx.activity.compose.rememberLauncherForActivityResult] 弹权限框。
@@ -81,6 +92,27 @@ data class TaskEditUiState(
             RepeatRule.Yearly -> "每年"
             is RepeatRule.CustomWeekdays -> "自定义（${repeatRule.days.size} 天）"
         }
+
+    /**
+     * Phase 8 Sub-step 8：节假日策略显示文案（UI 用）。
+     *
+     * 之所以放在 UI state 而不是 enum 自身,是为了遵守
+     * "domain enum 与 Android 文案解耦" 的实践。
+     */
+    val holidayStrategyLabel: String
+        get() = when (holidayStrategy) {
+            HolidayStrategy.SKIP -> "跳过本次"
+            HolidayStrategy.ADVANCE -> "提前到上一工作日"
+            HolidayStrategy.POSTPONE -> "推迟到下一工作日"
+            HolidayStrategy.KEEP_NORMAL -> "照常提醒"
+        }
+
+    /**
+     * 当任务不是重复任务时，节假日策略没意义,UI 应该禁用这一组控件。
+     * 但默认值 SKIP 仍会落库 —— 编辑老任务保留兼容。
+     */
+    val isHolidayStrategyEnabled: Boolean
+        get() = repeatRule != RepeatRule.None
 }
 
 private fun formatDueDateLabel(millis: Long): String {
