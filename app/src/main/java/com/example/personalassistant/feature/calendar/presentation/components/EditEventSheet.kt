@@ -45,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.calendar.presentation.EventEditState
 import com.example.personalassistant.feature.calendar.domain.model.EventCategory
+import com.example.personalassistant.feature.calendar.domain.model.EventConflictInfo
 import com.example.personalassistant.core.utils.DateUtils
 import java.time.Instant
 import java.time.ZoneId
@@ -88,6 +89,14 @@ fun EditEventSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     availableCategories: List<EventCategory> = emptyList(),
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：实时冲突检测结果（debounce 150ms 后）
+     * - null = 编辑器未打开 / 整天事件 / 无学期 / 学期外
+     * - 非 null = [DetectEventLiveConflictsUseCase] 的最新结果
+     *
+     - 只在 [state.hasTime] = true 时显示（整天模式下时段隐藏，不可能冲突）
+     */
+    liveConflict: EventConflictInfo? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -171,6 +180,14 @@ fun EditEventSheet(
                         onChange = onEndTimeChange,
                         modifier = Modifier.weight(1f),
                     )
+                }
+
+                // Phase 8 Sub-step 9 Step 4.2：实时冲突横幅（debounce 后）
+                // - info.conflictingCourses 为空时组件内部短路不渲染
+                // - 整天模式 hasTime=false 时本块根本不进入
+                if (liveConflict != null && liveConflict.conflictingCourses.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    ConflictWarningBanner(info = liveConflict)
                 }
             }
 

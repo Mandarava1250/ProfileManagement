@@ -174,6 +174,8 @@ fun CalendarScreen(
             DayDetailSheet(
                 date = selectedDate!!,
                 dayDetail = selectedDayDetail,
+                // Phase 8 Sub-step 9 Step 4.2：把 viewModel 的冲突 map 透传到 Sheet
+                conflictsByEventId = uiState.savedConflictsByEventId,
                 onDismiss = { viewModel.dismissDayDetail() },
                 onEventClick = { event ->
                     viewModel.dismissDayDetail()
@@ -187,6 +189,8 @@ fun CalendarScreen(
             EditEventSheet(
                 state = state,
                 availableCategories = eventCategories,
+                // Phase 8 Sub-step 9 Step 4.2：实时冲突（debounce 后）
+                liveConflict = uiState.liveConflictInfo,
                 onTitleChange = { newTitle ->
                     viewModel.updateEditingState(state.copy(title = newTitle))
                 },

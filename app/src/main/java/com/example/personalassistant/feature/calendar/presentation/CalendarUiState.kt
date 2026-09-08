@@ -3,6 +3,7 @@ package com.example.personalassistant.feature.calendar.presentation
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
+import com.example.personalassistant.feature.calendar.domain.model.EventConflictInfo
 import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
 
 /**
@@ -18,6 +19,12 @@ import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
  * @param viewType 当前视图类型（月/周/日，Sub-step 4 用）
  * @param selectedDate 用户当前选中的日期（用于触发 DayDetailSheet，Sub-step 4 用）
  * @param selectedDayDetail 选中日期的详情（null = 未选中或数据未到）
+ * @param liveConflictInfo Phase 8 Sub-step 9 Step 4.2：编辑实时冲突（debounce 后）。
+ *        null = 编辑器未打开 或 整天事件 / 无学期 / 学期外。
+ *        非空且 conflictingCourses 非空 → EditEventSheet 显示红色横幅。
+ * @param savedConflictsByEventId Phase 8 Sub-step 9 Step 4.2：已保存事件冲突 map。
+ *        key = event.id，value = 该事件对应的 EventConflictInfo。
+ *        用于 DayDetailSheet 行末的 ConflictBadge。
  */
 data class CalendarUiState(
     val yearMonth: String,
@@ -27,6 +34,8 @@ data class CalendarUiState(
     val viewType: CalendarViewType = CalendarViewType.MONTH,
     val selectedDate: Long? = null,
     val selectedDayDetail: DayDetail? = null,
+    val liveConflictInfo: EventConflictInfo? = null,
+    val savedConflictsByEventId: Map<Long, EventConflictInfo> = emptyMap(),
 ) {
     /**
      * 月份展示标题（如 "2024 年 12 月"）

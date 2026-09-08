@@ -5,13 +5,17 @@ import androidx.lifecycle.viewModelScope
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
+import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.model.EventCategory
+import com.example.personalassistant.feature.calendar.domain.model.EventConflictInfo
 import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
 import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.CancelEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventCategoryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.DetectEventLiveConflictsUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.DetectEventSavedConflictsUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayDetailUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveEventCategoriesUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
@@ -20,12 +24,16 @@ import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEvent
 import com.example.personalassistant.feature.calendar.domain.usecase.UpsertEventCategoryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -46,8 +54,9 @@ import javax.inject.Inject
  * - [dismissDayDetail]：取消选中
  *
  * @OptIn(ExperimentalCoroutinesApi::class) for [flatMapLatest]
+ * @OptIn(FlowPreview::class) for [debounce]
  */
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class CalendarViewModel @Inject constructor(
     private val observeMonthSummary: ObserveMonthSummaryUseCase,
@@ -61,6 +70,9 @@ class CalendarViewModel @Inject constructor(
     private val observeEventCategories: ObserveEventCategoriesUseCase,
     private val upsertEventCategory: UpsertEventCategoryUseCase,
     private val deleteEventCategory: DeleteEventCategoryUseCase,
+    // Phase 8 Sub-step 9 Step 4.2：事件冲突检测
+    private val detectLiveConflict: DetectEventLiveConflictsUseCase,
+    private val detectSavedConflict: DetectEventSavedConflictsUseCase,
 ) : ViewModel() {
 
     private val _currentYearMonth = MutableStateFlow(DateUtils.currentYearMonth())
@@ -109,7 +121,60 @@ class CalendarViewModel @Inject constructor(
     private val _categoryManagerError = MutableStateFlow<String?>(null)
     val categoryManagerError: StateFlow<String?> = _categoryManagerError.asStateFlow()
 
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：编辑实时冲突（debounce 后）
+     *
+     * - null = 编辑器未打开（_editingState == null）
+     * - 非 null = [detectLiveConflict] 的最新结果（含整天 / 学期外等空冲突场景）
+     */
+    private val _liveConflictInfo = MutableStateFlow<EventConflictInfo?>(null)
+    val liveConflictInfo: StateFlow<EventConflictInfo?> = _liveConflictInfo.asStateFlow()
+
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：已保存事件冲突 map
+     *
+     * - key = event.id
+     * - value = 该事件对应的 EventConflictInfo
+     * - selectedDayDetail 为 null / weekNumber 为空 → map 为空
+     */
+    private val _savedConflictsByEventId = MutableStateFlow<Map<Long, EventConflictInfo>>(emptyMap())
+    val savedConflictsByEventId: StateFlow<Map<Long, EventConflictInfo>> = _savedConflictsByEventId.asStateFlow()
+
     private val today: Long = DateUtils.todayStartMillis()
+
+    init {
+        // 1. 编辑实时冲突：_editingState debounce(150ms) → detectLiveConflict
+        // 关闭编辑器（state=null）时短路 emit null
+        // 不用 flatMapLatest 是为了让 collect 内可以做"状态判定 → null or detect"
+        // （flow { emit(...) } + flowOf(null) 的类型推断会让结果退化为 Flow<Nothing?>）
+        //
+        // 防御性 runCatching：草稿态 title="" 时 [EventEditState.toEvent] 会触发 Event.require()。
+        // 我们先显式判断 title.isBlank() 跳过 detect（草稿态 emit null 表示"无冲突"），
+        // 再用 runCatching 兜底，避免异常泄露到 viewModelScope。
+        viewModelScope.launch {
+            _editingState
+                .debounce(150L)
+                .collect { state ->
+                    val info = when {
+                        state == null -> null
+                        state.title.isBlank() -> null
+                        else -> runCatching {
+                            detectLiveConflict(state.toEvent(0L, 0L))
+                        }.getOrNull()
+                    }
+                    _liveConflictInfo.value = info
+                }
+        }
+
+        // 2. 已保存冲突：selectedDayDetail 变化 → 对每个有 id 的 event 串行检测
+        // weekNumber 为空时直接短路返回 emptyMap
+        viewModelScope.launch {
+            selectedDayDetail
+                .filterNotNull()
+                .map { detail -> buildSavedConflicts(detail) }
+                .collect { _savedConflictsByEventId.value = it }
+        }
+    }
 
     /**
      * 主 UI State。
@@ -117,13 +182,17 @@ class CalendarViewModel @Inject constructor(
      * `_currentYearMonth` 变化 → flatMapLatest 重新订阅 ObserveMonthSummaryUseCase
      * 拿到新月份的 MonthSummary → 客户端转 42 个 cell。
      */
-    val uiState: StateFlow<CalendarUiState> = _currentYearMonth
-        .flatMapLatest { yearMonth ->
+    val uiState: StateFlow<CalendarUiState> = combine(
+        _currentYearMonth.flatMapLatest { yearMonth ->
             val monthStart = DateUtils.monthStartMillis(yearMonth)
             val monthEnd = DateUtils.monthEndMillis(yearMonth)
             observeMonthSummary(monthStart, monthEnd, today)
-        }
-        .map { summary -> buildUiState(summary) }
+        },
+        _liveConflictInfo,
+        _savedConflictsByEventId,
+    ) { summary, live, saved ->
+        buildUiState(summary, live, saved)
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -434,7 +503,11 @@ class CalendarViewModel @Inject constructor(
 
     // ===== 内部 =====
 
-    private fun buildUiState(summary: MonthSummary): CalendarUiState {
+    private fun buildUiState(
+        summary: MonthSummary,
+        liveConflict: EventConflictInfo?,
+        savedConflicts: Map<Long, EventConflictInfo>,
+    ): CalendarUiState {
         val yearMonth = _currentYearMonth.value
         val cells = generateMonthCells(yearMonth, summary, today)
         return CalendarUiState(
@@ -444,7 +517,28 @@ class CalendarViewModel @Inject constructor(
             today = today,
             viewType = _viewType.value,
             selectedDate = _selectedDate.value,
+            liveConflictInfo = liveConflict,
+            savedConflictsByEventId = savedConflicts,
         )
+    }
+
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：构造 selectedDayDetail 中每个 event 的冲突 map
+     *
+     * 规则：
+     * - weekNumber == null（无学期 / 学期外）→ emptyMap
+     * - 串行调用 detectSavedConflict(event)：单日 events ≤ 10，串行开销可接受
+     * - event.id <= 0 跳过（理论上 DayDetail.events 都是已保存的，但防御性过滤）
+     */
+    private suspend fun buildSavedConflicts(detail: DayDetail): Map<Long, EventConflictInfo> {
+        if (detail.weekNumber == null) return emptyMap()
+        val map = mutableMapOf<Long, EventConflictInfo>()
+        for (event in detail.events) {
+            if (event.id > 0L) {
+                map[event.id] = detectSavedConflict(event)
+            }
+        }
+        return map
     }
 
     companion object {

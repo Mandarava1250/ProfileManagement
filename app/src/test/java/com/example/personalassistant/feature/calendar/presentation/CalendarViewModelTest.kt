@@ -11,6 +11,8 @@ import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUse
 import com.example.personalassistant.feature.calendar.domain.usecase.CancelEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventCategoryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.DetectEventLiveConflictsUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.DetectEventSavedConflictsUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayDetailUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveEventCategoriesUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
@@ -92,6 +94,72 @@ class CalendarViewModelTest {
         override suspend fun cancelAll() = Unit
     }
 
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：空探测（永远返回无冲突），
+     * 让 CalendarViewModel 初始化能跑通，但不参与实际冲突行为断言。
+     */
+    private object NoopDetectEventLiveConflictsUseCase : DetectEventLiveConflictsUseCase(
+        NoopCourseDao,
+        NoopSemesterDao,
+    ) {
+        override suspend fun invoke(event: com.example.personalassistant.feature.calendar.domain.model.Event) =
+            com.example.personalassistant.feature.calendar.domain.model.EventConflictInfo(
+                conflictingCourses = emptyList(),
+                weekNumber = null,
+                timeSlice = null,
+            )
+    }
+
+    private object NoopDetectEventSavedConflictsUseCase : DetectEventSavedConflictsUseCase(
+        NoopCourseDao,
+        NoopSemesterDao,
+    ) {
+        override suspend fun invoke(event: com.example.personalassistant.feature.calendar.domain.model.Event) =
+            com.example.personalassistant.feature.calendar.domain.model.EventConflictInfo(
+                conflictingCourses = emptyList(),
+                weekNumber = null,
+                timeSlice = null,
+            )
+    }
+
+    private object NoopCourseDao :
+        com.example.personalassistant.feature.timetable.data.local.CourseDao {
+        override suspend fun findConflicts(
+            semester: String, dayOfWeek: Int, startTime: Int, endTime: Int, excludeId: Long,
+        ): List<com.example.personalassistant.feature.timetable.data.local.CourseEntity> = emptyList()
+
+        // 占位：以下方法不被本测试触发；不实现也能编译通过——但 UseCase 构造需要，
+        // 所以提供 no-op 默认实现避免编译失败
+        override suspend fun insert(course: com.example.personalassistant.feature.timetable.data.local.CourseEntity): Long = 0
+        override suspend fun insertAll(courses: List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>) = Unit
+        override suspend fun update(course: com.example.personalassistant.feature.timetable.data.local.CourseEntity) = Unit
+        override suspend fun delete(course: com.example.personalassistant.feature.timetable.data.local.CourseEntity) = Unit
+        override suspend fun deleteById(id: Long) = Unit
+        override suspend fun getById(id: Long): com.example.personalassistant.feature.timetable.data.local.CourseEntity? = null
+        override fun observeBySemester(semester: String): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+        override fun observeBySemesterAndDay(semester: String, dayOfWeek: Int): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+        override suspend fun getBySemester(semester: String): List<com.example.personalassistant.feature.timetable.data.local.CourseEntity> = emptyList()
+        override fun observeByDayOfWeek(dayOfWeek: Int): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+        override suspend fun countBySemester(semester: String): Int = 0
+        override fun searchCourses(keyword: String): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+        override suspend fun getAllCourses(): List<com.example.personalassistant.feature.timetable.data.local.CourseEntity> = emptyList()
+    }
+
+    private object NoopSemesterDao :
+        com.example.personalassistant.feature.timetable.data.local.SemesterDao {
+        override suspend fun getCurrent(): com.example.personalassistant.feature.timetable.data.local.SemesterEntity? = null
+        override suspend fun insert(semester: com.example.personalassistant.feature.timetable.data.local.SemesterEntity): Long = 0
+        override suspend fun update(semester: com.example.personalassistant.feature.timetable.data.local.SemesterEntity) = Unit
+        override suspend fun delete(semester: com.example.personalassistant.feature.timetable.data.local.SemesterEntity) = Unit
+        override fun observeAll(): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.SemesterEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+        override suspend fun getAll(): List<com.example.personalassistant.feature.timetable.data.local.SemesterEntity> = emptyList()
+        override suspend fun getByName(name: String): com.example.personalassistant.feature.timetable.data.local.SemesterEntity? = null
+        override fun observeCurrent(): kotlinx.coroutines.flow.Flow<com.example.personalassistant.feature.timetable.data.local.SemesterEntity?> = kotlinx.coroutines.flow.flowOf(null)
+        override suspend fun deleteById(id: Long) = Unit
+        override suspend fun clearCurrent() = Unit
+        override suspend fun setCurrent(name: String) = Unit
+    }
+
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
@@ -111,6 +179,10 @@ class CalendarViewModelTest {
             observeEventCategories = ObserveEventCategoriesUseCase(categoryRepo),
             upsertEventCategory = UpsertEventCategoryUseCase(categoryRepo),
             deleteEventCategory = DeleteEventCategoryUseCase(categoryRepo),
+            // Phase 8 Sub-step 9 Step 4.2：冲突检测（本测试只校验 VM 其他逻辑，
+            // 用 Noop* 探测"调用一次 = 默认空结果"，不影响 month/event/category 相关断言）
+            detectLiveConflict = NoopDetectEventLiveConflictsUseCase,
+            detectSavedConflict = NoopDetectEventSavedConflictsUseCase,
         )
     }
 

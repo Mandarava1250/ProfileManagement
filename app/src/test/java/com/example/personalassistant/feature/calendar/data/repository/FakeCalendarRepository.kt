@@ -83,17 +83,23 @@ class FakeCalendarRepository : CalendarRepository {
 
     // ===== 联动聚合（Sub-step 2） — 占位实现 =====
 
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：测试用 —— 让 [observeDayDetail] 返回指定 weekNumber。
+     *
+     * - null = 默认占位（不返回 weekNumber）
+     * - 1..N = 让 DayDetail.weekNumber = N，触发 VM 的 saved conflicts 计算路径
+     */
+    var weekNumberForTest: Int? = null
+
     override fun observeDayDetail(date: Long): Flow<DayDetail> =
         eventsState.map { _ ->
-            // 简化版：只返回事件 + 默认空 tasks/courses
-            // 真实场景需要 mock taskDao / courseDao / semesterDao，但这里只测试 events 链路
             DayDetail(
                 date = date,
                 dayOfWeek = 1,
                 events = eventsState.value.filter { it.date == date },
                 tasks = emptyList(),
                 courses = emptyList(),
-                weekNumber = null,
+                weekNumber = weekNumberForTest,
             )
         }
 
