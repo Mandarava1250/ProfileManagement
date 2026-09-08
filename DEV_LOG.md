@@ -3,7 +3,8 @@
 > **维护者**：昔涟（自动更新）
 > **触发规则**：每次执行完一个计划（plan）后追加一段
 > **作用**：记录已完成的步骤、对应的计划章节、关键变更文件、验证结果、踩坑笔记 —— 方便后续记忆与查漏补缺
-> **生成时间**：2026-09-09 01:10（基于 `git log --all` 全量重建）
+> **生成时间**：2026-09-09 01:10（基于 `git log --all` 全量重建，commit `1563bbe`）
+> **本轮追加**：2026-09-09 01:13（Phase 8b 真实完成度复检 + Phase 8b' 待启动）
 
 ---
 
@@ -13,14 +14,14 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
-| 当前 HEAD | `608268d` |
+| 当前 HEAD | `1563bbe` |
 | 当前分支 | `feature/phase-8-reminder` |
 | 主分支 | `Develop` |
-| 累计 commit 数 | 37（不含 merge / revert 中的 commit） |
+| 累计 commit 数 | 38（含 merge / revert 中的 commit） |
 | 测试用例 | ~519（基线 510 + 9 个新增 LunarCalendarTest） |
 | Room 数据库 | v10（含 `event_categories` 表 + `events.category_id` 外键） |
 | 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项） |
-| 进行中 | Phase 8b' —— 5 Tab 切换 + 自定义档名 aliases |
+| 进行中 | Phase 8b' —— 5 Tab 切换 + 自定义档名 aliases（本轮盘点完成，编码待启动） |
 
 ---
 
@@ -387,14 +388,14 @@
 
 ---
 
-## 📊 累计进度（截至 2026-09-09 01:10）
+## 📊 累计进度（截至 2026-09-09 01:13）
 
 | 项 | 值 |
 |---|---|
-| 累计 commit 数 | 37 |
+| 累计 commit 数 | 38（含 merge / revert 中的 commit） |
 | 测试用例 | ~519（基线 510 + 9 个新增 LunarCalendarTest） |
 | Room 数据库 | v10（含 `event_categories` 表 + `events.category_id` 外键） |
-| 当前 HEAD | `608268d` |
+| 当前 HEAD | `1563bbe` |
 | 当前分支 | `feature/phase-8-reminder` |
 | 工作树状态 | 干净 |
 
@@ -415,13 +416,62 @@
 
 ## 📌 下次继续时的入口
 
-**当前最新 commit**：`608268d`（DEV_LOG 全量重建）
+**当前最新 commit**：`1563bbe`（DEV_LOG 全量重建，覆盖 Phase 1~8 全部 38 个 commit）
 
-**待办候选**：
+**本轮盘点结果（2026-09-09 01:13）**：Phase 8b 实际状态重新复检 —— **domain 层 100% 完成**（5 档优先级 + 4 象限分组 + `TaskGroups` + `ObserveTasksByQuadrantUseCase` + 4 象限 UI 渲染均已存在），**只剩 5 Tab 切换 UI + aliases 自定义档名未做**。拆分为 `Phase 8b'` 单独执行。
+
+**待办候选**（按推荐顺序）：
 1. **Phase 8b' 5 Tab UI + aliases**（方案 A：domain 已完成，仅补 UI）—— **下次推荐**
 2. Phase 8a 真实提醒调度
 3. Phase 8c 附件上传 + 多账户
 4. Phase 8h 合并 `feature/phase-8-reminder` → `Develop`
+
+---
+
+---
+
+## 📊 Phase 8b 真实完成度盘点（2026-09-09 01:13）
+
+> 在准备执行 Phase 8b 时，发现 plan 假设与真实现状有重大出入，因此重新盘点实际完成度，作为 Phase 8b' 的执行依据。
+
+### ✅ 已经完成（domain 层 100%）
+
+| 部件 | 路径 | 关键内容 |
+|---|---|---|
+| **5 档优先级 enum** | `domain/model/TaskPriority.kt` | `LOW / MEDIUM / HIGH / NORMAL / URGENT`（比 plan 写的 P0~P4 更语义化） |
+| **4 象限模型** | `domain/model/TaskQuadrant.kt` | `P1 / P2 / P3 / P4 + UNSCHEDULED` |
+| **象限分类逻辑** | `domain/usecase/ObserveTasksByQuadrantUseCase.kt` | `classifyOne` + `classify`，按 priority + dueDate 判定 |
+| **数据分组结构** | `TaskGroups` data class | 5 个集合 + `countByQuadrant` 辅助函数 |
+| **4 象限 UI 渲染** | `presentation/components/QuadrantSection.kt` + `TasksTab.kt` | 头部色点 + 名字 + 数量 + 任务列表 |
+| **任务项 5 档色彩** | `TaskItem.kt` | 5 档 priority → 5 种 colorScheme |
+| **按象限过滤** | `TaskFilter.ByQuadrant` | domain 层支持 |
+
+### ❌ 还没做（plan 想做但未实现）
+
+| 部件 | plan 写的 | 实际状态 |
+|---|---|---|
+| `PriorityBadge` Composable | 独立小组件 | **没有**——`TaskItem` 内联处理 |
+| `PriorityBadge` 单元测试 | 单测 | **没有** |
+| 5 Tab 切换 UI | TasksTab 顶部 5 个 Tab | **没有**——当前是 P1~P4 垂直 4 区块 |
+| aliases 自定义档名 | `TaskPriority.alias` | **没有**——`TaskPriority.label` 是硬编码 |
+| 2x2 Eisenhower 矩阵 | 主页完整矩阵视图 | **没有**——但 4 象限分组已清晰，矩阵收益小 |
+| DB schema bump | v5→v6（新增 priority） | **不需要**——priority 字段早已存在，DB 已在 v10 |
+
+### 🎯 Phase 8b' 执行策略
+
+**核心结论**：domain 全部已落地，仅补 UI 层 + 别名持久化即可。
+
+**已对齐的方案 A 决策**：
+- Tab 数：5 + 1 默认「全部」Tab
+- aliases 持久化：DataStore + 5 个 `stringPreferencesKey`
+- 不做 2x2 矩阵
+- DB schema 不动
+- 1 个 commit（UI + 持久化强耦合）
+
+### 踩坑笔记
+
+1. **plan 假设与现状脱节**：`phase-8-plan.md` Sub-step 5 写的 P0/P1/P2/P3/P4 / DB v5→v6 / 真实提醒调度等内容已经被后续 Sub-step 提前实现（priority 5 档在 Sub-step 2 已经完成、DB 已经在 v10），plan 写完之后代码已经向前演化。
+2. **lesson learned**：**每次启动 plan 前必须先盘点真实代码状态**，不能假设 plan 内容就是当前现实。后续会在每个新 sub-step 开头加 5 分钟盘点环节。
 
 ---
 
