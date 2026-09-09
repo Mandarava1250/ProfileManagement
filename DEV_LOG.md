@@ -549,4 +549,70 @@
 - 下一步可选（待你拍板）：
   - **方案 1**：merge `feature/phase-8-reminder` 到 `Develop`，开启下一个 Phase（Phase 9 待规划）
   - **方案 2**：在 `feature/phase-8-reminder` 上继续 Phase 8 剩下的 Sub-step（Sub-step 8a 真实提醒调度）
-  - **方案 3**：先做一个小修复轮（如动态色启动闪屏问题），再开新 Phase
+  - **方案 3**：先做一个小修复轮（如动态色启动闪屏问题），再开新 Phase---
+
+## 📌 追加 6：2026-09-09 14:14 — 项目根目录整理 + nul 幽灵清理
+
+> **Commit**：`4075970`（`chore: 整理项目根目录，删除临时日志，移走策划文档`）
+> **触发**：用户要求「删除根目录中的测试文件，或者重新将项目的结构整理清楚不能像现在这样一堆文件堆在一起」
+> **计划章节**：本轮小修复（不在原 Phase 8 计划内）
+
+### 已完成的步骤
+
+1. **盘点根目录**：77 项（70 个文件 + 7 个目录），发现严重结构混乱
+2. **删除 54 个临时 build/test 日志**（从未被 git 跟踪，物理清理）
+3. **删除 `nul` Windows 设备名幽灵文件**（用 `\\?\` 字面路径前缀绕过设备名检查）
+4. **创建 `docs/specs/` + `docs/plans/` 目录结构**
+5. **移动 3 个策划文档**：
+   - `「昔涟个人助手APP」项目需求说明书.md` → `docs/specs/`
+   - `calendar-7c-plan.md` → `docs/plans/`
+   - `phase-8-plan.md` → `docs/plans/`
+6. **修 `.gitignore`**：去掉第 39 行重复的 `.idea/`
+7. **git commit**：`git add -A` 自动识别为 rename（不是 delete+add），完美保留历史
+
+### 关键变更文件
+
+- **修改** 1 个：`.gitignore`（去重）
+- **重命名** 3 个：策划文档全部移到 `docs/` 子目录
+- **删除** 1 个：`nul` 幽灵文件（实际从未被 git 跟踪，物理消失）
+- **未跟踪即删** 54 个：临时日志从未污染仓库
+
+### 验证结果
+
+- `git status`：working tree clean ✅
+- `git log --oneline -3`：commit `4075970` 领先 origin 1 个
+- `dir /b` 根目录：从 70 个文件降到 18 个项目必要文件
+- commit 中 rename 自动识别（R 标记），没有产生冗余 delete+add
+
+### 踩坑笔记
+
+1. **Windows `nul` 是设备名**，删除需要特殊处理：
+   - ❌ PowerShell `Remove-Item nul` → 把 `nul` 当 `Out-Null` alias，无法删除文件
+   - ❌ cmd `del nul` → 直接被设备名拦截，无输出
+   - ✅ `del "\\?\D:\...\nul"` → Win32 字面路径前缀绕过，删除成功
+
+2. **run_shell 预解析陷阱**：`%CD%` 在 shell 预解析阶段已被替换为 cmd 进程的当前目录（Cyrene 安装目录），导致 `\\?\%CD%\nul` 指向错地方。改用绝对路径解决。
+
+3. **Git 路径转义陷阱**：在 `git commit` 的 paths 参数里写重命名前的原路径，git 会报「pathspec did not match」。因为 `git add -A` 已经 staged，所有改动都被记录为 rename，所以 `git commit` 不需要传 paths，直接用 `.` 即可。
+
+4. **临时日志的真相**：54 个 `build_*.log` / `test_*.log` 居然从未被 git 跟踪过——之前每次跑测试都把日志写到根目录，但从未 `git add`。`.gitignore` 里有 `*.log` 规则但只在「未来」生效，对已经存在但未跟踪的文件不追溯。这是仓库历史上少有的"工作区脏但 git 历史干净"的场景。
+
+### 当前根目录状态（清理后）
+
+```
+.cyrene/         .git/           .gitattributes   .gitignore
+.gradle/         .idea/          .kotlin/         app/
+build/           build.gradle.kts                    DEV_LOG.md
+docs/            gradle/         gradle.properties gradlew
+gradlew.bat      local.properties                    local.properties.template
+README.md        settings.gradle.kts
+```
+
+干净 18 项（vs 清理前 77 项），按用途分组清晰。
+
+### 待办与下一个入口
+
+- 本 commit 待 push 到 `origin/feature/phase-8-reminder`
+- 用户下一指令：在本分支继续 Phase 8 剩余 Sub-step（Sub-step 8a 真实提醒调度），完成后微信通知
+- **微信通知方案待确认**：工具盘里没有微信原生 API，需要用户提供企业微信群机器人 webhook / 微信测试号 / 第三方桥接服务 等任一方案
+- **Phase 8 剩余 Sub-step 待规划**：需要进入 plan mode 重新盘点剩余工作
