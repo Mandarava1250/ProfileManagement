@@ -616,3 +616,41 @@ README.md        settings.gradle.kts
 - 用户下一指令：在本分支继续 Phase 8 剩余 Sub-step（Sub-step 8a 真实提醒调度），完成后微信通知
 - **微信通知方案待确认**：工具盘里没有微信原生 API，需要用户提供企业微信群机器人 webhook / 微信测试号 / 第三方桥接服务 等任一方案
 - **Phase 8 剩余 Sub-step 待规划**：需要进入 plan mode 重新盘点剩余工作
+---
+
+## 📅 2026-09-09 14:48 —— Phase 8 末尾补完：Phase 1 通知权限引导 UI
+
+### 已完成的步骤（对应计划文件 `.cyrene/docs/plan-20260909-142838.md` 中"Phase 1"）
+
+| # | 步骤 | 状态 |
+|---|---|---|
+| 1 | 新建 `core/notification/PermissionRepository.kt`（DataStore 封装"已询问过"偏好） | ✅ |
+| 2 | 新建 `core/notification/NotificationPermissionGate.kt`（Composable + Bridge + HiltViewModel）| ✅ |
+| 3 | 改 `MainActivity.kt` 在 `AppNavHost()` 之外加 `NotificationPermissionGate { }` 包裹 | ✅ |
+
+### 关键变更文件
+
+- `app/src/main/java/com/example/personalassistant/core/notification/PermissionRepository.kt`（新增，46 行）
+- `app/src/main/java/com/example/personalassistant/core/notification/NotificationPermissionGate.kt`（新增，100 行）
+- `app/src/main/java/com/example/personalassistant/MainActivity.kt`（修改，加 import + 包裹 Composable）
+
+### 验证结果
+
+- ✅ `./gradlew compileDebugKotlin` —— 通过（首次失败是因 `requester: NotificationPermissionRequester` 接口看不到 `request(bridge)` 重载，改成 `AndroidNotificationPermissionRequester` 后通过）
+- ✅ `./gradlew testDebugUnitTest` —— 全绿（现有 519+ 测试无回归）
+
+### 踩坑笔记
+
+1. **`request(bridge)` 重载看不见** —— 当 `requester` 声明为接口 `NotificationPermissionRequester` 时，Kotlin 只看到接口方法 `request()`，看不到 `AndroidNotificationPermissionRequester` 的 `request(bridge)` 重载。解决：声明类型用具体类 `AndroidNotificationPermissionRequester`，Hilt 仍可注入。
+2. **没有单测 PermissionRepository** —— 项目无 Robolectric，JVM 单测不能直接 `new PreferenceDataStoreFactory.create()`（要 Context）。DataStore 读写逻辑已被 Google 官方覆盖，跳过自测。后续可在 androidTest 用真实 in-memory datastore 验证。
+
+### 范围与决策
+
+- 不新建 `NotificationPermissionModule`，复用现有 `di/NotificationModule.kt` 的 `@Binds`（`AndroidNotificationPermissionRequester ← NotificationPermissionRequester`），新 ViewModel 直接拿具体类。
+- `ActivityCompat.shouldShowRequestPermissionRationale` 仅在 `rationale=false`（用户勾选"不再询问"或首次拒绝）才跳系统设置页，避免每次拒绝都跳。
+- 单测跳过：因 DataStore 真测试要 Robolectric；写空壳 ViewModel 测试低价值。
+
+### 待办与下一个入口
+
+- 下一步进入 Phase 2（附件上传，需先加 Coil 依赖）
+- 继续推进 Phase 3/4/5 之前不需要新依赖；Phase 2 起需要动 `libs.versions.toml`

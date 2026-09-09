@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.personalassistant.core.notification.NotificationPermissionGate
 import com.example.personalassistant.core.ui.theme.PersonalAssistantTheme
 import com.example.personalassistant.feature.settings.theme.ThemeViewModel
 import com.example.personalassistant.navigation.AppNavHost
@@ -33,7 +34,10 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = themePreferences.dynamicColor,
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    AppNavHost()
+                    // Phase 8 末尾补完：通知权限引导（Android 13+ 首次启动触发系统弹窗）
+                    NotificationPermissionGate {
+                        AppNavHost()
+                    }
                 }
             }
         }
