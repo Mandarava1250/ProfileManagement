@@ -2,12 +2,14 @@ package com.example.personalassistant.feature.finance.presentation.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -15,9 +17,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.domain.model.Transaction
 import com.example.personalassistant.feature.finance.domain.model.TransactionType
@@ -26,14 +31,17 @@ import com.example.personalassistant.feature.finance.presentation.util.IconRegis
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
 
 /**
- * Phase 7b：交易行（一行展示一条流水）
+ * Phase 7b + Phase 2：交易行（一行展示一条流水）
  *
- * 7a → 7b 增量：
+ * ## 7b
  * - 整行可点击（onClick 回调）→ 编辑流水入口
- *
  * - 左侧：分类彩色圆形 + icon
- * - 中间：分类名 + 备注（或"无备注"）+ source（手动 / 自动，7b 增量）
+ * - 中间：分类名 + 备注（或"无备注"）+ source
  * - 右侧：金额（支出负红色 / 收入正绿色） + 时间
+ *
+ * ## Phase 2 增量
+ * - 中间列底部增加首张附件缩略图（32dp 圆形）— 仅当 `transaction.attachmentUri` 非空
+ * - 缩略图是 file:// URI（Coil 直接加载）
  */
 @Composable
 fun TransactionRow(
@@ -45,6 +53,11 @@ fun TransactionRow(
     val categoryName = category?.name ?: "未知分类"
     val categoryColor = category?.color?.let { Color(it) } ?: Color(0xFF9E9E9E)
     val iconName = category?.iconName ?: "Category"
+    // Phase 2：首张附件（attachmentUri 是逗号分隔的 file:// URI 串）
+    val firstAttachmentUri = transaction.attachmentUri
+        ?.split(",")
+        ?.firstOrNull()
+        ?.takeIf { it.isNotBlank() }
 
     Row(
         modifier = modifier
@@ -68,7 +81,7 @@ fun TransactionRow(
             )
         }
 
-        // 中间：分类名 + 备注 + source
+        // 中间：分类名 + 备注 + source + [Phase 2] 附件缩略图
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -85,6 +98,19 @@ fun TransactionRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             )
+
+            // Phase 2：首张附件缩略图（圆形 32dp）
+            if (firstAttachmentUri != null) {
+                AsyncImage(
+                    model = firstAttachmentUri,
+                    contentDescription = "附件",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .padding(top = 4.dp)
+                        .clip(RoundedCornerShape(6.dp)),
+                )
+            }
         }
 
         // 右侧：金额 + 时间

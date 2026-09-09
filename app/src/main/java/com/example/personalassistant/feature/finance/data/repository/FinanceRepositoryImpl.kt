@@ -55,6 +55,7 @@ class FinanceRepositoryImpl @Inject constructor(
         categoryId: Long,
         note: String?,
         date: Long,
+        attachmentUri: String?,
     ): Long = withContext(dispatcher) {
         val poolDate = startOfDayMillis(date)
         val txEntity = TransactionEntity(
@@ -66,7 +67,7 @@ class FinanceRepositoryImpl @Inject constructor(
             note = note,
             createdAt = System.currentTimeMillis(),
             source = "手动",
-            attachmentUri = null,
+            attachmentUri = attachmentUri,
         )
         when (type) {
             TransactionType.EXPENSE ->
@@ -89,16 +90,18 @@ class FinanceRepositoryImpl @Inject constructor(
         categoryId: Long,
         note: String?,
         date: Long,
+        attachmentUri: String?,
     ): Unit = withContext(dispatcher) {
         // 1. 取旧 tx；不存在 → no-op
         val oldTx = financeDao.getTransactionById(id) ?: return@withContext
-        // 2. 构造新 tx（保留 createdAt / source / attachmentUri，便于审计）
+        // 2. 构造新 tx（保留 createdAt / source，便于审计；attachmentUri 由调用方显式传入）
         val newTx = oldTx.copy(
             amount = amount,
             type = type.storageValue,
             categoryId = categoryId,
             date = date,
             note = note,
+            attachmentUri = attachmentUri,
         )
         // 3. 走 DAO 事务方法：退旧 pool + 应用新 pool
         financeDao.transactionalUpdateTransaction(oldTx, newTx)

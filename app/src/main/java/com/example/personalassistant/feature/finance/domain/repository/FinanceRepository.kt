@@ -39,6 +39,7 @@ interface FinanceRepository {
         categoryId: Long,
         note: String?,
         date: Long,
+        attachmentUri: String? = null,
     ): Long
 
     /**
@@ -52,7 +53,8 @@ interface FinanceRepository {
      *
      * 涟宝解读：任何编辑都走"退旧 + 插新"路径，DAO 内部保证原子性。
      * - id 不存在时静默 no-op
-     * - source / attachmentUri / createdAt 保留原值
+     * - createdAt / source 保留原值
+     * - attachmentUri：调用方需显式传入（null 表示清空现有附件）；不传则默认 null
      */
     suspend fun updateTransaction(
         id: Long,
@@ -61,6 +63,7 @@ interface FinanceRepository {
         categoryId: Long,
         note: String?,
         date: Long,
+        attachmentUri: String? = null,
     )
 
     /** 全部流水，按 date DESC, createdAt DESC */

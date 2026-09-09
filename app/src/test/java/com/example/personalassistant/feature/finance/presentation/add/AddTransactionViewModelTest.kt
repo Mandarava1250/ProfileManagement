@@ -49,6 +49,7 @@ class AddTransactionViewModelTest {
             addTransaction = AddTransactionUseCase(repo),
             updateTransaction = UpdateTransactionUseCase(repo),
             deleteTransaction = DeleteTransactionUseCase(repo),
+            attachmentStore = FakeAttachmentStore(testDispatcher),
         )
     }
 

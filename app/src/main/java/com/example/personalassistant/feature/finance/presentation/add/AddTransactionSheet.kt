@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -101,6 +102,14 @@ fun AddTransactionSheet(
                 label = { Text("备注（可选）") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
+            )
+
+            // Phase 2：附件选择区（最多 3 张，已选满后按钮隐藏）
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            AttachmentSection(
+                uris = uiState.attachmentUris,
+                onPicked = viewModel::onPickedAttachments,
+                onRemove = viewModel::onRemoveAttachment,
             )
 
             // 分类选择（按当前 type 过滤）

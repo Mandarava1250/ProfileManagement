@@ -138,6 +138,9 @@ dependencies {
     // ---- Lunar Calendar (农历日期转换，驱动月视图角标) ----
     implementation(libs.lunar)
 
+    // ---- Image loading (Coil — Phase 2 附件缩略图) ----
+    implementation(libs.coil.compose)
+
     // ---- Test ----
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -50,6 +50,7 @@ class FakeFinanceRepository : FinanceRepository {
         categoryId: Long,
         note: String?,
         date: Long,
+        attachmentUri: String?,
     ): Long {
         val id = nextTxId++
         transactionsState.value = transactionsState.value + Transaction(
@@ -61,6 +62,7 @@ class FakeFinanceRepository : FinanceRepository {
             note = note,
             createdAt = System.currentTimeMillis(),
             source = "手动",
+            attachmentUri = attachmentUri,
         )
         return id
     }
@@ -81,6 +83,7 @@ class FakeFinanceRepository : FinanceRepository {
         categoryId: Long,
         note: String?,
         date: Long,
+        attachmentUri: String?,
     ) {
         transactionsState.value = transactionsState.value.map {
             if (it.id == id) it.copy(
@@ -89,6 +92,7 @@ class FakeFinanceRepository : FinanceRepository {
                 categoryId = categoryId,
                 note = note,
                 date = date,
+                attachmentUri = attachmentUri,
             ) else it
         }
     }
@@ -264,6 +268,6 @@ class FakeFinanceRepository : FinanceRepository {
         note: String?,
         date: Long,
     ): Long {
-        return addTransaction(type, amount, categoryId, note, date)
+        return addTransaction(type, amount, categoryId, note, date, attachmentUri = null)
     }
 }
