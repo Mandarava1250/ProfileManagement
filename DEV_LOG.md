@@ -484,3 +484,69 @@
 5. **里程碑（首个 release / 100 commit / v1.0 等）→ 在文末追加「🎉 里程碑」段**。
 
 > 任何人在 6 个月后打开这份日志，都能还原「这半年项目走到了哪、下一步该做什么、哪些坑不能踩第二次」。
+---
+
+## ✅ Phase 8b'（2026-09-09 13:30 完成） —— 5 Tab 切换 + 自定义档名 aliases
+
+### 计划来源
+`.cyrene/docs/plan-20260909-011013.md`（昨夜 plan mode 留下的方案）
+
+### 完成清单
+
+| Step | 内容 | 关键文件 | 状态 |
+|---|---|---|---|
+| 1 | Domain 模型：`TaskViewMode` + `TaskDisplayPreferences` | `domain/model/TaskViewMode.kt`<br>`domain/model/TaskDisplayPreferences.kt` | ✅ |
+| 2 | Repository 接口 + DataStore 实现（防御性解析非法 enum） | `domain/repository/TaskDisplayRepository.kt`<br>`data/preferences/TaskDisplayRepositoryImpl.kt` | ✅ |
+| 3 | Hilt DI 模块 | `di/TaskDisplayModule.kt` | ✅ |
+| 4 | ViewModel 集成：`displayPreferences` StateFlow + 3 个 action<br>VM 自动兜底：`setViewMode(BY_QUADRANT)` 时若 selectedQuadrant=null 则强制设 P1 | `presentation/TaskViewModel.kt`（注入 + stateIn 合并到 uiState）<br>`presentation/TaskUiState.kt`（+ `activeQuadrants` / `activeTaskCount` 辅助 getter） | ✅ |
+| 5 | UI：6 Tab（全部 + 5 象限）+ 长按重命名 dialog + ALL/BY_QUADRANT 切换渲染 | `presentation/components/PriorityTabRow.kt`<br>`presentation/components/RenameQuadrantAliasDialog.kt`<br>`presentation/components/QuadrantSection.kt`（+ displayName 参数）<br>`presentation/TasksTab.kt`（接 TabRow + 切换渲染 + rename dialog）<br>`TaskScreen.kt`（接 3 个新回调） | ✅ |
+| 6 | 测试：25 个新用例（domain 7 + data 7 + VM 11） | `domain/model/TaskDisplayPreferencesTest.kt`<br>`data/preferences/TaskDisplayRepositoryImplTest.kt`<br>`presentation/TaskViewModelDisplayTest.kt` | ✅ |
+
+### 验证结果
+- `gradlew :app:assembleDebug` → **BUILD SUCCESSFUL**
+- `gradlew :app:testDebugUnitTest` → **549 tests, 0 failures, 100% successful**（11.6s）
+
+### 踩坑笔记
+
+1. **避免双重维护优先级映射**：原 plan 写的是「5 档 P0/P1/P2/P3/P4 + 5 Tab」，实际读取代码发现 `TaskPriority`（LOW/MEDIUM/HIGH/NORMAL/URGENT）和 `TaskQuadrant`（P1/P2/P3/P4/UNSCHEDULED）都已经在 Sub-step 2 完成，且 4 象限分组 UI 也跑得好 → 本 Sub-step 只补「Tab 切换 + 别名持久化」，不重做 domain 层。
+2. **`combinedClickable` 重载不匹配**：Material 3 的 `combinedClickable` 有两个重载（带不带 MutableInteractionSource），最初用 `indication = null` 触发类型推断失败 → 改用 `Box(pointerInput { detectTapGestures(onLongPress) })` 包裹 `Tab`，更简洁。
+3. **DataStore 测试 race condition**：同 `@Test` 多次 `dataStore.edit` + `observe().first()` 在 `runBlocking` 下偶发「Unable to rename」错误 → 改用「**单次 atomic edit + 单次 read**」的测试设计，把多写场景挪到 VM 层（FakeRepo 无 race）。
+4. **`aliasKey` 必须放在 `companion object` 里**：作为成员函数时，外部无法通过 `TaskDisplayRepositoryImpl.aliasKey(...)` 调用 → 移到 companion object 后，测试可直接引用。
+5. **VM StateFlow 用 `WhileSubscribed(5_000)`**：直接读 `uiState.value` 拿不到 combine 输出（无订阅者不计算） → 测试策略改为「**默认值用 initialValue 验证**、**action 后用 FakeRepo 直接验证**」。
+
+### 关键决策
+
+- ✅ **Tab 数量 = 6（全部 + P1/P2/P3/P4/UNSCHEDULED）**，默认选中「全部」避免空白
+- ✅ **aliases 持久化到 DataStore**（key: `quadrant_alias_<name>`），与 Task 数据物理隔离
+- ✅ **不在本步改 4 象限分组渲染** —— 保持既有 UI 逻辑稳定
+- ✅ **VM 层兜底**：`setViewMode(BY_QUADRANT)` 时若 selectedQuadrant=null → 自动选 P1
+- ✅ **不改 TaskPriority / TaskQuadrant 任何字段**，仅做 UI + 持久化层
+
+### 文件清单（共 14 个变更 / 新增）
+
+**新增 9 个**：
+- `domain/model/TaskViewMode.kt`
+- `domain/model/TaskDisplayPreferences.kt`
+- `domain/repository/TaskDisplayRepository.kt`
+- `data/preferences/TaskDisplayRepositoryImpl.kt`
+- `di/TaskDisplayModule.kt`
+- `presentation/components/PriorityTabRow.kt`
+- `presentation/components/RenameQuadrantAliasDialog.kt`
+- `test/domain/model/TaskDisplayPreferencesTest.kt`
+- `test/data/preferences/TaskDisplayRepositoryImplTest.kt`
+- `test/presentation/TaskViewModelDisplayTest.kt`
+
+**修改 4 个**：
+- `presentation/TaskViewModel.kt`（注入 Repository + 4 个 action + state 合并到 uiState）
+- `presentation/TaskUiState.kt`（+ displayPreferences + activeQuadrants/activeTaskCount helper）
+- `presentation/TasksTab.kt`（+ PriorityTabRow + 重命名 dialog + 切换渲染）
+- `presentation/components/QuadrantSection.kt`（+ displayName 参数）
+- `TaskScreen.kt`（接 3 个新回调）
+
+### 待办与下一个入口
+
+- 本 commit 待 push 到 `origin/feature/phase-8-reminder`
+- 下一步可选（待你拍板）：
+  - **方案 1**：merge `feature/phase-8-reminder` 到 `Develop`，开启下一个 Phase（Phase 9 待规划）
+  - **方案 2**：在 `feature/phase-8-reminder` 上继续 Phase 8 剩下的 Sub-step（Sub-step 8a 真实提醒调度）
+  - **方案 3**：先做一个小修复轮（如动态色启动闪屏问题），再开新 Phase

@@ -4,10 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.Task
+import com.example.personalassistant.feature.task.domain.model.TaskDisplayPreferences
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
 import com.example.personalassistant.feature.task.domain.model.TaskGroups
+import com.example.personalassistant.feature.task.domain.model.TaskQuadrant
 import com.example.personalassistant.feature.task.domain.model.TaskSort
+import com.example.personalassistant.feature.task.domain.model.TaskViewMode
 import com.example.personalassistant.feature.task.domain.model.toExpression
+import com.example.personalassistant.feature.task.domain.repository.TaskDisplayRepository
 import com.example.personalassistant.feature.task.domain.usecase.DeleteTaskUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveAllTagsWithCountUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveTasksByQuadrantUseCase
@@ -19,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -41,7 +46,11 @@ import javax.inject.Inject
  *   这样 filter 与 tag 共存（ActiveOnly + ByTag = 仅显示未完成且有该标签的任务）
  * - 同时观察 [ObserveAllTagsWithCountUseCase] 拿标签云，写入 uiState.tagsWithCount
  *
- * 实现要点：7 个 Flow 用 [combine] 的可变参数重载 `combine(vararg)` 合并。
+ * 实现要点：8 个 Flow 用 [combine] 的可变参数重载 `combine(vararg)` 合并。
+ *
+ * Phase 8b'：
+ * - 注入 [TaskDisplayRepository]，把 aliases + viewMode + selectedQuadrant 合并到 uiState
+ * - 暴露 `setAlias` / `setViewMode` / `selectQuadrant` 三个 action 给 UI
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -50,6 +59,7 @@ class TaskViewModel @Inject constructor(
     observeAllTagsWithCount: ObserveAllTagsWithCountUseCase,
     private val toggleTaskComplete: ToggleTaskCompleteUseCase,
     private val deleteTask: DeleteTaskUseCase,
+    private val taskDisplayRepository: TaskDisplayRepository,
 ) : ViewModel() {
 
     private val _filter = MutableStateFlow<FilterExpression>(FilterExpression.ActiveOnly)
@@ -86,6 +96,11 @@ class TaskViewModel @Inject constructor(
      */
     private val tagsWithCountFlow = observeAllTagsWithCount()
 
+    /**
+     * Phase 8b'：显示偏好（aliases + viewMode + selectedQuadrant）
+     */
+    private val displayPreferencesFlow = taskDisplayRepository.observe()
+
     val uiState: StateFlow<TaskUiState> = combine(
         // 第一阶段：合并 5 个核心流（任务流 + 4 个 UI 状态）
         tasksFlow,
@@ -96,12 +111,13 @@ class TaskViewModel @Inject constructor(
     ) { tasks, showCompleted, filter, sort, sortMenuExpanded ->
         TasksBundle(tasks, showCompleted, filter, sort, sortMenuExpanded)
     }.let { bundleFlow ->
-        // 第二阶段：合并 tags + selectedTagId（统一为 Any?）
+        // 第二阶段：合并 tags + selectedTagId + displayPreferences（统一为 Any?）
         combine(
             bundleFlow,
             tagsWithCountFlow,
             _selectedTagId,
-        ) { bundle, tags, selectedTagId ->
+            displayPreferencesFlow,
+        ) { bundle, tags, selectedTagId, displayPrefs ->
             val active = bundle.tasks.filter { !it.isCompleted }
             val completed = bundle.tasks.filter { it.isCompleted }
             val groups = ObserveTasksByQuadrantUseCase.classify(active, completed)
@@ -114,6 +130,8 @@ class TaskViewModel @Inject constructor(
                 sortMenuExpanded = bundle.sortMenuExpanded,
                 tagsWithCount = tags,
                 selectedTagId = selectedTagId,
+                // ===== Phase 8b' =====
+                displayPreferences = displayPrefs,
             )
         }
     }.stateIn(
@@ -186,5 +204,55 @@ class TaskViewModel @Inject constructor(
     /** 清空 tag 筛选 */
     fun clearTagFilter() {
         _selectedTagId.value = null
+    }
+
+    // ===== Phase 8b'：显示偏好 =====
+
+    /**
+     * 改写某象限的展示别名（持久化）
+     */
+    fun setAlias(quadrant: TaskQuadrant, alias: String) {
+        viewModelScope.launch {
+            taskDisplayRepository.setAlias(quadrant, alias)
+        }
+    }
+
+    /**
+     * 切换视图模式（持久化）
+     *
+     * - 切到 [TaskViewMode.ALL]：selectedQuadrant 保持不变（不影响展示）
+     * - 切到 [TaskViewMode.BY_QUADRANT]：若 selectedQuadrant 为 null，强制回落到 P1（最常用）
+     */
+    fun setViewMode(mode: TaskViewMode) {
+        viewModelScope.launch {
+            taskDisplayRepository.setViewMode(mode)
+            if (mode == TaskViewMode.BY_QUADRANT) {
+                val current = displayPreferencesFlow.first()
+                if (current.selectedQuadrant == null) {
+                    taskDisplayRepository.selectQuadrant(TaskQuadrant.P1)
+                }
+            }
+        }
+    }
+
+    /**
+     * 选中某象限（[TaskViewMode.BY_QUADRANT] 时生效）
+     */
+    fun selectQuadrant(quadrant: TaskQuadrant) {
+        viewModelScope.launch {
+            // 同时切到 BY_QUADRANT 模式 + 选中该象限（一次调用更直观）
+            taskDisplayRepository.setViewMode(TaskViewMode.BY_QUADRANT)
+            taskDisplayRepository.selectQuadrant(quadrant)
+        }
+    }
+
+    /**
+     * 回到「全部」视图（清空 viewMode 与 selectedQuadrant）
+     */
+    fun showAll() {
+        viewModelScope.launch {
+            taskDisplayRepository.setViewMode(TaskViewMode.ALL)
+            taskDisplayRepository.selectQuadrant(null)
+        }
     }
 }

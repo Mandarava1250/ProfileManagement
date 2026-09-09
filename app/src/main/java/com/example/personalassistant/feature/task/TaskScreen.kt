@@ -101,6 +101,10 @@ fun TaskScreen(
                 onSortClick = taskViewModel::toggleSortMenu,
                 onSortSelected = taskViewModel::setSort,
                 onSortDismiss = taskViewModel::dismissSortMenu,
+                // ===== Phase 8b' =====
+                onShowAll = taskViewModel::showAll,
+                onSelectQuadrant = taskViewModel::selectQuadrant,
+                onAliasChange = taskViewModel::setAlias,
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
             else -> ChecklistTab(

@@ -22,13 +22,18 @@ import com.example.personalassistant.feature.task.domain.model.TaskQuadrant
 /**
  * 任务象限区块头
  *
- * 显示一个色点 + 象限名 + (数量)，用于分隔四象限 + 未排期。
+ * 显示一个色点 + 别名 + (数量)，用于分隔四象限 + 未排期。
+ *
+ * Phase 8b'：
+ * - [displayName] 替代硬编码 [TaskQuadrant.label]，允许展示用户自定义别名
+ * - 默认值 = [quadrant.label]，保证旧调用方零改动
  */
 @Composable
 fun QuadrantSection(
     quadrant: TaskQuadrant,
     count: Int,
     modifier: Modifier = Modifier,
+    displayName: String = quadrant.label,
 ) {
     val color = when (quadrant) {
         TaskQuadrant.P1 -> MaterialTheme.colorScheme.error          // 🔴 红
@@ -53,7 +58,7 @@ fun QuadrantSection(
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = quadrant.label,
+            text = displayName,
             style = MaterialTheme.typography.titleMedium,
         )
         Spacer(Modifier.width(8.dp))
