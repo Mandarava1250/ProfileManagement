@@ -5,18 +5,26 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.SavedStateHandle
+import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Tag
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.domain.model.TaskSort
 import com.example.personalassistant.feature.task.domain.model.TaskWithSubTasks
+import com.example.personalassistant.feature.task.domain.repository.TagRepository
 import com.example.personalassistant.feature.task.domain.repository.TaskRepository
 import com.example.personalassistant.feature.task.domain.usecase.AddSubTaskToTaskUseCase
+import com.example.personalassistant.feature.task.domain.usecase.AddTagToTaskUseCase
+import com.example.personalassistant.feature.task.domain.usecase.CreateTagUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DeleteSubTaskUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveSubTasksUseCase
+import com.example.personalassistant.feature.task.domain.usecase.ObserveTagsForTaskUseCase
+import com.example.personalassistant.feature.task.domain.usecase.RemoveTagFromTaskUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleSubTaskCompleteUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleTaskCompleteUseCase
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -51,6 +59,8 @@ class TaskDetailScreenTest {
         override fun observeSubTasks(parentId: Long) = subTaskFlow
         override fun observeTasks(filter: TaskFilter, sort: TaskSort) =
             MutableStateFlow<List<Task>>(emptyList())
+        override fun observeTasks(filter: FilterExpression, sort: TaskSort): Flow<List<Task>> =
+            MutableStateFlow<List<Task>>(emptyList())
         override suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks? = null
         override suspend fun upsertTask(task: Task, subTasks: List<SubTask>): Long = -1L
         override suspend fun deleteTask(task: Task) {}
@@ -60,6 +70,27 @@ class TaskDetailScreenTest {
         override suspend fun addSubTaskToTask(parentId: Long, title: String): Long = -1L
         override suspend fun deleteSubTask(subTask: SubTask) {}
         override suspend fun reorderTasks(orderedIds: List<Long>) {}
+        override fun searchTasks(keyword: String): Flow<List<Task>> =
+            MutableStateFlow<List<Task>>(emptyList())
+    }
+
+    // ===== Phase 6c：Tag 侧 No-op Fake =====
+    //
+    // 详情页标签流在本测试里恒空（断言只覆盖标题/子清单），用共享 object 即可，
+    // 避免为 ObserveTagsForTaskUseCase 再 fork 一层（它是 final class，不可继承）。
+    private object NoopTagRepository : TagRepository {
+        override fun observeAllTags() = MutableStateFlow<List<Tag>>(emptyList())
+        override fun observeAllTagsWithCount() = MutableStateFlow<List<Tag>>(emptyList())
+        override fun observeTagsForTask(taskId: Long) = MutableStateFlow<List<Tag>>(emptyList())
+        override suspend fun createTag(displayName: String, colorHex: Long): Tag = Tag(
+            id = -1L,
+            nameNormalized = Tag.normalize(displayName),
+            displayName = displayName,
+            colorHex = colorHex,
+        )
+        override suspend fun deleteTag(id: Long) {}
+        override suspend fun addTagToTask(taskId: Long, tagId: Long) {}
+        override suspend fun removeTagFromTask(taskId: Long, tagId: Long) {}
     }
 
     private class FakeObserveSubTasksUseCase(
@@ -102,11 +133,16 @@ class TaskDetailScreenTest {
     ) : TaskDetailViewModel(
         savedStateHandle = SavedStateHandle(mapOf(ARG_TASK_ID to 1L)),
         observeSubTasks = FakeObserveSubTasksUseCase(FakeTaskRepository()),
+        observeTagsForTask = ObserveTagsForTaskUseCase(NoopTagRepository),
+        tagRepository = NoopTagRepository,
         repository = FakeTaskRepository(),
         toggleTaskComplete = NoopToggleTaskCompleteUseCase(FakeTaskRepository()),
         toggleSubTaskCompleteUseCase = NoopToggleSubTaskCompleteUseCase(FakeTaskRepository()),
         deleteSubTaskUseCase = NoopDeleteSubTaskUseCase(FakeTaskRepository()),
         addSubTaskToTaskUseCase = NoopAddSubTaskToTaskUseCase(FakeTaskRepository()),
+        createTagUseCase = CreateTagUseCase(NoopTagRepository),
+        addTagToTaskUseCase = AddTagToTaskUseCase(NoopTagRepository),
+        removeTagFromTaskUseCase = RemoveTagFromTaskUseCase(NoopTagRepository),
     ) {
         private val fakeRepo = FakeTaskRepository(
             taskFlow = MutableStateFlow(initialTask),

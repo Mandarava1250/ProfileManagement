@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.SavedStateHandle
 import com.example.personalassistant.core.notification.FakeNotificationPermissionRequester
+import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
@@ -19,6 +20,7 @@ import com.example.personalassistant.feature.task.domain.usecase.DeleteTaskUseCa
 import com.example.personalassistant.feature.task.domain.usecase.GetTaskWithSubTasksUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ScheduleReminderUseCase
 import com.example.personalassistant.feature.task.domain.usecase.UpsertTaskUseCase
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Rule
 import org.junit.Test
@@ -47,6 +49,8 @@ class TaskEditScreenTest {
         override fun observeSubTasks(parentId: Long) = MutableStateFlow<List<SubTask>>(emptyList())
         override fun observeTasks(filter: TaskFilter, sort: TaskSort) =
             MutableStateFlow<List<Task>>(emptyList())
+        override fun observeTasks(filter: FilterExpression, sort: TaskSort): Flow<List<Task>> =
+            MutableStateFlow<List<Task>>(emptyList())
         override suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks? = null
         override suspend fun upsertTask(task: Task, subTasks: List<SubTask>): Long = -1L
         override suspend fun deleteTask(task: Task) {}
@@ -56,6 +60,8 @@ class TaskEditScreenTest {
         override suspend fun addSubTaskToTask(parentId: Long, title: String): Long = -1L
         override suspend fun deleteSubTask(subTask: SubTask) {}
         override suspend fun reorderTasks(orderedIds: List<Long>) {}
+        override fun searchTasks(keyword: String): Flow<List<Task>> =
+            MutableStateFlow<List<Task>>(emptyList())
     }
 
     private object NoopReminderScheduler : ReminderScheduler {
@@ -73,7 +79,13 @@ class TaskEditScreenTest {
     private class NoopDeleteTask : DeleteTaskUseCase(repository = NoopTaskRepository) {
         override suspend operator fun invoke(task: Task) {}
     }
-    private class NoopScheduleReminder : ScheduleReminderUseCase(scheduler = NoopReminderScheduler) {
+    // Phase 8 Sub-step 7：ScheduleReminderUseCase 新增 isHolidayUseCase 依赖。
+    // IsHolidayUseCase 是 fun interface，直接给常量 false stub，
+    // 与 JVM 侧 TaskEditViewModelTest 同写法，保持「不避让」的原测试语义。
+    private class NoopScheduleReminder : ScheduleReminderUseCase(
+        scheduler = NoopReminderScheduler,
+        isHolidayUseCase = com.example.personalassistant.core.holiday.usecase.IsHolidayUseCase { false },
+    ) {
         override suspend operator fun invoke(task: Task) {}
     }
     private class NoopCancelReminder : CancelReminderUseCase(scheduler = NoopReminderScheduler) {
