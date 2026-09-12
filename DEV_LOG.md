@@ -14,14 +14,15 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
-| 当前 HEAD | `1ef27df` |
+| 当前 HEAD | `a3d7dca` |
 | 当前分支 | `feature/phase-8-reminder`（已 push origin）|
 | 主分支 | `Develop` |
-| 累计 commit 数 | 50（`git rev-list --count HEAD`，含 merge / revert）|
-| 测试用例 | 568（JVM 单测，`./gradlew testDebugUnitTest` 实测 0 失败）|
+| 累计 commit 数 | 54（`git rev-list --count HEAD`，含 merge / revert）|
+| 测试用例 | **568 JVM 单测**（`testDebugUnitTest` 实测 0 失败）+ **2 instrumented**（`connectedDebugAndroidTest`，AVD 真跑 0 失败）|
 | Room 数据库 | **v9**（`user_profiles` 账户表 + 记账域 4 表 `accountId` 隔离）<br>⚠️ 本行旧值写的是“v10 + `events.category_id`”，与代码不符 —— 见下方「台账校正记录」|
 | 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项）|
-| 进行中 | **阶段 Phase 3（多账户 + 数据隔离）🟨** —— 代码 + JVM 验证已完成，Room 迁移 instrumented 真跑被阻塞（见该段 ⛔）|
+| 已完成（本轮新转 ✅） | **阶段 Phase 3（多账户 + 数据隔离）✅** —— Room 迁移已在 AVD `pm_api34` 真跑通过 @`a3d7dca`，原 ⛔ 环境阻塞已解除 |
+| 进行中 | **阶段 Phase 4（账户头像）🟨** —— 方向已确认（`avatars/` 独立目录 / 旧文件全清 / 行内显示 + 右侧相机按钮），代码待落 |
 
 ---
 
@@ -742,7 +743,12 @@ README.md        settings.gradle.kts
 > 与本文件前文「📦 Phase 3：任务模块 MVP」的**模块编号**无关，不要混淆。
 > 对应计划文件：修正版 `.cyrene/docs/plan-20260912-182400.md`（旧版见下文「计划修正」）。
 
-### 状态：**🟨 进行中**（代码与 JVM 验证完成；Room 迁移 instrumented 真跑被阻塞，见「阻塞」）
+### 状态：**✅ 已完成**（代码 + JVM 验证 + **Room 迁移 AVD 真跑均通过**）
+
+> **2026-09-12 转 ✅**：原先因「无 AVD」+「androidTest 编不过」两条阻塞记为 🟨，现均已解除：
+> 环境已配好（AVD `pm_api34` / API 34 / aosp_atd / WHPX 硬件加速），
+> `connectedDebugAndroidTest` 真跑 **tests=2 / failures=0 / errors=0 / skipped=0**。
+> 提交链：`9ecd424` → `1ef27df` → `e4cdd94` → **`a3d7dca`（真跑通过 + 修两处只在真机暴露的问题）**。
 
 ### 已完成的步骤
 
@@ -777,6 +783,8 @@ README.md        settings.gradle.kts
 | 22 | `Migration_8_9StatementsTest.kt`（**10 条** JVM SQL 断言：4 表加列 DEFAULT 1 / 两个旧 UNIQUE 先 DROP / parent 索引须先于子表重建 / 6 索引全建 / sqlite_sequence 不得进语句列表 / 不含 foreign_keys PRAGMA / 顺序依赖） | ✅ |
 | 23 | `AccountIsolationTest.kt`（**9 条**：实体默认 accountId、**旧备份 JSON 缺字段回落默认账户**、新 JSON 不被覆盖、切账户后读流按新账户重查、派生零钱池流重算、Fake 拒绝非正 id、分类按账户 9 个且 id=0） | ✅ |
 | 24 | `compileDebugAndroidTestKotlin`：本 Phase 新写的 `AppDatabaseMigrationsTest.kt` 已无编译错误 | ✅ |
+| 25 | **配 instrumented 环境**：`cmdline-tools` 16111833 + `system-images;android-34;aosp_atd;x86_64` + AVD `pm_api34`（WHPX 硬件加速，boot_completed=1） | ✅ |
+| 26 | **Migration_8_9 AVD 真跑**：`tests=2 failures=0`，覆盖结构校验 / 旧数据落 accountId=1 / 复合唯一索引 / 复合 FK（含正反两向）。顺带修两处只在真机暴露的问题 → `a3d7dca` | ✅ |
 
 ### 验证结果
 
@@ -787,12 +795,25 @@ README.md        settings.gradle.kts
   `getAllTransactions` / `getAllCategories` / `getAllMonthlyBudgets` / `getAllDailyPools`（备份快照）
   + `deleteTransactionById` / `deleteCategoryById` / `deleteMonthlyBudgetById` / `deleteDailyPoolById`（备份导入按全局 id 清理）
 - ✅ `./gradlew :app:compileDebugAndroidTestKotlin` —— **BUILD SUCCESSFUL**（陈旧 8 错已清，见 `e4cdd94`）
-- 🟨 Room 迁移真跑：**仍未完成**（仅剩「无设备/无 AVD」一条阻塞，见下）
+- ✅ **Room 迁移真跑（B 路线，已完成 @`a3d7dca`）** —— `connectedDebugAndroidTest`（仅本类）：
+  `Starting 2 tests on pm_api34(AVD) - 14` → XML 报告 `tests="2" failures="0" errors="0" skipped="0"`，BUILD SUCCESSFUL。
+  结论取自闭生成的 `app/build/outputs/androidTest-results/connected/debug/TEST-*.xml`，**不拿 exit code 当结论**：
+  第一次真跑就是被 cmd 的 `%ERRORLEVEL%` 提前展开骗了（报 `GRADLE_EXIT=0` 但实为 BUILD FAILED），
+  改用 `&&`/`||` + 查 XML 才拿到真实结果。
+  覆盖：`runMigrationsAndValidate` 结构校验 / 旧行落 accountId=1 / 两账户同月同日可写 / 同账户仍拒 /
+  跨账户 FK 被拒 + 同账户 FK 不误伤。
 
-### ⛔ 阻塞（B 路线真跑，原两条已消一条）
+### ⛔ 阻塞（已全部解除）
 
-1. **无可用设备 / AVD**：`adb devices` 空；SDK（`D:\Software\Code\JetBrain's\Android\Sdk`）**没有 `cmdline-tools`**、**没有 `system-images`**，`%USERPROFILE%\.android\avd` 为空目录 → 既不能 `avdmanager` 建 AVD，也没有现成镜像可装（要下载数百 MB 起）。
-   ⚠️ 计划稿里「`%USERPROFILE%\.android` 整个目录不存在」的判断**是错的**：该目录实际存在（`adbkey` / `debug.keystore` / `cli` / `studio` 都在），缺的只是 avd 内容与 cmdline-tools。已实测纠正。
+1. ~~**无可用设备 / AVD**~~ —— **已解决 @`a3d7dca`**（2026-09-12 22:20）。实际做法（均为本机环境改动，**不入库**）：
+   - 先推翻上一轮两个误判：`Android Studio` **其实在** `D:\Software\Code\JetBrain's\Android\Android Studio`（上次只查了 `C:\Program Files`）；
+     `C:\Users\Loren\.android` **也存在**（`adbkey` / `debug.keystore` / `cache` 都在），avd 子目录只是空的。
+   - SDK **确实无** `cmdline-tools` / `system-images` → 从 `repository2-1.xml` 取真实包名
+     `commandlinetools-win-16111833_latest.zip`（155MB）；解压后**必须**摆成 `cmdline-tools\latest\bin`（新版目录结构和旧版不同）。
+   - `emulator -accel-check` → **WHPX(10.0.26200) is installed and usable**，CPU AMD64 → 因此镜像选 `x86_64`（不是 arm64）。
+   - 镜像选 `system-images;android-34;aosp_atd;x86_64`：ATD 是专为自动化测试做的轻镜像，API 34 对齐 compileSdk。
+   - `avdmanager create avd -n pm_api34` → `emulator -no-window -read-only` → `sys.boot_completed=1`（约 90 秒）。
+   ⚠️ 计划稿里「`%USERPROFILE%\.android` 整个目录不存在」的判断**是错的**：该目录实际存在，缺的只是 avd 内容与 cmdline-tools。已实测纠正。
 2. ~~**androidTest 源集本身编不过（Phase 3 之前就坏）**~~ —— **已解决 @`e4cdd94`**。
    原 8 个编译错误的**真实根因**不是「Fake 漏实现」，而是接口在 Phase 6c / Phase 8-7 扩了成员、androidTest 源集从未跟上：
    - `TaskRepository` 现有**两个 `observeTasks` 重载**（`TaskFilter` 版 + Phase 6c 的 `FilterExpression` 版）+ Phase 8-3 的 `searchTasks`；两个 Fake 只实现了旧的那一个
@@ -800,7 +821,10 @@ README.md        settings.gradle.kts
    - `TaskDetailViewModel` 构造多 5 个参数；其中 `ObserveTagsForTaskUseCase` 是 **final class 不可 fork**，只能注入 `NoopTagRepository` 而非照抄邻居的 Fake-UseCase 写法
    - `ScheduleReminderUseCase` 缺的 `isHolidayUseCase` 报在测试第 76 行，但**归属是 UseCase 构造而非 ViewModel**（列号 66 指向 `ScheduleReminderUseCase(...)`）
    **归属已用证据确认**：把本 Phase 的 androidTest 文件 + 两个依赖用 `git stash push -u` 移出后重编，报错**一字不差仍是那 8 个**；`git diff --name-only HEAD~1` 里 task 域文件数为 **0**。→ 陈旧腐化，非本次引入，已在独立 commit 中修复，未动任何生产代码。
-3. 时间盒结论：未盲目 `sdkmanager` 下载赌运气，按规则**如实记 ⛔ 不虚标 ✅**。测试代码（`AppDatabaseMigrationsTest.kt` + 两个依赖）**保留在库**，接上设备/建好 AVD 后即可 `./gradlew connectedDebugAndroidTest` 直接跑。
+3. ~~时间盒结论：若环境装不上就退到 JVM 断言 SQL，androidTest 代码保留但台账记 🟨~~ —— **该退路未动用**：环境真装上去了，台账因此是 ✅，不需要「虚标风险」的兑底说明。
+4. 新发现的次要限制（不阻塞 Phase 3，但影响后续）：**AVD 与镜像属本机环境，不在版本库里**。
+   换机器 / 上 CI 时仍需一次性重装（命令已列在上条 1）或接真机；否则 `connectedDebugAndroidTest` 会因「无设备」而跳过。
+   建议：后续上 CI 用 `reactivecirc/android-emulator-runner` 一类 Action，避免误以为仪表测试已覆盖。
 
 ### 关键变更文件
 
@@ -812,7 +836,7 @@ README.md        settings.gradle.kts
 
 **修改（16）**：`AppDatabase.kt`、`DatabaseCallback.kt`、`CoreModule.kt`、记账 4 实体、`FinanceDao.kt`、`FinanceRepositoryImpl.kt`、`DefaultCategories.kt`、`GetMonthlyReportUseCase.kt`、`SettingsViewModel.kt`、`SettingsScreen.kt`、备份 5 文件（`BackupPayload` / `BackupManifest` / `BackupFormatVersion` / `BackupExporter` / `BackupSerializer` / `BackupImporter`）、`BackupFormatVersionTest.kt`、`app/build.gradle.kts`、`gradle/libs.versions.toml`
 
-**提交**：功能 `9ecd424`（3a+3b+3c+备份+JVM 测试，合成一次 —— 三者互相依赖，拆开中间态编译不过，与计划「可拆三次」的预估不同）、`1ef27df`（androidTest + room-testing 依赖）、`e4cdd94`（清掉 androidTest 8 个陈旧编译错误 —— 迁移真跑的前置阻塞项）。已 push `origin/feature/phase-8-reminder`。
+**提交**：功能 `9ecd424`（3a+3b+3c+备份+JVM 测试，合成一次 —— 三者互相依赖，拆开中间态编译不过，与计划「可拆三次」的预估不同）、`1ef27df`（androidTest + room-testing 依赖）、`e4cdd94`（清掉 androidTest 8 个陈旧编译错误 —— 迁移真跑的前置阻塞项）、**`a3d7dca`（AVD 真跑通过 + 修两处只在真机才暴露的问题）**。已 push `origin/feature/phase-8-reminder`。
 
 ### 踩坑笔记
 
@@ -832,6 +856,24 @@ README.md        settings.gradle.kts
 12. **`MigrationTestHelper` 的正确构造别猜**：Room 按**数据库类全名**导出 schema（`app/schemas/com.example…AppDatabase/8.json`），而 `createMigrationTestDriver` 按**数据库文件名**找 assets（`personal_assistant.db/8.json`）—— 两者对不上只会 `Could not find database schema`，容易被误读成"迁移测试没配好"。2.6.1 应使用 `MigrationTestHelper(context, AppDatabase::class.java)` 重载（`androidTest.assets.srcDirs` 已指向 schemas，无需额外配置）。
 13. **`createDatabase()` 返回的是 `SupportSQLiteDatabase`**：只有 `query(sql)`，**没有** `rawQuery(sql, args)`（后者是 `android.database.sqlite.SQLiteDatabase` 特有的）。照 App 层习惯写会吃一串 `Unresolved reference`。
 14. **工具链小坑**：cmd 里跑多行 `python -c` 会被吞（只执行第一行）→ 改单行分号式；`findstr` 无匹配返回非 0，会把 `&&` 链**整个截断**，导致后半段根本没跑 —— 需要并列查询时改用 `&` 或分开调用；`DEV_LOG.md` 是 UTF-8，用 cmd `findstr` 看会成乱码（文件本身没问题，别被吓到去"修编码"）。
+15. **反引号空格测试名过不了 D8**（上一轮判断遗漏，本轮真跑才发现）：`fun \`migrate 8 to 9 ...\`() 在 **JVM 单测**完全合法，但 androidTest 还要过 dex ——
+    `D8: Space characters in SimpleName '...' are not allowed prior to DEX version 040`（DEX 035 对应 minSdk 26），直接 `dexBuilderDebugAndroidTest FAILED`。
+    改成 camelCase + KDoc 描述意图，断言逻辑一字未动。
+    **真正的教训是验证下限**：上一轮只跑了 `compileDebugAndroidTestKotlin`（绿）就下了"androidTest 已可用"的结论 ——
+    **编译绿 ≠ 能装到设备**。仪表测试的验证下限是 `connectedDebugAndroidTest`，不是 `compile*AndroidTestKotlin`。
+16. **Android 默认不强制外键，`MigrationTestHelper` 尤其如此**（真跑抓到的第二个问题，**不是产品代码缺陷**）：
+    断言"跨账户引用分类应被复合 FK 拒绝"首次真跑直接失败（跨账户插入没被拒）。取证链：
+    `runMigrationsAndValidate` **已通过**（证明 schema 与 `9.json` 一致）+ 生成的 `AppDatabase_Impl.java` 里
+    `ForeignKey("categories","RESTRICT","CASCADE",[accountId,categoryId],[accountId,id])` **确实在** →
+    所以 FK 定义正确，缺的是**运行时开关**：Android `SQLiteDatabase` 为向后兼容**默认不开** `foreign_keys`，
+    而 `MigrationTestHelper` 返回裸连接，**绕过了 Room 的 `onConfigure`**（Room 自己会开）。
+    修法：测试内补 `PRAGMA foreign_keys = ON`，且必须在迁移事务已提交之后（该 PRAGMA 在事务内是 no-op，同第 3 条）。
+    **关键防线**：同时加一条自证断言 `PRAGMA foreign_keys` 必须回 1 —— 否则开关未生效时会**静默放行**两条 FK 断言，
+    把"测不了"伪装成"测过了"。这不叫放宽断言蒙过去，区别就在于有没有那条自证。
+17. **`%ERRORLEVEL%` 在 cmd 单行里会提前展开**（本轮差点因此误报成功）：`gradlew … > log 2>&1 & echo EXIT=%ERRORLEVEL%`
+    打出 `EXIT=0`，而日志末尾其实是 `BUILD FAILED in 3m 21s` —— cmd 在**解析阶段**就展开变量，拿到的是执行前的旧值。
+    改用 `cmd && echo SUCCESS || echo FAILED`（运行时求值）+ **查 `TEST-*.xml` 的 tests/failures 计数**双证，
+    并注意到 `androidTest-results` 目录不存在 = 一条测试都没跑。以后判断仪表测试结果，只看 XML 报告。
 
 ### 范围与决策
 
