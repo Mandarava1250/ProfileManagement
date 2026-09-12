@@ -20,11 +20,13 @@ import org.junit.runner.RunWith
  * 2. 旧数据无损落到 accountId=1
  * 3. 两个账户可以各写同一天/同一个月（复合唯一索引真的生效）
  * 4. 旧的全局唯一索引已被替换（若没替换，第 3 步会撞 UNIQUE）
- * 5. 跨账户引用分类会被复合 FK 拒绝
+ * 5. 跨账户引用分类会被复合 FK 拒绝（需先 PRAGMA foreign_keys=ON，见测试内注释）
  *
- * ## 运行前提（本机当前不满足 —— 见 DEV_LOG Phase 3 阻塞说明）
+ * ## 运行前提（2026-09-12 已在本机配好）
  * 需要连接的设备或模拟器：
- *   adb devices 非空 / 或先 sdkmanager 装 system-images + avdmanager 建 AVD
+ *   adb devices 非空 / 或先装 system-images + 建 AVD
+ *   本机已配：AVD `pm_api34`（aosp_atd / x86_64 / API 34，WHPX 硬件加速）
+ *   启动：emulator -avd pm_api34 -no-window -no-audio -no-boot-anim -read-only
  * 跑法：
  *   ./gradlew connectedDebugAndroidTest
  * 若只有真机/模拟器可用，也可：
@@ -38,6 +40,13 @@ import org.junit.runner.RunWith
  *
  * 另一细节：createDatabase 返回的是 [androidx.sqlite.db.SupportSQLiteDatabase]，
  * 只有 `query(sql)`，没有 android 特有的 `rawQuery(sql, args)` —— 别照 Activity 层的 API 写。
+ *
+ * ## 为什么测试名不用反引号空格写法
+ * `fun \`migrate 8 to 9 ...\`() 这种名字在 **JVM 单测**里完全合法，所以 Phase 3 写这个文件时
+ * 只跑了 `compileDebugAndroidTestKotlin`（绿）就以为没问题。但 androidTest 还要过 **D8 dex**：
+ *   D8: Space characters in SimpleName '...' are not allowed prior to DEX version 040
+ * DEX 035（minSdk 26 对应的版本）不允许方法名含空格，直接 `dexBuilderDebugAndroidTest FAILED`。
+ * 所以仪表测试一律用 camelCase 方法名 + 注释描述意图；空格名只留给 src/test 下的 JVM 测试。
  */
 @RunWith(AndroidJUnit4::class)
 class AppDatabaseMigrationsTest {
@@ -48,8 +57,9 @@ class AppDatabaseMigrationsTest {
         AppDatabase::class.java,
     )
 
+    /** 8→9：schema 校验通过，旧行全部落到默认账户 */
     @Test
-    fun `migrate 8 to 9 validates schema and keeps legacy rows on default account`() {
+    fun migrate8To9ValidatesSchemaAndKeepsLegacyRowsOnDefaultAccount() {
         // ===== 1. 先造一份 v8 结构的库，并塞入「旧时代」数据（表还没有 accountId 列）=====
         val db8 = helper.createDatabase(TEST_DB, 8)
         db8.apply {
@@ -133,7 +143,18 @@ class AppDatabaseMigrationsTest {
         )
 
         // ===== 6. 复合 FK 生效：账户 1 的流水不能引用账户 2 的分类 =====
-        //     （迁移全程没关外键，所以这里应当被真实约束拦住）
+        //
+        // ⚠️ 必须先显式开启外键强制：Android 的 SQLiteDatabase **默认不开** foreign_keys（为了向后兼容），
+        // MigrationTestHelper 返回的是裸连接，不像 Room 的 RoomOpenHelper 会自己开。
+        // 首次真跑就是因为没开这一句，跨账户插入没被拒而失败（而不是 FK 写错）。
+        // 另：PRAGMA foreign_keys 在事务内是 no-op，必须放在迁移事务已提交之后的现在。
+        db9.execSQL("PRAGMA foreign_keys = ON")
+        assertEquals(
+            "外键强制应已开启（否则下面两条断言会失真）",
+            1,
+            foreignKeysEnabled(db9),
+        )
+
         assertTrue(
             "跨账户引用分类应被复合 FK 拒绝",
             runsThrowing {
@@ -153,8 +174,9 @@ class AppDatabaseMigrationsTest {
         db9.close()
     }
 
+    /** 8→9：空库（无 sqlite_sequence）也能安全迁移 */
     @Test
-    fun `migration is idempotent safe for a fresh v8 database without any transactions`() {
+    fun migrationIsSafeForFreshV8DatabaseWithoutAnyTransactions() {
         // 回归「装了但从未记账」的设备：sqlite_sequence 表还不存在。
         // 若那两条 UPDATE 混在无条件语句列表里，这里会抛 no such table: sqlite_sequence。
         val db8 = helper.createDatabase(TEST_DB, 8)
@@ -167,6 +189,11 @@ class AppDatabaseMigrationsTest {
     }
 
     // ===== helpers =====
+
+    private fun foreignKeysEnabled(db: androidx.sqlite.db.SupportSQLiteDatabase): Int =
+        db.query("PRAGMA foreign_keys").use { c ->
+            if (c.moveToFirst()) c.getInt(0) else -1
+        }
 
     private fun countRows(db: androidx.sqlite.db.SupportSQLiteDatabase, table: String): Int =
         db.query("SELECT COUNT(*) FROM $table").use { c ->
