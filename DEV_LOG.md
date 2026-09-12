@@ -786,14 +786,20 @@ README.md        settings.gradle.kts
 - ✅ Room 40 条 @Query 用脚本逐条判定是否带 `accountId`，MISS 恰为白名单 8 条：
   `getAllTransactions` / `getAllCategories` / `getAllMonthlyBudgets` / `getAllDailyPools`（备份快照）
   + `deleteTransactionById` / `deleteCategoryById` / `deleteMonthlyBudgetById` / `deleteDailyPoolById`（备份导入按全局 id 清理）
-- 🟨 Room 迁移真跑：**未完成**（见下）
+- ✅ `./gradlew :app:compileDebugAndroidTestKotlin` —— **BUILD SUCCESSFUL**（陈旧 8 错已清，见 `e4cdd94`）
+- 🟨 Room 迁移真跑：**仍未完成**（仅剩「无设备/无 AVD」一条阻塞，见下）
 
-### ⛔ 阻塞（B 路线真跑，两条并列）
+### ⛔ 阻塞（B 路线真跑，原两条已消一条）
 
 1. **无可用设备 / AVD**：`adb devices` 空；SDK（`D:\Software\Code\JetBrain's\Android\Sdk`）**没有 `cmdline-tools`**、**没有 `system-images`**，`%USERPROFILE%\.android\avd` 为空目录 → 既不能 `avdmanager` 建 AVD，也没有现成镜像可装（要下载数百 MB 起）。
    ⚠️ 计划稿里「`%USERPROFILE%\.android` 整个目录不存在」的判断**是错的**：该目录实际存在（`adbkey` / `debug.keystore` / `cli` / `studio` 都在），缺的只是 avd 内容与 cmdline-tools。已实测纠正。
-2. **androidTest 源集本身编不过（Phase 3 之前就坏）**：`TaskDetailScreenTest` / `TaskEditScreenTest` 共 **8 个**编译错误（`FakeTaskRepository` 未实现 `observeTasks`；构造缺 `observeTagsForTask` / `tagRepository` / `create*TagUseCase` / `isHolidayUseCase`）。
-   **归属已用证据确认**：把本 Phase 的 androidTest 文件 + 两个依赖用 `git stash push -u` 移出后重编，报错**一字不差仍是那 8 个**；`git diff --name-only HEAD~1` 里 task 域文件数为 **0**。→ 陈旧腐化，非本次引入，但它是迁移真跑的前置修复项。
+2. ~~**androidTest 源集本身编不过（Phase 3 之前就坏）**~~ —— **已解决 @`e4cdd94`**。
+   原 8 个编译错误的**真实根因**不是「Fake 漏实现」，而是接口在 Phase 6c / Phase 8-7 扩了成员、androidTest 源集从未跟上：
+   - `TaskRepository` 现有**两个 `observeTasks` 重载**（`TaskFilter` 版 + Phase 6c 的 `FilterExpression` 版）+ Phase 8-3 的 `searchTasks`；两个 Fake 只实现了旧的那一个
+   - 编译器只报了 `observeTasks` 一条，`searchTasks` 的缺失被**同一条错误吞掉**（Kotlin 报「未实现抽象成员」时不逐项列举）——补完 FilterExpression 才暴露
+   - `TaskDetailViewModel` 构造多 5 个参数；其中 `ObserveTagsForTaskUseCase` 是 **final class 不可 fork**，只能注入 `NoopTagRepository` 而非照抄邻居的 Fake-UseCase 写法
+   - `ScheduleReminderUseCase` 缺的 `isHolidayUseCase` 报在测试第 76 行，但**归属是 UseCase 构造而非 ViewModel**（列号 66 指向 `ScheduleReminderUseCase(...)`）
+   **归属已用证据确认**：把本 Phase 的 androidTest 文件 + 两个依赖用 `git stash push -u` 移出后重编，报错**一字不差仍是那 8 个**；`git diff --name-only HEAD~1` 里 task 域文件数为 **0**。→ 陈旧腐化，非本次引入，已在独立 commit 中修复，未动任何生产代码。
 3. 时间盒结论：未盲目 `sdkmanager` 下载赌运气，按规则**如实记 ⛔ 不虚标 ✅**。测试代码（`AppDatabaseMigrationsTest.kt` + 两个依赖）**保留在库**，接上设备/建好 AVD 后即可 `./gradlew connectedDebugAndroidTest` 直接跑。
 
 ### 关键变更文件
@@ -806,7 +812,7 @@ README.md        settings.gradle.kts
 
 **修改（16）**：`AppDatabase.kt`、`DatabaseCallback.kt`、`CoreModule.kt`、记账 4 实体、`FinanceDao.kt`、`FinanceRepositoryImpl.kt`、`DefaultCategories.kt`、`GetMonthlyReportUseCase.kt`、`SettingsViewModel.kt`、`SettingsScreen.kt`、备份 5 文件（`BackupPayload` / `BackupManifest` / `BackupFormatVersion` / `BackupExporter` / `BackupSerializer` / `BackupImporter`）、`BackupFormatVersionTest.kt`、`app/build.gradle.kts`、`gradle/libs.versions.toml`
 
-**提交**：功能 `9ecd424`（3a+3b+3c+备份+JVM 测试，合成一次 —— 三者互相依赖，拆开中间态编译不过，与计划「可拆三次」的预估不同）、`1ef27df`（androidTest + room-testing 依赖）。已 push `origin/feature/phase-8-reminder`。
+**提交**：功能 `9ecd424`（3a+3b+3c+备份+JVM 测试，合成一次 —— 三者互相依赖，拆开中间态编译不过，与计划「可拆三次」的预估不同）、`1ef27df`（androidTest + room-testing 依赖）、`e4cdd94`（清掉 androidTest 8 个陈旧编译错误 —— 迁移真跑的前置阻塞项）。已 push `origin/feature/phase-8-reminder`。
 
 ### 踩坑笔记
 
@@ -856,7 +862,7 @@ README.md        settings.gradle.kts
 
 ### 待办与下一个入口
 
-- 🔜 **前置修复（建议单独一个 commit）**：修 `TaskDetailScreenTest` / `TaskEditScreenTest` 的 8 个陈旧编译错误（给两个 Fake 补 `observeTasks` 等成员）→ androidTest 源集恢复可编。
+- ✅ **前置修复已完成 @`e4cdd94`**（单独 commit，未动生产代码）：androidTest 源集恢复可编，`compileDebugAndroidTestKotlin` BUILD SUCCESSFUL，`testDebugUnitTest` 仍全绿。
 - 🔜 **B 路线补跑**：装 `cmdline-tools` → `sdkmanager "system-images;android-34;google_apis;x86_64"` → `avdmanager create avd` → `./gradlew connectedDebugAndroidTest`；跑绿后才允许把本段状态从 🟨 改 ✅（当前 `AppDatabaseMigrationsTest` 已就位，含 schema 校验 / 旧数据落 1 / 复合唯一 / 复合 FK / 空库回归 5 组断言）。
 - 🔜 记账页**顶部账户切换入口**（当前只能进 Settings 换；计划本 Phase 只要求 Settings 入口，已满足，但常用切换建议下阶段补快捷入口）。
 - ➡️ 下一阶段 Phase 4（头像上传）复用 Phase 2 的 `AttachmentStore` + 单图 PhotoPicker；`UserProfileEntity.avatarUri` 已预留（当前恒 null）。
