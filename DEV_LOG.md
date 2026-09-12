@@ -14,15 +14,17 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
-| 当前 HEAD | `a3d7dca` |
+| 当前 HEAD | `75fca56` |
 | 当前分支 | `feature/phase-8-reminder`（已 push origin）|
 | 主分支 | `Develop` |
-| 累计 commit 数 | 54（`git rev-list --count HEAD`，含 merge / revert）|
-| 测试用例 | **568 JVM 单测**（`testDebugUnitTest` 实测 0 失败）+ **2 instrumented**（`connectedDebugAndroidTest`，AVD 真跑 0 失败）|
+| 累计 commit 数 | 57（`git rev-list --count HEAD`，含 merge / revert）|
+| 测试用例 | **578 JVM 单测**（`testDebugUnitTest` 实测 0 失败）+ **6 instrumented**（`connectedDebugAndroidTest`，AVD 真跑 0 失败）|
+| 测试环境 | AVD `pm_api34`（API 34 / aosp_atd / x86_64 / WHPX 硬件加速）—— 属本机环境，**不在版本库** |
 | Room 数据库 | **v9**（`user_profiles` 账户表 + 记账域 4 表 `accountId` 隔离）<br>⚠️ 本行旧值写的是“v10 + `events.category_id`”，与代码不符 —— 见下方「台账校正记录」|
 | 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项）|
 | 已完成（本轮新转 ✅） | **阶段 Phase 3（多账户 + 数据隔离）✅** —— Room 迁移已在 AVD `pm_api34` 真跑通过 @`a3d7dca`，原 ⛔ 环境阻塞已解除 |
-| 进行中 | **阶段 Phase 4（账户头像）🟨** —— 方向已确认（`avatars/` 独立目录 / 旧文件全清 / 行内显示 + 右侧相机按钮），代码待落 |
+| 已完成（本轮新转 ✅） | **阶段 Phase 4（账户头像）✅** —— `c4224c3` 功能 + `75fca56` 真实读写 AVD 真跑；无 DB 变更 / 无新依赖 |
+| 进行中 | （空）—— 阶段 Phase 1~4 均已 ✅；Phase 5+（跨账户转账 / 账户间预算汇总 / 记账页顶部切换快捷入口）待开 |
 
 ---
 
@@ -910,4 +912,140 @@ README.md        settings.gradle.kts
   上一轮台账旧文本里的 `google_apis` 推测已在上面的「阻塞 1」中被实测路径取代。
 - 🔜 记账页**顶部账户切换入口**（当前只能进 Settings 换；计划本 Phase 只要求 Settings 入口，已满足，但常用切换建议下阶段补快捷入口）。
 - ➡️ 下一阶段 Phase 4（头像上传）复用 Phase 2 的 `AttachmentStore` + 单图 PhotoPicker；`UserProfileEntity.avatarUri` 已预留（当前恒 null）。
-  ⚠️ 本行的「复用 `AttachmentStore`」已被 Phase 4 实做推翻（改为新增 `AvatarStorage` 接口 + 独立 `avatars/` 目录），原因见本段下方 Phase 4 记录的「范围与决策」。
+  ⚠️ 本行的「复用 `AttachmentStore`」已被 Phase 4 实做推翻（改为新增 `AvatarStorage` 接口 + 独立 `avatars/` 目录），原因见下方 Phase 4 记录的「范围与决策」。
+
+---
+
+## 🧩 阶段 Phase 4：账户头像（上传 / 压缩 / 旧文件清理）
+
+> 对应计划：`.cyrene/docs/plan-20260912-182400.md` 的「Phase 4」（该文件在本地，`.gitignore` 已排除 `.cyrene/`）。
+> 上一阶段（Phase 3）已完成，本阶段**不改 schema、不加迁移、不升 version、不新增依赖**。
+
+### 状态：**✅ 已完成**（10 条 JVM 编排测 + 4 条 AVD 真实读写测均通过）
+
+> 提交链：`c4224c3`（功能 + JVM 测试）→ `75fca56`（`AvatarStorageImpl` 真跑）。
+> ⚠️ **`c4224c3` 的提交信息里写了「AvatarStorageImpl 未在设备上跑过」**，
+> 该结论已被 **`75fca56` 推翻**。历史提交不改写，本段记录才是当前事实。
+
+### 已完成的步骤
+
+| # | 步骤 | 状态 |
+|---|---|---|
+| **4a 存储层（不改 AttachmentStore 公开签名）** | | |
+| 1 | 新增 `core/storage/ImageEncoder.kt`：抽出 `encodeImageToJpeg` / `deleteFileInsideDir` + 两组参数常量（附件 1080 / 头像 512，同为 JPEG 85） | ✅ |
+| 2 | `AttachmentStore` 改为委派调用：编码 12 行 + 删除 10 行 → 4 行委派；**构造签名与 `saveAll`/`delete`/`deleteAll`/`deleteAllInDir` 一字未改** | ✅ |
+| 3 | 新增 `AvatarStorage` 接口 + `AvatarStorageImpl`（写 `filesDir/avatars`，512px）；`ProfileModule` 加 `@Binds` | ✅ |
+| **4b 数据 / 仓储层** | | |
+| 4 | `UserProfileDao.updateAvatar(id, avatarUri)`（单列 UPDATE，不走先查后写）；`AccountRepository` 加 `findAccount` / `setAvatarUri` | ✅ |
+| 5 | `deleteAccount` 补上**头像文件级联清理**（计划未提，本轮发现）；取 `avatarUri` 必须排在删行**之前** | ✅ |
+| 6 | 新增 `SetAccountAvatarUseCase`：编排「存新 → 写库 → 删旧」，失败即中断；`AccountRepositoryImpl` 退化为只写一列 | ✅ |
+| **4c UI** | | |
+| 7 | `SettingsViewModel` 注入 UseCase + `onAvatarPicked` / `onAvatarRemoved`（失败文案区分「读不出图」与「账户不存在」） | ✅ |
+| 8 | `AccountSettingsCard`：行内 36dp 圆形头像（Coil `AsyncImage`，无图时 `Person` 占位）+ 有图时角标「移除」+ 行右侧相机按钮 | ✅ |
+| 9 | `SettingsScreen` 接 `PickVisualMedia`，用本地 `avatarTargetAccountId` 记住「刚才点的是哪个账户」 | ✅ |
+| **4d 测试** | | |
+| 10 | `FakeAvatarStorage` + `FakeAccountRepository`（共享同一个 orderLog，才能断言**跨对象**顺序）；`placeholderUri()` 解决 JVM 造不出 `Uri` | ✅ |
+| 11 | `SetAccountAvatarUseCaseTest`（**10 条**）：失败保持原状 / 账户不存在零 IO / 三步顺序 / 首次无旧文件 / 连换两次 / 同图幂等不误删 / 清除顺序 / 无头像清除 / 清除不存在 / 越界守卫 | ✅ |
+| 12 | `AvatarStorageImplTest`（**4 条 instrumented**）：真解码落盘 + **最长边 ≤512 实测** / 非图片返回 null / 真删成功 / **拒删 attachments 与 filesDir 根** | ✅ |
+
+### 验证结果
+
+- ✅ `./gradlew testDebugUnitTest` —— **TESTS=578 FAILURES=0 ERRORS=0 SKIPPED=0**
+  （Phase 3 基线 568 + 本 Phase 新增 10，零回归）；
+  `SetAccountAvatarUseCaseTest` 单看：`tests="10" failures="0"`。
+  ⚠️ 计数方式：用正则从 `TEST-*.xml` 取。**不要用 PowerShell `[xml]` 强解析**，
+  它会因报告里的中文字节失败并输一个错数（本轮一度算出 614，实为 578）。
+- ✅ `./gradlew connectedDebugAndroidTest`（`AvatarStorageImplTest` + `AppDatabaseMigrationsTest`）：
+  `Starting 6 tests on pm_api34(AVD) - 14` → XML `tests="6" failures="0" errors="0" skipped="0"`。
+  6 = 头像 4 条 + Phase 3 迁移 2 条（**迁移仍绿，证明 Phase 4 改动没碰坏 Phase 3**）。
+- ✅ `./gradlew assembleDebug` —— BUILD SUCCESSFUL。这是比 `compileDebugKotlin` **更高的一档验证**：
+  只有它会完整跑 Hilt 依赖图，能发现 `AvatarStorage` 忘加 `@Binds` 这类只在运行期爆的缺口。
+- ✅ `./gradlew compileDebugAndroidTestKotlin` —— 通过（androidTest 源集保持可编）。
+- 🟨 **人工 UI 验收未做**：选图面板交互、圆角渲染观感、头像尺寸在真实照片上的视觉质量。
+  自动化已覆盖「写对文件 / 压缩到位 / 不越目录删」，但「看得好看」只能人看。
+
+### 关键变更文件
+
+**新增（7 个代码 + 2 个测试）**：
+- main：`core/storage/ImageEncoder.kt`；`feature/profile/data/AvatarStorage.kt` / `AvatarStorageImpl.kt` / `SetAccountAvatarUseCase.kt`
+- test：`FakeAvatarStorage.kt` / `FakeAccountRepository.kt` / `SetAccountAvatarUseCaseTest.kt`
+- androidTest：`AvatarStorageImplTest.kt`
+
+**修改（8）**：`AttachmentStore.kt`、`AccountRepository.kt`、`AccountRepositoryImpl.kt`、`UserProfileDao.kt`、`ProfileModule.kt`、`AccountSettingsCard.kt`、`SettingsViewModel.kt`、`SettingsScreen.kt`
+
+**未改（刻意的）**：`UserProfileEntity`（`avatarUri` Phase 3 已预留）、`AppDatabase`（仍 v9）、`Migration_8_9`（已发布不得改）、`app/build.gradle.kts`（Coil 已在）、`core/backup/` 下的备份文件（`avatarUri` 已随 `user_profiles` 一起序列化，无需改动）。
+
+### 范围与决策
+
+- **`avatars/` 独立目录，不跟 `attachments/` 混**（本 Phase 最值钱的判断）：
+  `AttachmentStore.deleteAllInDir()` 是「清空该目录全部文件」的核按钮。
+  两类文件混放，意味着将来任何人调它都会**连头像一起删掉**，而库里 `avatarUri` 还在 → 永久 404。
+  `AvatarStorageImplTest.deleteRefusesToTouchFilesOutsideAvatarsDir` 是这条决定的回归锁。
+- **编排放 UseCase 不放 Repository**（可测性驱动）：见踩坑 1。
+  顺序不变量「先存新 → 再写库 → 后删旧」集中在 `SetAccountAvatarUseCase`，
+  `AccountRepositoryImpl.setAvatarUri` 退化成只写一列。
+- **旧头像文件三处全清**：换头像（UseCase）、清除头像（UseCase）、删账户（Repository 级联）。
+  本 Phase 新增的是 **`AvatarStorage.delete`**（main 源集里 `avatarStorage.delete(...)` 共 **3 处** 调用）。
+- ⚠️ **`AttachmentStore.delete()` / `deleteAll()` 至今仍是零生产调用**（本轮实测：main 源集 `attachmentStore.`
+  只命中 `saveAll` 一处）。Phase 2 记的「未保存残留是已知小泄漏」说轻了 —— 旧**附件**文件从来没被清理过。
+  本 Phase **没有**解决它（两者只共用底层 `deleteFileInsideDir` 助手）。
+  切勿因为「头像能删了」就以为附件也能 —— 已列入下方待办。
+- **UI 入口 = 行内头像只展示 + 右侧相机按钮**：`AccountRow` 整行已 `clickable(onSwitch)`，
+  头像若可点会**先误触「切换账户」**。移除按钮做成头像角标上的独立 `IconButton`（自己消费点击，不外泄）。
+- **不需要 `takePersistableUriPermission`**：PhotoPicker 的 `content://` 只本次会话可读，
+  而本功能立即拷成自己的 `file://`，所以不依赖长期授权。这也是「必须拷一份、不能只存引用」的原因。
+- **头像 512px / 附件 1080px，质量同为 85**：UI 里头像最大约 48dp（3x ≈ 168px），512 已留足余量。
+- **文案继续硬编码中文**，与 `SettingsScreen` 现有风格一致（同 Phase 3 的有意偏离）。
+- **不做**：图片裁剪 / 圆形裁剪交由 `Modifier.clip(CircleShape)` 完成，不做像素级 centerCrop 定制；
+  EXIF 旋转仍未处理（Phase 2 遗留）；头像不进备份的独立条目（随 `user_profiles` 行走）。
+
+### 踩坑笔记
+
+1. **顺序不变量该放在「能被 fake 的最小切口」上**（本 Phase 的核心决定，中途改过一次设计）：
+   最初把「存新 → 写库 → 删旧」写在 `AccountRepositoryImpl.applyAvatar` 里，看着很自然，实际**测不了**：
+   该类还依赖 `FinanceDao`（**47** 个方法）与 `UserProfileDao`（11 个），项目「Fake 优先、无 Mockito」，
+   为一条头像链路手写 58 个假方法的真实结局就是「干脆不测」。
+   迁到 `SetAccountAvatarUseCase`（只依赖 `AvatarStorage` + `AccountRepository`）后，2 个 Fake 覆盖 10 条用例。
+   **判据**：新增逻辑要测它需要 fake 多少个方法？超过两三个就该重新切层。
+2. **给 Hilt `@Inject constructor` 类加构造参数是危险的**（原计划写「给 `AttachmentStore` 加 `subdir`/`maxLongEdge` 复用」，实测不可行）：
+   ① `@Singleton open class ... @Inject constructor(...)` 的 Hilt Factory 按**全部参数**生成 Java 调用；
+   ② `FakeAttachmentStore` **继承**它并用命名参数调父类构造，而它覆盖的 `saveAll` 正是 Phase 2 的被测路径。
+   改成提取顶层函数（`encodeImageToJpeg` / `deleteFileInsideDir`）两边各自调用，公开签名一字未改。
+   **另有一条连锁**：`delete()` 内如果写成 `= withContext { deleteFileInsideDir(...) }`，
+   返回类型会从 `Unit` 变成 `Boolean`，直接弄坏 `FakeAttachmentStore` 的 `override ... = Unit`。
+   委派时显式写 `Unit`，别让类型推断改变 override 兼容的签名。
+3. **JUnit4 的 `fun xxx() = runBlocking { ... }` 会静默让整个类不跑**（本轮真跑才暴露）：
+   返回类型由 lambda **最后一个表达式**推断；那条用例结尾是 `file.delete()`（返回 Boolean），
+   方法就不是 void → `InvalidTestClassError: Method xxx() should be void`，
+   表现为只有 1 条 `initializationError`、**一条测试都不执行**，且报错信息只指向其中一个方法（其余 3 个同样问题不列）。
+   修法：仪表测试的 `@Test` **一律显式写 `: Unit`**，把这类问题从「运行时静默」收敛到编译期。
+4. **JVM 里造不出 `android.net.Uri`**：`isReturnDefaultValues=true`（Phase 5 为 `Log.i` 开的）让
+   `Uri.parse(...)` 只返回 null，而 `Uri` 是抽象类，手写实现要补几十个方法。
+   解法是泛型 `null` 转换（`private fun <T> nullAs(): T = null as T`），**前提是 Fake 不读该参数**。
+   ⚠️ 不能「简化」成 `null as Uri`：那看着能编译，实际 Kotlin 对具体非空类型的 `as` **在运行时**抛
+   ClassCastException，`@Suppress("UNCHECKED_CAST")` 只压编译期警告，管不了它。
+5. **统计测试结果时别用 PowerShell `[xml]` 强解析 Gradle 报告**：报告含中文用例名，
+   `[xml]$d = Get-Content -Raw` 会因编码/属性解析报错并给出**错的总数**（本轮一度算出 614，实为 578）。
+   用正则抓 `tests="(\d+)" failures="(\d+)"` 累加才可靠。
+6. **改源文件不要用 shell 拼字符串**（本轮自己制造的一次破坏）：
+   想用 `powershell -replace ... | Set-Content -NoNewline` 改测试文件，结果
+   `-NoNewline` 把整个文件压成**一行**、Windows PowerShell 5 的 `-Encoding UTF8` 又加了 **BOM**，
+   文件直接不可编译。最终用 `write_file` 完整重写并校验 `BOM=False` 才恢复。
+   规则：编辑用 `str_replace` / `apply_patch` / `write_file`，shell 只用于跑构建与查询。
+7. **`assembleDebug` 比 `compileDebugKotlin` 高一档**：只有前者会完整跑 Hilt 依赖图。
+   本 Phase 加了 `AvatarStorage` 的 `@Binds`，若漏绑定 `compileDebugKotlin` 照样绿，
+   装机才崩。故提交前跑 `assembleDebug`，不只是 compile。
+
+### 待办与下一个入口
+
+- 🟨 **人工 UI 验收**：真机上走一遍「选图 → 显示圆头像 → 换一张 → 移除」，
+  重点看相册真实照片压到 512 后的观感与 Coil 加载闪烁。
+- 🔜 **附件旧文件回收（仍未解决，Phase 2 遗留）**：
+  `AttachmentStore.delete()` 与 `deleteAll()` 依旧**零生产调用**（本轮实测，见上方「范围与决策」的警示条）。
+  缺口是两条路径：「编辑流水时移除单张图」与「删流水时清附件」都没接
+  （`AttachmentSection.onRemove` 只从列表里去掉，不删磁盘文件）。
+  底层 `deleteFileInsideDir` 助手已就位，接起来只差调用点 —— 但**必须带测试**，
+  否则又是一个「写了方法从来没人调」的死代码（本轮台账就差点因此写错一句）。
+- 🔜 记账页**顶部账户切换快捷入口**（Phase 3 遗留）。
+- ➡️ 下一阶段 Phase 5：跨账户转账 / 账户间预算汇总。
+
