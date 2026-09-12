@@ -37,10 +37,13 @@ class BackupFormatVersionTest {
     }
 
     @Test
-    fun `DB_VERSION 应等于当前 schema version 7`() {
+    fun `DB_VERSION 应等于当前 schema version 9`() {
         // Phase 8 Sub-step 7：v6（holidays 表 + tasks.holidayStrategy）
         // Phase 8 Sub-step 9：v7（event_categories 表 + events.categoryId）
-        assertEquals(7, BackupFormatVersion.DB_VERSION)
+        // ⚠️ v8 当时没同步改这里（长期停在 7），是一处未被发现的老漂移
+        // Phase 3：v9（user_profiles 表 + 记账 4 表 accountId）—— 同时修正老漂移
+        // 以后 AppDatabase.version 每 +1，本测试会失败提醒同步改 BackupFormatVersion.DB_VERSION
+        assertEquals(9, BackupFormatVersion.DB_VERSION)
     }
 
     @Test

@@ -28,6 +28,8 @@ data class BackupManifest(
     companion object {
         /** manifest 的固定顺序表清单（导入侧按此顺序清理+插入以保证外键依赖） */
         val DEFAULT_TABLES: List<String> = listOf(
+            // Phase 3：账户表排最前 —— 记账 4 表的 accountId 指向它，必须先就位
+            "user_profiles",
             "semesters",
             "courses",
             "tags",

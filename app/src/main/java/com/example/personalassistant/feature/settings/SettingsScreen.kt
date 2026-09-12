@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.example.personalassistant.feature.profile.presentation.AccountSettingsCard
 import com.example.personalassistant.feature.settings.theme.ThemeMode
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -63,6 +64,7 @@ import java.util.Locale
  * 设置页（Phase 8 Sub-step 4+6+8 完整版）
  *
  * 内容：
+ * - 记账账户（新增 Phase 3）：多账户列表 / 切换 / 新建 / 重命名 / 删除
  * - 主题切换（浅色/深色/系统）
  * - 智能提醒（新增 Sub-step 8）：节假日避让 / 提前通知 / 时间 / 同步
  * - 数据备份（Sub-step 4）：自动备份开关 + 备份目录 + 立即备份 / 立即恢复
@@ -76,6 +78,9 @@ fun SettingsScreen(
     val themePreferences by viewModel.themePreferences.collectAsStateWithLifecycle()
     val backupState by viewModel.backupState.collectAsStateWithLifecycle()
     val holidayState by viewModel.holidayState.collectAsStateWithLifecycle()
+    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+    val currentAccountId by viewModel.currentAccountId.collectAsStateWithLifecycle()
+    val pendingDeletion by viewModel.pendingDeletion.collectAsStateWithLifecycle()
     val syncPromptYear by viewModel.syncPromptYear.collectAsStateWithLifecycle()
     val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
 
@@ -156,6 +161,19 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // ===== 记账账户（Phase 3：多账户 + 数据隔离）=====
+            AccountSettingsCard(
+                accounts = accounts,
+                currentAccountId = currentAccountId,
+                pendingDelete = pendingDeletion,
+                onSwitch = viewModel::switchAccount,
+                onCreate = viewModel::createAccount,
+                onRename = viewModel::renameAccount,
+                onDeleteRequest = viewModel::requestDeleteAccount,
+                onConfirmDelete = viewModel::confirmDeleteAccount,
+                onDismissDelete = viewModel::dismissDeleteAccount,
+            )
+
             // ===== 主题（Phase 8 Sub-step 6：ThemeMode + dynamicColor 持久化）=====
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {

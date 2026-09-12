@@ -11,13 +11,14 @@ import com.example.personalassistant.feature.task.data.local.TaskDao
 import com.example.personalassistant.feature.task.data.local.TaskTagDao
 import com.example.personalassistant.feature.timetable.data.local.CourseDao
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
+import com.example.personalassistant.feature.profile.data.local.UserProfileDao
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Phase 8 Sub-step 4：备份序列化器（Room → 内存快照）
  *
- * 单一职责：把 Room 12 张表全量拉出，组装成 [BackupPayload]。
+ * 单一职责：把 Room 13 张表全量拉出，组装成 [BackupPayload]。
  * 不涉及 IO / ZIP / 偏好。导出侧的 [BackupExporter] 负责把它写到 ZIP，
  * 导入侧的 [BackupImporter] 负责把 ZIP 数据写回 Room。
  *
@@ -34,12 +35,17 @@ class BackupSerializer @Inject constructor(
     private val eventDao: EventDao,
     private val financeDao: FinanceDao,
     private val holidayDao: HolidayDao,
+    // Phase 3：账户表必须入备份，否则恢复后记账数据会指向不存在的账户
+    private val userProfileDao: UserProfileDao,
 ) {
     /**
-     * 全量快照：从 Room 拉出 12 张表全部数据
+     * 全量快照：从 Room 拉出 13 张表全部数据
+     *
+     * 全部是**跨账户全量**：备份语义 = 导出所有账户的所有数据（含账户清单本身）。
      */
     suspend fun snapshot(): BackupResult<BackupPayload> = try {
         val payload = BackupPayload(
+            userProfiles = userProfileDao.getAll(),
             semesters = semesterDao.getAll(),
             courses = courseDao.getAllCourses(),
             tags = tagDao.getAllTags(),

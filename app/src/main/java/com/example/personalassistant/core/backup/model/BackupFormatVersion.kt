@@ -7,12 +7,17 @@ package com.example.personalassistant.core.backup.model
  * - DB_VERSION：写入此备份时 App 数据库的 schema version
  * - APPLICATION：应用包标识（防止跨应用误读备份）
  *
+ * ⚠️ DB_VERSION 与 [com.example.personalassistant.core.database.AppDatabase.version] 同步维护。
+ *    Phase 3 之前它长期停在 7，而实际 schema 已到 8 —— 一处未被发现的老漂移，
+ *    随 Phase 3（v9）一并修正；以后每次 schema +1 都要同时改这里。
+ *
  * 备份文件结构：
  * ```
  * cyrene-backup-{timestamp}.zip
  * ├── manifest.json     (格式版本 + 创建时间 + 数据库版本)
  * ├── checksums.json    (各表 JSON 的 sha256)
  * └── data/
+ *     ├── user_profiles.json   ← Phase 3 新增（账户清单，记账数据归属根表）
  *     ├── courses.json
  *     ├── semesters.json
  *     ├── tasks.json
@@ -28,11 +33,17 @@ package com.example.personalassistant.core.backup.model
  * ```
  */
 object BackupFormatVersion {
-    /** 当前备份格式版本 */
+    /**
+     * 当前备份格式版本
+     *
+     * Phase 3 没有升它：按 [BackupManifest] 的增量规则「新增表只往 tables 加一项，
+     * FORMAT_VERSION 不必升」，user_profiles 属于新增表；
+     * 记账 4 表新增 accountId 字段则靠 `@Serializable` 默认值向后兼容（旧 JSON 缺该字段 → 落 1L）。
+     */
     const val FORMAT_VERSION: Int = 1
 
     /** App 数据库 schema version（备份时的 schema 版本）*/
-    const val DB_VERSION: Int = 7
+    const val DB_VERSION: Int = 9
 
     /** 应用包名（写入 manifest 用于跨应用保护）*/
     const val APPLICATION: String = "com.example.personalassistant"

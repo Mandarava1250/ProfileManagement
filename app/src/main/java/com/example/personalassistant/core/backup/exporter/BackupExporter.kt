@@ -19,6 +19,7 @@ import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
+import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.OutputStream
@@ -46,6 +47,8 @@ class BackupExporter @Inject constructor(
             ZipOutputStream(outputStream).use { zipOut ->
                 val checksums = mutableMapOf<String, String>()
 
+                // Phase 3：账户表最先写（记账 4 表的 accountId 指向它）
+                writeUserProfiles(zipOut, payload.userProfiles, checksums)
                 writeSemesters(zipOut, payload.semesters, checksums)
                 writeCourses(zipOut, payload.courses, checksums)
                 writeTags(zipOut, payload.tags, checksums)
@@ -86,7 +89,12 @@ class BackupExporter @Inject constructor(
         }
     }
 
-    // 12 张表分别 dispatch（用唯一方法名避免 JVM signature clash）
+    // 13 张表分别 dispatch（用唯一方法名避免 JVM signature clash）
+    private fun writeUserProfiles(zipOut: ZipOutputStream, data: List<UserProfileEntity>, checksums: MutableMap<String, String>) =
+        writeBytes(zipOut, "user_profiles",
+            json.encodeToString(ListSerializer(UserProfileEntity.serializer()), data).toByteArray(Charsets.UTF_8),
+            checksums)
+
     private fun writeSemesters(zipOut: ZipOutputStream, data: List<SemesterEntity>, checksums: MutableMap<String, String>) =
         writeBytes(zipOut, "semesters",
             json.encodeToString(ListSerializer(SemesterEntity.serializer()), data).toByteArray(Charsets.UTF_8),

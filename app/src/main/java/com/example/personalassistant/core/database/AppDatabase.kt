@@ -14,6 +14,8 @@ import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.profile.data.local.UserProfileDao
+import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import com.example.personalassistant.feature.task.data.local.SubTaskEntity
 import com.example.personalassistant.feature.task.data.local.TagDao
 import com.example.personalassistant.feature.task.data.local.TagEntity
@@ -29,7 +31,7 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 /**
  * App 主数据库
  *
- * 13 张表：
+ * 14 张表：
  * 1. courses          - 课程
  * 2. semesters        - 学期
  * 3. tasks            - 任务
@@ -43,6 +45,7 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
  * 11. monthly_budgets  - 月度预算
  * 12. daily_pools      - 每日零钱池
  * 13. holidays        - 节假日（Phase 8 Sub-step 7 新增）
+ * 14. user_profiles    - 账户（Phase 3 多账户新增，记账域 4 表靠 accountId 指向它）
  *
  * ⚠️ schema 变更必须按以下流程：
  *   1. 修改对应 Entity
@@ -70,8 +73,10 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
         DailyPoolEntity::class,
         // 节假日（Phase 8 Sub-step 7）
         HolidayEntity::class,
+        // 账户（Phase 3）
+        UserProfileEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -84,6 +89,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun eventCategoryDao(): EventCategoryDao
     abstract fun financeDao(): FinanceDao
     abstract fun holidayDao(): HolidayDao
+    abstract fun userProfileDao(): UserProfileDao
 
     companion object {
         const val DATABASE_NAME = "personal_assistant.db"
@@ -103,6 +109,7 @@ abstract class AppDatabase : RoomDatabase() {
                 Migration_5_6,
                 Migration_6_7,
                 Migration_7_8,
+                Migration_8_9,
             )
     }
 }

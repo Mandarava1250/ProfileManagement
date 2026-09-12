@@ -6,6 +6,8 @@ import com.example.personalassistant.core.holiday.model.PresetHolidays
 import com.example.personalassistant.feature.calendar.data.seed.DefaultEventCategories
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.finance.data.seed.DefaultCategories
+import com.example.personalassistant.feature.profile.data.local.AccountIds
+import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,7 +19,8 @@ import javax.inject.Singleton
  * Phase 7a + 8 Sub-step 7：数据库首次创建时的初始化回调
  *
  * - onCreate：数据库文件首次创建（即首次安装）时插入默认数据
- *   - finance 内置分类（8 支出 + 1 收入）
+ *   - 默认账户（Phase 3，id=1「默认账户」）
+ *   - finance 内置分类（8 支出 + 1 收入，挂在默认账户下）
  *   - 节假日预置数据 2025 + 2026（Phase 8 Sub-step 7 新增）
  *
  * - onOpen / onDestructiveMigrate：暂不做事，留扩展点
@@ -50,6 +53,7 @@ class DatabaseCallback @Inject constructor() : RoomDatabase.Callback() {
         super.onCreate(db)
         // 数据库首次创建时，异步插入默认数据
         scope.launch {
+            seedDefaultAccount()
             seedDefaultCategories()
             seedEventCategories()
             seedHolidays()
@@ -61,13 +65,32 @@ class DatabaseCallback @Inject constructor() : RoomDatabase.Callback() {
         // 暂不做事；扩展点：未来可在这里检查 schema 版本兼容性等
     }
 
+    /**
+     * Phase 3：默认账户 seed。
+     *
+     * - id 必须固定为 [AccountIds.DEFAULT_ACCOUNT_ID]，与 [Migration_8_9] 里
+     *   `INSERT OR IGNORE INTO user_profiles ... VALUES (1, ...)` 保持一致；
+     *   记账实体的 accountId 默认值也是它，错开会让首次记账撞 FK。
+     * - 必须在 seedDefaultCategories 之前跑：分类行带 accountId=1。
+     */
+    private suspend fun seedDefaultAccount() {
+        val db = database ?: return
+        db.userProfileDao().insert(
+            UserProfileEntity(
+                id = AccountIds.DEFAULT_ACCOUNT_ID,
+                name = AccountIds.DEFAULT_ACCOUNT_NAME,
+            ),
+        )
+    }
+
     private suspend fun seedDefaultCategories() {
         val db = database ?: return  // 极端兜底：attachDatabase 还没跑
         val financeDao: FinanceDao = db.financeDao()
         // onCreate 只在数据库首次创建时触发，此时 categories 表为空；
         // 直接 REPLACE 插入即可（不存在冲突目标）。
         // 若未来需要迁移时也 seed，请改用 OnConflictStrategy.IGNORE 风格的 DAO 方法。
-        DefaultCategories.build().forEach { entity ->
+        // Phase 3：内置分类挂在默认账户下；新建账户时由账户管理 UI 再 seed 一套
+        DefaultCategories.build(AccountIds.DEFAULT_ACCOUNT_ID).forEach { entity ->
             financeDao.insertCategory(entity)
         }
     }

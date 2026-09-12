@@ -9,6 +9,11 @@ import com.example.personalassistant.core.backup.model.BackupResult
 import com.example.personalassistant.core.backup.serializer.BackupSerializer
 import com.example.personalassistant.core.holiday.data.HolidayRepository
 import com.example.personalassistant.core.holiday.di.HolidayReminderScheduler
+import com.example.personalassistant.feature.profile.data.AccountRepository
+import com.example.personalassistant.feature.profile.data.CurrentAccountRepository
+import com.example.personalassistant.feature.profile.data.local.AccountIds
+import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
+import com.example.personalassistant.feature.profile.presentation.PendingAccountDeletion
 import com.example.personalassistant.feature.settings.theme.ObserveThemePreferencesUseCase
 import com.example.personalassistant.feature.settings.theme.SetDynamicColorUseCase
 import com.example.personalassistant.feature.settings.theme.SetThemeModeUseCase
@@ -31,6 +36,8 @@ import javax.inject.Inject
  *
  * 暴露：
  * - [themePreferences]：主题偏好（mode + dynamicColor，来自 ThemeRepository）
+ * - [accounts] / [currentAccountId]：Phase 3 记账账户列表与当前账户
+ * - [pendingDeletion]：待二次确认的删除请求（null = 不弹框）
  * - [backupState]：备份偏好（autoBackup / folderUri / lastBackupAt）
  * - [holidayState]：节假日/智能提醒偏好（avoid / eveningEnabled / time / 数据范围 / 同步提示）
  * - [statusMessage]：操作反馈（成功/失败消息）
@@ -41,6 +48,8 @@ import javax.inject.Inject
  * - [setThemeMode] / [setDynamicColor]：主题偏好写操作
  * - [setHolidayAvoidEnabled] / [setHolidayEveningEnabled] / [setHolidayEveningTime]：节假日偏好
  * - [triggerHolidaySync]：占位同步入口（当前 Stub）
+ * - [switchAccount] / [createAccount] / [renameAccount] /
+ *   [requestDeleteAccount] / [confirmDeleteAccount] / [dismissDeleteAccount]：账户管理
  * - [dismissHolidaySyncPrompt]：用户关闭「节假日数据即将过期」弹窗
  */
 @HiltViewModel
@@ -55,6 +64,8 @@ class SettingsViewModel @Inject constructor(
     observeThemePreferences: ObserveThemePreferencesUseCase,
     private val setThemeModeUseCase: SetThemeModeUseCase,
     private val setDynamicColorUseCase: SetDynamicColorUseCase,
+    private val accountRepository: AccountRepository,
+    private val currentAccountRepository: CurrentAccountRepository,
 ) : ViewModel() {
 
     /** 主题偏好快照（mode + dynamicColor） */
@@ -83,6 +94,92 @@ class SettingsViewModel @Inject constructor(
 
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
+
+    // ===== Phase 3：记账账户 =====
+
+    /** 全部账户（Room Flow，新建/删除后自动重发） */
+    val accounts: StateFlow<List<UserProfileEntity>> = accountRepository.observeAccounts()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList(),
+        )
+
+    /** 当前账户 id（DataStore Flow） */
+    val currentAccountId: StateFlow<Long> = currentAccountRepository.currentAccountIdFlow()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = AccountIds.DEFAULT_ACCOUNT_ID,
+        )
+
+    /** 待二次确认的删除请求（null = 不弹删除确认框） */
+    private val _pendingDeletion = MutableStateFlow<PendingAccountDeletion?>(null)
+    val pendingDeletion: StateFlow<PendingAccountDeletion?> = _pendingDeletion.asStateFlow()
+
+    fun switchAccount(accountId: Long) {
+        viewModelScope.launch {
+            currentAccountRepository.setCurrentAccountId(accountId)
+            // 不刷记账页：FinanceRepositoryImpl 的 flatMapLatest 会自动重发读流
+        }
+    }
+
+    fun createAccount(name: String) {
+        viewModelScope.launch {
+            runCatching { accountRepository.createAccount(name) }
+                .onSuccess {
+                    _statusMessage.value = "已创建账户「${name.trim()}」"
+                }
+                .onFailure { e ->
+                    _statusMessage.value = "创建失败：${e.message ?: "账户名不合法"}"
+                }
+        }
+    }
+
+    fun renameAccount(accountId: Long, name: String) {
+        viewModelScope.launch {
+            runCatching { accountRepository.renameAccount(accountId, name) }
+                .onSuccess { _statusMessage.value = "已重命名" }
+                .onFailure { e -> _statusMessage.value = "重命名失败：${e.message}" }
+        }
+    }
+
+    /**
+     * 用户点了删除按钮：先查该账户流水数，回填给二次确认文案。
+     *
+     * 不在此处直接删 —— 删账户不可恢复，必须让 UI 再确认一次。
+     */
+    fun requestDeleteAccount(account: UserProfileEntity) {
+        viewModelScope.launch {
+            val count = withContext(Dispatchers.IO) {
+                accountRepository.transactionCount(account.id)
+            }
+            _pendingDeletion.value = PendingAccountDeletion(
+                accountId = account.id,
+                name = account.name,
+                transactionCount = count,
+            )
+        }
+    }
+
+    fun confirmDeleteAccount() {
+        val pending = _pendingDeletion.value ?: return
+        viewModelScope.launch {
+            runCatching { accountRepository.deleteAccount(pending.accountId) }
+                .onSuccess {
+                    _pendingDeletion.value = null
+                    _statusMessage.value = "已删除账户「${pending.name}」及其记账数据"
+                }
+                .onFailure { e ->
+                    _pendingDeletion.value = null
+                    _statusMessage.value = "删除失败：${e.message ?: "至少需要保留一个账户"}"
+                }
+        }
+    }
+
+    fun dismissDeleteAccount() {
+        _pendingDeletion.value = null
+    }
 
     /** Phase 8 Sub-step 8：网络授权同步提示（null = 不显示） */
     private val _syncPromptYear = MutableStateFlow<Int?>(null)

@@ -27,6 +27,9 @@ import com.example.personalassistant.feature.timetable.data.local.CourseDao
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
+import com.example.personalassistant.feature.profile.data.CurrentAccountRepository
+import com.example.personalassistant.feature.profile.data.local.UserProfileDao
+import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.InputStream
@@ -49,12 +52,21 @@ import javax.inject.Singleton
  *
  * 关键不变量：
  * - 整个写入过程是原子的（要么全成功，要么全回滚）
- * - 外键依赖顺序：semesters → tasks → sub_tasks → tags → cross_ref → events → categories → monthly_budgets → daily_pools → transactions → courses → holidays
+ * - 外键依赖顺序：user_profiles → semesters → tasks → sub_tasks → tags → cross_ref → events → categories → monthly_budgets → daily_pools → transactions → courses → holidays
+ *
+ * ## Phase 3：账户表与「当前账户」的一致性
+ * - 新备份带 user_profiles.json → 整表替换，账户清单随备份走。
+ * - 旧备份（formatVersion=1）没有这张表 → **不清空不覆盖**现有账户清单；
+ *   旧备份的记账 JSON 缺 accountId 字段，靠 `@Serializable` 默认值全部落到 id=1，
+ *   正好对应一定存在的默认账户（迁移 / DatabaseCallback 都保证了这点）。
+ * - 导入成功后要校准 DataStore 里的当前账户 id：备份可能不含当前正在用的那个账户，
+ *   不校准的话切到一个不存在的账户 = 记账页永远空白。
  */
 @Singleton
 class BackupImporter @Inject constructor(
     private val database: AppDatabase,
     private val validator: BackupValidator,
+    private val currentAccountRepository: CurrentAccountRepository,
     @com.example.personalassistant.core.backup.di.BackupJson
     private val json: Json,
 ) {
@@ -83,6 +95,11 @@ class BackupImporter @Inject constructor(
         // ===== 解码各表 JSON 字节 =====
         val payload = try {
             BackupPayload(
+                // Phase 3：账户表（旧备份缺这个条目 → decodeTable 返回空列表，走兼容分支）
+                userProfiles = decodeTable(
+                    bundle.tableBytes["user_profiles"],
+                    ListSerializer(UserProfileEntity.serializer()),
+                ),
                 semesters = decodeTable(
                     bundle.tableBytes["semesters"],
                     ListSerializer(SemesterEntity.serializer()),
@@ -155,6 +172,7 @@ class BackupImporter @Inject constructor(
                     val eventDao: EventDao = database.eventDao()
                     val financeDao: FinanceDao = database.financeDao()
                     val holidayDao: HolidayDao = database.holidayDao()
+                    val userProfileDao: UserProfileDao = database.userProfileDao()
 
                     // ===== 清空所有表（按 manifest.DEFAULT_TABLES 反序）=====
                     clearTable { holidayDao.clearAll() }
@@ -169,8 +187,15 @@ class BackupImporter @Inject constructor(
                     clearTable { taskDao.getAllTasks().forEach { taskDao.deleteById(it.id) } }
                     clearTable { courseDao.getAllCourses().forEach { courseDao.deleteById(it.id) } }
                     clearTable { semesterDao.getAll().forEach { semesterDao.deleteById(it.id) } }
+                    // 账户表只在备份里确实有内容时才清空（否则会把现有账户连默认账户一起删光）
+                    if (payload.userProfiles.isNotEmpty()) {
+                        clearTable { userProfileDao.clearAll() }
+                    }
 
                     // ===== 按 manifest.DEFAULT_TABLES 顺序插入新数据 =====
+                    if (payload.userProfiles.isNotEmpty()) {
+                        payload.userProfiles.forEach { userProfileDao.insert(it) }
+                    }
                     if (payload.semesters.isNotEmpty()) {
                         payload.semesters.forEach { semesterDao.insert(it) }
                     }
@@ -211,6 +236,8 @@ class BackupImporter @Inject constructor(
                     database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
                 }
             }
+            // 事务成功后：当前账户若已不在库里（备份里没有它），切回第一个可用账户
+            reconcileCurrentAccount()
             BackupResult.Success(payload)
         } catch (t: Throwable) {
             // withTransaction 已经在内部回滚
@@ -222,6 +249,24 @@ class BackupImporter @Inject constructor(
     }
 
     private inline fun clearTable(block: () -> Unit) = block()
+
+    /**
+     * Phase 3：导入后校准「当前账户」偏好。
+     *
+     * DataStore 里的 currentAccountId 不在恢复出的账户清单时（典型场景：
+     * 在 A 设备用账户 3 记账 → 备份 → 在 B 设备恢复，B 原本没有账户 3 之后又被覆盖），
+     * 记账页会查一个不存在的账户而永远空白。这里回退到 id 最小的账户。
+     *
+     * 放在事务外：DataStore 不参与 Room 事务，回滚时不应误改偏好。
+     */
+    private suspend fun reconcileCurrentAccount() {
+        val accounts = database.userProfileDao().getAll()
+        if (accounts.isEmpty()) return  // 理论上不会发生（旧备份分支不清表），保底不动
+        val current = currentAccountRepository.currentAccountId()
+        if (accounts.none { it.id == current }) {
+            currentAccountRepository.setCurrentAccountId(accounts.first().id)
+        }
+    }
 
     private fun <T> decodeTable(
         bytes: ByteArray?,
