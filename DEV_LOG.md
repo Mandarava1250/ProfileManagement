@@ -14,14 +14,14 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
-| 当前 HEAD | `1563bbe` |
-| 当前分支 | `feature/phase-8-reminder` |
+| 当前 HEAD | `1ef27df` |
+| 当前分支 | `feature/phase-8-reminder`（已 push origin）|
 | 主分支 | `Develop` |
-| 累计 commit 数 | 38（含 merge / revert 中的 commit） |
-| 测试用例 | ~519（基线 510 + 9 个新增 LunarCalendarTest） |
-| Room 数据库 | v10（含 `event_categories` 表 + `events.category_id` 外键） |
-| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项） |
-| 进行中 | Phase 8b' —— 5 Tab 切换 + 自定义档名 aliases（本轮盘点完成，编码待启动） |
+| 累计 commit 数 | 50（`git rev-list --count HEAD`，含 merge / revert）|
+| 测试用例 | 568（JVM 单测，`./gradlew testDebugUnitTest` 实测 0 失败）|
+| Room 数据库 | **v9**（`user_profiles` 账户表 + 记账域 4 表 `accountId` 隔离）<br>⚠️ 本行旧值写的是“v10 + `events.category_id`”，与代码不符 —— 见下方「台账校正记录」|
+| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项）|
+| 进行中 | **阶段 Phase 3（多账户 + 数据隔离）🟨** —— 代码 + JVM 验证已完成，Room 迁移 instrumented 真跑被阻塞（见该段 ⛔）|
 
 ---
 
@@ -733,3 +733,130 @@ README.md        settings.gradle.kts
 - Phase 5 是收尾 commit（DEV_LOG 校对 / KDoc 中文化 / 错误码统一 / 性能 profile），不动 schema
 - Phase 6 PR 流程需要 `gh auth login`（用户先登录 GitHub CLI）
 - Phase 2 完成后，下一个 plan 模式入口在 `Phase 3` multi-account（最重的一块：动 schema + 改 8+ 个文件 + 写 migration test）
+---
+
+## 📅 2026-09-12 18:34 —— 阶段 Phase 3：多账户 + 记账域数据隔离（DB v8 → v9）
+
+> **注意编号体系**：本段的「Phase 3」指 `.cyrene/docs/plan-20260909-142838.md` 里的**阶段序号**
+> （Phase 1 通知 / Phase 2 附件 / Phase 3 多账户 / Phase 4 头像…），
+> 与本文件前文「📦 Phase 3：任务模块 MVP」的**模块编号**无关，不要混淆。
+> 对应计划文件：修正版 `.cyrene/docs/plan-20260912-182400.md`（旧版见下文「计划修正」）。
+
+### 状态：**🟨 进行中**（代码与 JVM 验证完成；Room 迁移 instrumented 真跑被阻塞，见「阻塞」）
+
+### 已完成的步骤
+
+| # | 步骤 | 状态 |
+|---|---|---|
+| **3a schema 与迁移** | | |
+| 1 | 新建 `feature/profile/data/local/UserProfileEntity.kt`（表 `user_profiles`）+ `UserProfileDao.kt` + `AccountIds.kt`（保留 id=1 常量单一来源） | ✅ |
+| 2 | 记账 4 实体各加 `accountId: Long = 1`（`@ColumnInfo(defaultValue = "1")`），并按计划改索引 / 复合 FK | ✅ |
+| 3 | `AppDatabase`：entities +`UserProfileEntity`、`version = 9`、`ALL_MIGRATIONS` 追加 `Migration_8_9`、类头 13→14 张表 | ✅ |
+| 4 | 新建 `core/database/Migration_8_9.kt`：建表 + 默认账户 + 4 表加列 + **DROP/CREATE 两个唯一索引** + 重建 `transactions` 换复合 FK + 重建 6 个索引 + `foreign_key_check` 守卫 | ✅ |
+| 5 | `CoreModule` 加 `provideUserProfileDao`；`DatabaseCallback.onCreate` 先 seed 默认账户再 seed 分类 | ✅ |
+| 6 | `DefaultCategories.build(accountId)` 改签名（9 个内置分类按账户各一套） | ✅ |
+| 7 | 编译 + 导出 `app/schemas/…/9.json`，与迁移 SQL **逐条双向比对**（列 / 索引名 / unique / FK 列序全一致） | ✅ |
+| **3b 查询链路隔离** | | |
+| 8 | `CurrentAccountRepository`（接口 + DataStore 实现，`longPreferencesKey("current_account_id")` 默认 1L，复用同一 "settings" DataStore 实例）+ `ProfileModule` @Binds | ✅ |
+| 9 | `FinanceDao` **40 条 @Query 全量核对**：32 条面向 UI 的补 `accountId`；8 条列入「跨账户全量」白名单 | ✅ |
+| 10 | 零钱池算法三处（`getMonthlyBudget` / `getMonthlyExpense` / 昨日 `getDailyPool`）按当前账户；`deductFromPool` / `addIncomeToPool` 带 accountId | ✅ |
+| 11 | DAO 事务方法（`recordExpense` / `recordIncome` / `deleteTransactionAndRollbackPool`）的 accountId **从传入 entity 派生**，pool 缺失时新建也带同一 accountId | ✅ |
+| 12 | `searchTransactions` 的 JOIN 补 `t.accountId = c.accountId`（分类每账户一套，不加会命中别账户同名分类） | ✅ |
+| 13 | `FinanceRepositoryImpl`：**接口签名零改动** —— 写路径 `copy(accountId=当前)`，读路径 `accountIdFlow.flatMapLatest` | ✅ |
+| 14 | ⚠️ **计划外补漏**：`GetMonthlyReportUseCase` 是全项目唯一绕开 Repository 直接注入 `FinanceDao` 的地方，改为注入 `CurrentAccountRepository` + flatMapLatest | ✅ |
+| **3c 账户管理 UI** | | |
+| 15 | `AccountRepository` / `AccountRepositoryImpl`：新建账户即 seed 一套分类；删账户级联清 4 张表 + 先把当前账户回退（防 DataStore 悬空 id）；`countTransactionsByAccount` 等 5 条 DAO | ✅ |
+| 16 | `AccountSettingsCard.kt`：列表 + 当前勾选 + 新建 / 重命名（`AlertDialog` + 空名校验）+ 删除（仅剩 1 个禁删、有流水二次确认显示笔数） | ✅ |
+| 17 | `SettingsViewModel` 暴露 `accounts` / `currentAccountId` / `pendingDeletion` + 6 个操作；`SettingsScreen` 顶部插入该 Card（现有 3 个 Card 之前）。**不动 `BottomTab` / `AppNavHost`** | ✅ |
+| **备份（计划第 7 条被判定写得太轻，做了更多）** | | |
+| 18 | `user_profiles` 纳入备份：`BackupPayload.userProfiles` + `BackupManifest.DEFAULT_TABLES` 首位 + exporter/serializer/importer 三处 | ✅ |
+| 19 | 旧备份兼容：缺 `user_profiles.json` 时**不清空不覆盖**现有账户清单；`accountId` 缺字段靠 `@Serializable` 默认值落 1L；导入后校准当前账户 | ✅ |
+| 20 | 修正既有漂移：`BackupFormatVersion.DB_VERSION` 长期停在 **7**（实际 schema 早已 8），随本次升到 9；哨兵测试同步改 | ✅ |
+| **3d 测试** | | |
+| 21 | `FakeCurrentAccountRepository.kt`（项目「Fake 优先、无 Mockito」风格） | ✅ |
+| 22 | `Migration_8_9StatementsTest.kt`（**10 条** JVM SQL 断言：4 表加列 DEFAULT 1 / 两个旧 UNIQUE 先 DROP / parent 索引须先于子表重建 / 6 索引全建 / sqlite_sequence 不得进语句列表 / 不含 foreign_keys PRAGMA / 顺序依赖） | ✅ |
+| 23 | `AccountIsolationTest.kt`（**9 条**：实体默认 accountId、**旧备份 JSON 缺字段回落默认账户**、新 JSON 不被覆盖、切账户后读流按新账户重查、派生零钱池流重算、Fake 拒绝非正 id、分类按账户 9 个且 id=0） | ✅ |
+| 24 | `compileDebugAndroidTestKotlin`：本 Phase 新写的 `AppDatabaseMigrationsTest.kt` 已无编译错误 | ✅ |
+
+### 验证结果
+
+- ✅ `./gradlew compileDebugKotlin` —— BUILD SUCCESSFUL（KSP 重新校验 schema 并导出 `9.json`）
+- ✅ `./gradlew testDebugUnitTest` —— **568 tests / 0 failed**（Phase 2 基线 549 + 本次新增 19，零回归）
+- ✅ `./gradlew compileDebugUnitTestKotlin` —— 通过（`FinanceRepository` 接口签名未变，15 个 UseCase 与各 ViewModel 无需改构造）
+- ✅ Room 40 条 @Query 用脚本逐条判定是否带 `accountId`，MISS 恰为白名单 8 条：
+  `getAllTransactions` / `getAllCategories` / `getAllMonthlyBudgets` / `getAllDailyPools`（备份快照）
+  + `deleteTransactionById` / `deleteCategoryById` / `deleteMonthlyBudgetById` / `deleteDailyPoolById`（备份导入按全局 id 清理）
+- 🟨 Room 迁移真跑：**未完成**（见下）
+
+### ⛔ 阻塞（B 路线真跑，两条并列）
+
+1. **无可用设备 / AVD**：`adb devices` 空；SDK（`D:\Software\Code\JetBrain's\Android\Sdk`）**没有 `cmdline-tools`**、**没有 `system-images`**，`%USERPROFILE%\.android\avd` 为空目录 → 既不能 `avdmanager` 建 AVD，也没有现成镜像可装（要下载数百 MB 起）。
+   ⚠️ 计划稿里「`%USERPROFILE%\.android` 整个目录不存在」的判断**是错的**：该目录实际存在（`adbkey` / `debug.keystore` / `cli` / `studio` 都在），缺的只是 avd 内容与 cmdline-tools。已实测纠正。
+2. **androidTest 源集本身编不过（Phase 3 之前就坏）**：`TaskDetailScreenTest` / `TaskEditScreenTest` 共 **8 个**编译错误（`FakeTaskRepository` 未实现 `observeTasks`；构造缺 `observeTagsForTask` / `tagRepository` / `create*TagUseCase` / `isHolidayUseCase`）。
+   **归属已用证据确认**：把本 Phase 的 androidTest 文件 + 两个依赖用 `git stash push -u` 移出后重编，报错**一字不差仍是那 8 个**；`git diff --name-only HEAD~1` 里 task 域文件数为 **0**。→ 陈旧腐化，非本次引入，但它是迁移真跑的前置修复项。
+3. 时间盒结论：未盲目 `sdkmanager` 下载赌运气，按规则**如实记 ⛔ 不虚标 ✅**。测试代码（`AppDatabaseMigrationsTest.kt` + 两个依赖）**保留在库**，接上设备/建好 AVD 后即可 `./gradlew connectedDebugAndroidTest` 直接跑。
+
+### 关键变更文件
+
+**新增（10）**：
+- main：`feature/profile/data/local/UserProfileEntity.kt` / `UserProfileDao.kt` / `AccountIds.kt`；`feature/profile/data/CurrentAccountRepository.kt` / `CurrentAccountRepositoryImpl.kt` / `AccountRepository.kt` / `AccountRepositoryImpl.kt`；`feature/profile/di/ProfileModule.kt`；`feature/profile/presentation/AccountSettingsCard.kt`；`core/database/Migration_8_9.kt`
+- test：`core/database/Migration_8_9StatementsTest.kt`；`feature/profile/data/FakeCurrentAccountRepository.kt` / `AccountIsolationTest.kt`
+- androidTest：`core/database/AppDatabaseMigrationsTest.kt`
+- schema：`app/schemas/…AppDatabase/9.json`
+
+**修改（16）**：`AppDatabase.kt`、`DatabaseCallback.kt`、`CoreModule.kt`、记账 4 实体、`FinanceDao.kt`、`FinanceRepositoryImpl.kt`、`DefaultCategories.kt`、`GetMonthlyReportUseCase.kt`、`SettingsViewModel.kt`、`SettingsScreen.kt`、备份 5 文件（`BackupPayload` / `BackupManifest` / `BackupFormatVersion` / `BackupExporter` / `BackupSerializer` / `BackupImporter`）、`BackupFormatVersionTest.kt`、`app/build.gradle.kts`、`gradle/libs.versions.toml`
+
+**提交**：功能 `9ecd424`（3a+3b+3c+备份+JVM 测试，合成一次 —— 三者互相依赖，拆开中间态编译不过，与计划「可拆三次」的预估不同）、`1ef27df`（androidTest + room-testing 依赖）。已 push `origin/feature/phase-8-reminder`。
+
+### 踩坑笔记
+
+1. **唯一索引不重建 = 多账户直接写不进去（计划里最值钱的一条，实测确认）**：`monthly_budgets.yearMonth` 与 `daily_pools.date` 在 v8 都是**全局 UNIQUE**。只 `ALTER TABLE ADD COLUMN accountId` 的话，第二个账户记同一个月 / 同一天会 `UNIQUE constraint failed` —— 不是崩溃而是**功能直接不可用**。必须 DROP 旧索引再建 `(accountId, xxx)` 复合唯一。
+2. **复合 FK 必须有 parent 侧索引，且顺序不能反**：`transactions(accountId, categoryId) → categories(accountId, id)` 要求 `categories` 上存在以 `accountId, id` 为前缀的索引，SQLite 才不会在运行时抛 "no unique index"。所以 `index_categories_accountId_id` 必须在**建 `transactions_new` 之前**创建（已有 JVM 测试锁死这个顺序）。
+3. **`PRAGMA foreign_keys = OFF` 在 Room 迁移里是无效代码**：SQLite 规定该 PRAGMA 在事务内为 no-op，而 Room 把整个迁移包在一个事务里。计划稿让写它，实际写了也不生效 —— 反而误导后来者以为"关了就安全"。改成：让语句序列本身不依赖关 FK（只 DROP 子表 + 父行已就位），收尾用 `PRAGMA foreign_key_check` **主动回滚**坏迁移。
+4. **`UPDATE sqlite_sequence` 混进无条件语句列表会让迁移回滚**（自己埋的坑，写完整改）：`sqlite_sequence` 只在**首次**向 AUTOINCREMENT 表插入时才创建。「装了 App 但从未记过账」的 v8 库里它不存在 → 直接 `UPDATE` 抛 `no such table` → **整个迁移回滚**，老用户升级即失败。解决：从语句列表里移出，先查 `sqlite_master` 确认存在再执行。另注：`ALTER TABLE RENAME` 不改 `sqlite_sequence.name` 是 SQLite **3.25+** 才完善的，minSdk=26 设备可能只有 3.19/3.22，所以修正仍有必要（但不修只留悬空条目，不丢数据）。
+5. **接口签名不变这一条救了改动面**：计划预估「15 个 UseCase 与全局搜索不受牵连」是对的 —— `FakeFinanceRepository` 和全部 ViewModel 测试**一行没改**，549 个既有用例零回归就是这个决定的直接证据。反面教训见下条。
+6. **绕层的 UseCase 是隔离方案的暗雷**：`GetMonthlyReportUseCase` 直接注入 `FinanceDao`（它注释里还写明是"有意为之，避免污染 Repository 接口"）。DAO 一旦要求 accountId 参数，它就编译失败 —— 好在是**编译期暴露**而不是静默错账。若当初 DAO 设计成"accountId 带默认值"，这里就会静默读默认账户的报表。**教训**：想防"漏改导致静默串账"，就让参数**没有默认值**，把风险逼到编译期。
+7. **计划第 7 条「备份保持全量语义」写得太轻**：只加 `accountId` 字段的话，备份里有 `accountId=2` 的流水、却没有 id=2 的账户行（账户表不在备份清单里）→ 恢复后那笔账**永远看不到也删不掉**（孤儿数据）。必须把 `user_profiles` 一起纳入备份，并处理"旧备份没这张表"与"导入后当前账户指向不存在的账户"两个分支。
+8. **`@Serializable` 默认值 = 旧备份天然兼容**：4 个实体的 `accountId` 都有默认值，旧 JSON 缺该字段直接解码成 1L，正好等于迁移的落点。这条不需要写任何迁移代码，但必须有测试兜住（`AccountIsolationTest` 用手工拼的旧 JSON 断言了 3 种实体），否则将来有人把字段改成非默认值就会静默破坏兼容。
+9. **`BackupFormatVersion.DB_VERSION` 是一处潜伏的老漂移**：v8 发布时没人同步它（长期停在 7），而且**没有任何测试能发现** —— 因为断言就是照抄常量（`assertEquals(7, DB_VERSION)`）。它只是"提醒同步"的哨兵，不是校验器。真正发现它靠的是 `git diff` 手改时注意到。改进方向（未做）：让测试去读 `AppDatabase::class.java` 上的 `@Database` 注解取 version，而不是硬编码数字。同一个病根在台账顶部也有一份（写成 v10），见下方「台账校正记录」。
+10. **自己写坏过两次，都是"看起来合理但逻辑是空的"**（如实记录）：
+    - `FinanceRepositoryImpl` 初版为省事写了 `flowOf(常量)` 的"快照"包装，实际把读路径永久钉在账户 1 —— 正是本 Phase 要防的静默错账。编译和既有单测都发现不了（因为 JVM 没有 Room）。重写为统一 `accountIdFlow`。
+    - `AccountIsolationTest` 初版为绕一个 import 手造了 3 个假扩展函数；另一版用 `backgroundScope.launch + advanceUntilIdle` 想验证"活跃订阅连续收到 1→2→3"，实测 `collected` 为空。**教训**：测虚拟时间下的 Flow 要用确定性取值（`first()`），别和调度器时序较劲；`flatMapLatest` 的取消语义是 kotlinx 的职责，不该由本项目测试重复证明。
+11. **androidTest 的陈旧错误要先定性再决定**：看到 8 个编译错很容易顺手"帮忙修了"，但那会把 Phase 3 的提交掺进无关模块、且 task 域 Fake 该补什么参数需要 owner 判断。**做法**：`git stash push -u` 移出本次新增后重编，报错一字不差 → 铁证是既有问题；台账记 ⛔ 并留待单独修，不混提交也不谎报"已跑通"。
+12. **`MigrationTestHelper` 的正确构造别猜**：Room 按**数据库类全名**导出 schema（`app/schemas/com.example…AppDatabase/8.json`），而 `createMigrationTestDriver` 按**数据库文件名**找 assets（`personal_assistant.db/8.json`）—— 两者对不上只会 `Could not find database schema`，容易被误读成"迁移测试没配好"。2.6.1 应使用 `MigrationTestHelper(context, AppDatabase::class.java)` 重载（`androidTest.assets.srcDirs` 已指向 schemas，无需额外配置）。
+13. **`createDatabase()` 返回的是 `SupportSQLiteDatabase`**：只有 `query(sql)`，**没有** `rawQuery(sql, args)`（后者是 `android.database.sqlite.SQLiteDatabase` 特有的）。照 App 层习惯写会吃一串 `Unresolved reference`。
+14. **工具链小坑**：cmd 里跑多行 `python -c` 会被吞（只执行第一行）→ 改单行分号式；`findstr` 无匹配返回非 0，会把 `&&` 链**整个截断**，导致后半段根本没跑 —— 需要并列查询时改用 `&` 或分开调用；`DEV_LOG.md` 是 UTF-8，用 cmd `findstr` 看会成乱码（文件本身没问题，别被吓到去"修编码"）。
+
+### 范围与决策
+
+- **入口走 Settings 页**（计划选项 C）：账户是低频管理动作，不值得占第 5 个底部 Tab；`BottomTab` enum 与 `AppNavHost` 主结构零改动。
+- **分类是"每账户一套"**（计划选项 B 的代价）：因此 `categories` 需要 `(accountId, id)` 复合唯一索引、`DefaultCategories` 需带 accountId、`deleteCategory` 引用计数按账户统计（别的账户引用同一 categoryId 不该挡住本账户删分类）。
+- **当前账户走 DataStore 不走 Room**：它是设备级 UI 偏好，不该被备份/恢复覆盖，也不该为一次视角切换产生写库事务。
+- **删除账户会级联清除该账户记账数据**（含不可恢复），DB 层未对 `user_profiles` 建 FK，守卫放在 Repository（最后一个账户禁删 + 删前把当前账户回退）+ UI（二次确认显示笔数）。
+- **CSV 导入导出不改 header**：`Import/ExportTransactionsUseCase` 全走 `FinanceRepository`，天然按当前账户隔离，无需改动。
+- **文案跟文件现状**：新 Card 用硬编码中文，与 `SettingsScreen` 现有 3 个 Card 一致；**有意偏离**计划的"字符串进 strings.xml"，避免同一页两种风格（后续若统一 i18n 再一起收）。
+- **不做**：账户间转账 / 账户图标 / 预算跨账户汇总（Phase 5+）；`service/reminder/`、task / calendar / timetable / holiday 四域不参与隔离。
+
+### 台账校正记录（本段核对时发现，顺手修正顶部速览）
+
+1. **顶部「项目速览」旧值与代码不符**，已刷新为实测值：
+
+| 旧值 | 实测 | 证据 |
+|---|---|---|
+| Room 数据库 **v10**（含 `events.category_id` 外键）| 本次改动前为 **v8**，现为 **v9** | `AppDatabase.kt@HEAD~2` 写 `version = 8`；`ALL_MIGRATIONS` 只到 `Migration_7_8`；`app/schemas/` 只有 `1.json`~`8.json`（现为 1~9）；`findstr MIGRATION_9_10` 全项目**命中 0 行** |
+| 累计 commit 38 | **50** | `git rev-list --count HEAD` |
+| 测试用例 ~519 | **568** | `testDebugUnitTest` 实跑计数 |
+
+   推测成因（**未证实，只存疑不下定论**）：Sub-step 9 Step 1 的记录写了「`MIGRATION_9_10`：events `category` → `category_id`」，但该迁移在代码里**不存在**，而 `event_categories` 表与 `events.categoryId` **确实存在**于 v8。→ 很可能是那轮把 schema 版本号记错，并连带使 `BackupFormatVersion.DB_VERSION` 该同步的值留在 7（即本段踩坑第 9 条）。
+   **教训**：台账里的 schema 版本必须从代码当场抽（`@Database.version` + `app/schemas/` 目录列举），不能照抄 plan 或上一轮描述。版本类数字写错不会报错，但会**误导下一次迁移的编号起点** —— 本轮差点因此去抢已被 `Migration_1_2`（Event rrule）占用的号，修正版计划就是靠实查代码才把编号改回 `Migration_8_9`。
+
+2. **本段的「阶段 Phase」与文件前文的「模块 Phase」是两套编号**，已在段首加提示。
+   前文 📦 Phase 1~8 是模块演进顺序；`.cyrene/docs/plan-20260909-142838.md` 里的 Phase 1~6 是阶段 8 末尾补完的子任务序号。
+   **历史段落一律不改写**（它们是当时的事实），只修正顶部「当前状态」类活数据。
+
+### 待办与下一个入口
+
+- 🔜 **前置修复（建议单独一个 commit）**：修 `TaskDetailScreenTest` / `TaskEditScreenTest` 的 8 个陈旧编译错误（给两个 Fake 补 `observeTasks` 等成员）→ androidTest 源集恢复可编。
+- 🔜 **B 路线补跑**：装 `cmdline-tools` → `sdkmanager "system-images;android-34;google_apis;x86_64"` → `avdmanager create avd` → `./gradlew connectedDebugAndroidTest`；跑绿后才允许把本段状态从 🟨 改 ✅（当前 `AppDatabaseMigrationsTest` 已就位，含 schema 校验 / 旧数据落 1 / 复合唯一 / 复合 FK / 空库回归 5 组断言）。
+- 🔜 记账页**顶部账户切换入口**（当前只能进 Settings 换；计划本 Phase 只要求 Settings 入口，已满足，但常用切换建议下阶段补快捷入口）。
+- ➡️ 下一阶段 Phase 4（头像上传）复用 Phase 2 的 `AttachmentStore` + 单图 PhotoPicker；`UserProfileEntity.avatarUri` 已预留（当前恒 null）。
