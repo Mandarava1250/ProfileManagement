@@ -3,6 +3,7 @@ package com.example.personalassistant.feature.settings
 import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,6 +66,7 @@ import java.util.Locale
  *
  * 内容：
  * - 记账账户（新增 Phase 3）：多账户列表 / 切换 / 新建 / 重命名 / 删除
+ * - 账户头像（新增 Phase 4）：每行右侧相机按钮走 PhotoPicker，行内圆形缩略图可移除
  * - 主题切换（浅色/深色/系统）
  * - 智能提醒（新增 Sub-step 8）：节假日避让 / 提前通知 / 时间 / 同步
  * - 数据备份（Sub-step 4）：自动备份开关 + 备份目录 + 立即备份 / 立即恢复
@@ -140,6 +142,26 @@ fun SettingsScreen(
     // ===== Phase 8 Sub-step 8：提前通知 TimePicker 状态 =====
     var showEveningTimePicker by remember { mutableStateOf(false) }
 
+    // ===== Phase 4：账户头像 Picker =====
+    //
+    // Picker 回调里只能拿到选中的 Uri，拿不到「刚才点的是哪个账户」，
+    // 所以用本地 state 把 accountId 暂存下来（不进 ViewModel：它是纯 UI 会话内状态，
+    // 也不进备份，与 Phase 3 「当前账户走 DataStore 不走 Room」同一类判断）。
+    var avatarTargetAccountId by remember { mutableStateOf<Long?>(null) }
+
+    // PhotoPicker 无需运行时权限；它给的 content:// Uri 只有本次会话可读，
+    // 而本功能会立即把它复制成自己的 file://（见 SetAccountAvatarUseCase），
+    // 所以不需要 takePersistableUriPermission —— 这也是头像必须「拷一份」而不能只存引用的原因。
+    val avatarPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { picked ->
+        val target = avatarTargetAccountId
+        avatarTargetAccountId = null
+        if (picked != null && target != null) {
+            viewModel.onAvatarPicked(target, picked)
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -172,6 +194,13 @@ fun SettingsScreen(
                 onDeleteRequest = viewModel::requestDeleteAccount,
                 onConfirmDelete = viewModel::confirmDeleteAccount,
                 onDismissDelete = viewModel::dismissDeleteAccount,
+                onAvatarClick = { account ->
+                    avatarTargetAccountId = account.id
+                    avatarPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                onAvatarRemove = viewModel::onAvatarRemoved,
             )
 
             // ===== 主题（Phase 8 Sub-step 6：ThemeMode + dynamicColor 持久化）=====

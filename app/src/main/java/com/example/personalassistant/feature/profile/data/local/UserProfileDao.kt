@@ -58,4 +58,13 @@ interface UserProfileDao {
 
     @Query("UPDATE user_profiles SET name = :name WHERE id = :id")
     suspend fun rename(id: Long, name: String)
+
+    /**
+     * Phase 4：更新头像 URI（传 null 即清除头像）。
+     *
+     * 不用 [update] 整行写回：那需要先查后写，两步之间别人改了名字就会被覆盖回去。
+     * 单条 UPDATE 只动 `avatarUri` 一列，不存在这个问题。
+     */
+    @Query("UPDATE user_profiles SET avatarUri = :avatarUri WHERE id = :id")
+    suspend fun updateAvatar(id: Long, avatarUri: String?)
 }

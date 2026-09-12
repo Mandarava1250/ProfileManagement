@@ -31,6 +31,15 @@ interface AccountRepository {
     suspend fun exists(accountId: Long): Boolean
 
     /**
+     * Phase 4：按 id 取单个账户（不存在返回 null）。
+     *
+     * 为什么不用现成的 [exists] + [observeAccounts]：[SetAccountAvatarUseCase] 需要拿到
+     * **换头像之前**的 `avatarUri` 才能决定删哪个旧文件，一次查询就够；
+     * 而 observeAccounts() 是持续 Flow，在 UseCase 里 `.first()` 取快照反而更绕。
+     */
+    suspend fun findAccount(accountId: Long): UserProfileEntity?
+
+    /**
      * 删除账户，并**级联清除该账户在记账域的 4 张表数据**。
      *
      * ⚠️ 不可恢复。调用方（UI）必须已经拿到用户明确二次确认；
@@ -43,6 +52,22 @@ interface AccountRepository {
      * 的复合外键，只删 `user_profiles` 一行会留下无人认领的分类与流水。
      */
     suspend fun deleteAccount(accountId: Long)
+
+    // ===== Phase 4：头像 =====
+
+    /**
+     * 单纯把账户的 `avatarUri` 写为 [avatarUri]（传 null 即清除）。
+     *
+     * ⚠️ 本方法**不管文件**：不保存新图、也不删旧图。
+     * 「先写库 → 后删旧文件」这条顺序不变量住在
+     * [SetAccountAvatarUseCase] 里，因为那里只依赖两个接口就能被完整测到；
+     * 若把编排放在本 Repository，测试就得 fake 掉 [com.example.personalassistant.feature.finance.data.local.FinanceDao]
+     * 的 47 个方法（本类依赖它），而头像链路根本不用到它们。
+     *
+     * 例外：[deleteAccount] 会顺手清掉该账户的头像文件 —— 那是级联删除的一部分，
+     * 不拆到 UseCase，否则「删账户但漏清文件」会变成只能靠调用方自觉的隐式约定。
+     */
+    suspend fun setAvatarUri(accountId: Long, avatarUri: String?)
 }
 
 /** 仅剩最后一个账户，禁止删除 */

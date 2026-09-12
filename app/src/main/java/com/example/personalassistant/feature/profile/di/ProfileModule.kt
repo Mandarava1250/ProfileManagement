@@ -2,6 +2,8 @@ package com.example.personalassistant.feature.profile.di
 
 import com.example.personalassistant.feature.profile.data.AccountRepository
 import com.example.personalassistant.feature.profile.data.AccountRepositoryImpl
+import com.example.personalassistant.feature.profile.data.AvatarStorage
+import com.example.personalassistant.feature.profile.data.AvatarStorageImpl
 import com.example.personalassistant.feature.profile.data.CurrentAccountRepository
 import com.example.personalassistant.feature.profile.data.CurrentAccountRepositoryImpl
 import dagger.Binds
@@ -35,4 +37,17 @@ abstract class ProfileModule {
     abstract fun bindAccountRepository(
         impl: AccountRepositoryImpl,
     ): AccountRepository
+
+    /**
+     * Phase 4：头像存储绑定。
+     *
+     * [AccountRepositoryImpl] 依赖的是接口而非实现类，这样「新头像保存失败不得删旧文件」
+     * 这条顺序不变量能在 JVM 里用 Fake 测（实现类依赖 `ContentResolver` / `Bitmap`，
+     * 单测里只能拿到 null，测不出成功/失败分支）。
+     */
+    @Binds
+    @Singleton
+    abstract fun bindAvatarStorage(
+        impl: AvatarStorageImpl,
+    ): AvatarStorage
 }

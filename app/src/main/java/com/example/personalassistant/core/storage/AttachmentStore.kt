@@ -1,19 +1,14 @@
 package com.example.personalassistant.core.storage
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import com.example.personalassistant.core.di.IoDispatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.max
 
 /**
  * Phase 2：附件存储（图片压缩到 1080p 写入 filesDir/attachments）
@@ -28,6 +23,14 @@ import kotlin.math.max
  * - 选 JPEG 85% 而非 PNG：缩略图场景，肉眼几乎无差别，文件小一半
  * - 不做 EXIF 旋转：1080p 缩放后视觉差异小；后续 Phase 可加
  * - 不入库路径，只存 file:// URI：让 SQL 字段保持小，且 Uri.toString() 是稳定 ID
+ *
+ * ## Phase 4：编码与删除逻辑已抽到 [ImageEncoder]
+ * 头像（[com.example.personalassistant.feature.profile.data.AvatarStorage]）与附件做的是同一件事，只差子目录名与最长边像素。
+ * 曾考虑给本类构造函数加 `subdir` / `maxLongEdge` 参数来复用，**不可行**：
+ * 本类是 `@Singleton open class ... @Inject constructor(...)`，Hilt 生成的
+ * `AttachmentStore_Factory` 按全部参数调用；且 `app/src/test/.../FakeAttachmentStore.kt`
+ * 继承本类并用命名参数调父类构造（它覆盖的 `saveAll` 正是 Phase 2 的被测路径）。
+ * 故改为「提取顶层函数，两边各自调用」，**本类的公开签名一字未改**。
  */
 @Singleton
 open class AttachmentStore @Inject constructor(
@@ -56,14 +59,11 @@ open class AttachmentStore @Inject constructor(
      * - 仅删除位于本 store 管理的目录下文件，避免误删（路径穿越保护）
      */
     open suspend fun delete(uriString: String) = withContext(dispatcher) {
-        val uri = runCatching { Uri.parse(uriString) }.getOrNull()
-            ?: return@withContext
-        if (uri.scheme != "file") return@withContext
-        val path = uri.path ?: return@withContext
-        val file = File(path)
-        // 路径穿越保护：只在 attachments 子目录内的文件才能删除
-        if (!file.parentFile?.canonicalPath.equals(attachmentDir.canonicalPath)) return@withContext
-        if (file.exists()) file.delete()
+        // 路径穿越保护（只删 attachments 子目录内的文件）在 [deleteFileInsideDir] 里实现。
+        // 显式写 Unit：否则 withContext 会推断出 Boolean，改变本方法返回类型，
+        // 连带弄坏 FakeAttachmentStore 的 `override ... = Unit`。
+        deleteFileInsideDir(uriString, attachmentDir)
+        Unit
     }
 
     /** 批量删除 */
@@ -77,36 +77,12 @@ open class AttachmentStore @Inject constructor(
         Unit
     }
 
-    private fun saveOne(uri: Uri): String? = runCatching {
-        val input = context.contentResolver.openInputStream(uri) ?: return@runCatching null
-        input.use { stream ->
-            val original = BitmapFactory.decodeStream(stream) ?: return@runCatching null
-            val scaled = scaleDown(original, MAX_LONG_EDGE_PX)
-            val filename = "${UUID.randomUUID()}.jpg"
-            val file = File(attachmentDir, filename)
-            FileOutputStream(file).use { out ->
-                scaled.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-            }
-            if (scaled !== original) original.recycle()
-            scaled.recycle()
-            Uri.fromFile(file).toString()
-        }
-    }.getOrNull()
-
-    private fun scaleDown(src: Bitmap, maxLongEdge: Int): Bitmap {
-        val w = src.width
-        val h = src.height
-        val longEdge = max(w, h)
-        if (longEdge <= maxLongEdge) return src
-        val scale = maxLongEdge.toDouble() / longEdge
-        val nw = (w * scale).toInt().coerceAtLeast(1)
-        val nh = (h * scale).toInt().coerceAtLeast(1)
-        return Bitmap.createScaledBitmap(src, nw, nh, true)
-    }
-
-    companion object {
-        private const val ATTACHMENT_SUBDIR = "attachments"
-        private const val MAX_LONG_EDGE_PX = 1080
-        private const val JPEG_QUALITY = 85
-    }
+    /** 解码 + 缩放 + 落盘全部委派给 [encodeImageToJpeg]（与头像链路共用同一实现） */
+    private fun saveOne(uri: Uri): String? =
+        encodeImageToJpeg(
+            resolver = context.contentResolver,
+            uri = uri,
+            dir = attachmentDir,
+            maxLongEdge = ATTACHMENT_MAX_LONG_EDGE_PX,
+        )
 }

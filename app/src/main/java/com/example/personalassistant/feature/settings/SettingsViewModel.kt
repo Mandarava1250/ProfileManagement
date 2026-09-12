@@ -11,6 +11,7 @@ import com.example.personalassistant.core.holiday.data.HolidayRepository
 import com.example.personalassistant.core.holiday.di.HolidayReminderScheduler
 import com.example.personalassistant.feature.profile.data.AccountRepository
 import com.example.personalassistant.feature.profile.data.CurrentAccountRepository
+import com.example.personalassistant.feature.profile.data.SetAccountAvatarUseCase
 import com.example.personalassistant.feature.profile.data.local.AccountIds
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import com.example.personalassistant.feature.profile.presentation.PendingAccountDeletion
@@ -50,6 +51,7 @@ import javax.inject.Inject
  * - [triggerHolidaySync]：占位同步入口（当前 Stub）
  * - [switchAccount] / [createAccount] / [renameAccount] /
  *   [requestDeleteAccount] / [confirmDeleteAccount] / [dismissDeleteAccount]：账户管理
+ * - [onAvatarPicked] / [onAvatarRemoved]：Phase 4 账户头像
  * - [dismissHolidaySyncPrompt]：用户关闭「节假日数据即将过期」弹窗
  */
 @HiltViewModel
@@ -66,6 +68,7 @@ class SettingsViewModel @Inject constructor(
     private val setDynamicColorUseCase: SetDynamicColorUseCase,
     private val accountRepository: AccountRepository,
     private val currentAccountRepository: CurrentAccountRepository,
+    private val setAccountAvatar: SetAccountAvatarUseCase,
 ) : ViewModel() {
 
     /** 主题偏好快照（mode + dynamicColor） */
@@ -179,6 +182,33 @@ class SettingsViewModel @Inject constructor(
 
     fun dismissDeleteAccount() {
         _pendingDeletion.value = null
+    }
+
+    // ===== Phase 4：账户头像 =====
+
+    /**
+     * 用户从 PhotoPicker 选完图。
+     *
+     * 真正的「先存新 → 再写库 → 后删旧」顺序守卫在 [SetAccountAvatarUseCase] 里，
+     * 本方只负责把失败翻译成可理解的提示（不删旧像是关键不变量，不能在这里自己拼）。
+     */
+    fun onAvatarPicked(accountId: Long, source: android.net.Uri) {
+        viewModelScope.launch {
+            val ok = runCatching { setAccountAvatar(accountId, source) }
+                .getOrElse { e ->
+                    _statusMessage.value = "头像设置失败：${e.message ?: "账户不存在"}"
+                    return@launch
+                }
+            _statusMessage.value = if (ok) "头像已更新" else "无法读取所选图片，已保留原头像"
+        }
+    }
+
+    /** 移除头像（连带删文件） */
+    fun onAvatarRemoved(accountId: Long) {
+        viewModelScope.launch {
+            val ok = runCatching { setAccountAvatar.clear(accountId) }.getOrDefault(false)
+            _statusMessage.value = if (ok) "已移除头像" else "移除失败：账户不存在"
+        }
     }
 
     /** Phase 8 Sub-step 8：网络授权同步提示（null = 不显示） */

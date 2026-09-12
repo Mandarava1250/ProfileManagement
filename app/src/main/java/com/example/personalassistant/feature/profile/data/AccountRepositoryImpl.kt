@@ -20,6 +20,7 @@ import javax.inject.Singleton
  * - [UserProfileDao]：账户本身
  * - [FinanceDao]：删账户时级联清记账数据 + 统计流水数
  * - [CurrentAccountRepository]：删掉当前账户后要回退到哪个账户
+ * - [AvatarStorage]：Phase 4 换/删头像时清理旧文件
  *
  * 新建 / 删除都是「多表写」，走 [dispatcher]（IO）串行执行；
  * 单条 DELETE 语句自身原子，跨表的级联删除这里不包显式事务 ——
@@ -31,6 +32,7 @@ class AccountRepositoryImpl @Inject constructor(
     private val userProfileDao: UserProfileDao,
     private val financeDao: FinanceDao,
     private val currentAccountRepository: CurrentAccountRepository,
+    private val avatarStorage: AvatarStorage,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : AccountRepository {
 
@@ -69,6 +71,9 @@ class AccountRepositoryImpl @Inject constructor(
         userProfileDao.getById(accountId) != null
     }
 
+    override suspend fun findAccount(accountId: Long): UserProfileEntity? =
+        withContext(dispatcher) { userProfileDao.getById(accountId) }
+
     override suspend fun deleteAccount(accountId: Long): Unit = withContext(dispatcher) {
         // 守卫 1：默认账户是旧数据的落点，保留它可避免「所有账户都被删光」的极端状态
         if (accountId == AccountIds.DEFAULT_ACCOUNT_ID) {
@@ -93,6 +98,22 @@ class AccountRepositoryImpl @Inject constructor(
         financeDao.deleteBudgetsByAccount(accountId)
         financeDao.deleteDailyPoolsByAccount(accountId)
 
+        // Phase 4：账户头像文件也要跟着清，否则删完账户会在 filesDir/avatars 里
+        // 留下永久孤儿（没有任何行引用它，UI 也再看不到，无法通过任何入口删掉）。
+        // 放在删行**之前**取 avatarUri：删完行就查不到这个值了。
+        userProfileDao.getById(accountId)?.avatarUri?.let { avatarStorage.delete(it) }
+
         userProfileDao.deleteById(accountId)
     }
+
+    // ===== Phase 4：头像 =====
+
+    /**
+     * 只写 `avatarUri` 一列（单条 UPDATE），文件的保存与清理在
+     * [SetAccountAvatarUseCase] 里编排（理由见接口注释：可测性）。
+     */
+    override suspend fun setAvatarUri(accountId: Long, avatarUri: String?): Unit =
+        withContext(dispatcher) {
+            userProfileDao.updateAvatar(accountId, avatarUri)
+        }
 }

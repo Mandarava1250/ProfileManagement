@@ -2,17 +2,21 @@ package com.example.personalassistant.feature.profile.presentation
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,8 +36,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 
 /**
@@ -64,6 +71,8 @@ fun AccountSettingsCard(
     onDeleteRequest: (UserProfileEntity) -> Unit,
     onConfirmDelete: () -> Unit,
     onDismissDelete: () -> Unit,
+    onAvatarClick: (UserProfileEntity) -> Unit,
+    onAvatarRemove: (Long) -> Unit,
 ) {
     /** 正在重命名的账户（本地 UI 状态，不进 ViewModel） */
     var renamingAccount by remember { mutableStateOf<UserProfileEntity?>(null) }
@@ -101,6 +110,8 @@ fun AccountSettingsCard(
                     onSwitch = { onSwitch(account.id) },
                     onRename = { renamingAccount = account },
                     onDelete = { onDeleteRequest(account) },
+                    onAvatarClick = { onAvatarClick(account) },
+                    onAvatarRemove = { onAvatarRemove(account.id) },
                 )
             }
 
@@ -183,6 +194,8 @@ private fun AccountRow(
     onSwitch: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    onAvatarClick: () -> Unit,
+    onAvatarRemove: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -193,6 +206,13 @@ private fun AccountRow(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         RadioButton(selected = isCurrent, onClick = onSwitch)
+        // Phase 4：头像**只展示不可点**。
+        // 整行已绑了 clickable(onSwitch)，头像若也可点会先误触「切换账户」，
+        // 所以换头像走右侧独立的相机 IconButton（不嵌在行点击区里）。
+        AccountAvatar(
+            account = account,
+            onAvatarRemove = onAvatarRemove,
+        )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = account.name,
@@ -203,6 +223,13 @@ private fun AccountRow(
                 Text("当前使用中", style = MaterialTheme.typography.bodySmall)
             }
         }
+        IconButton(onClick = onAvatarClick) {
+            Icon(
+                Icons.Filled.PhotoCamera,
+                contentDescription = "更换头像",
+                modifier = Modifier.size(18.dp),
+            )
+        }
         IconButton(onClick = onRename) {
             Icon(Icons.Filled.Edit, contentDescription = "重命名", modifier = Modifier.size(18.dp))
         }
@@ -212,6 +239,63 @@ private fun AccountRow(
                 contentDescription = if (canDelete) "删除账户" else "至少保留一个账户，无法删除",
                 modifier = Modifier.size(18.dp),
             )
+        }
+    }
+}
+
+/**
+ * Phase 4：账户头像圆形缩略图（36dp）
+ *
+ * - 无头像时用 `Icons.Filled.Person` 占位，保证行高一致
+ * - **本身不可点**（原因见 [AccountRow] 内注释）；有头像时右下角叠一个小的「移除」按钮，
+ *   那是独立 IconButton，会自己消费点击，不会泄到整行的 onSwitch
+ * - Coil 已在项里（Phase 2 附件缩略图），2.7.0，无需加依赖
+ */
+@Composable
+private fun AccountAvatar(
+    account: UserProfileEntity,
+    onAvatarRemove: () -> Unit = {},
+) {
+    val hasAvatar = !account.avatarUri.isNullOrBlank()
+
+    Box {
+        if (hasAvatar) {
+            AsyncImage(
+                model = account.avatarUri,
+                contentDescription = "${account.name}的头像",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape),
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Filled.Person,
+                    contentDescription = "未设置头像",
+                    modifier = Modifier.size(36.dp),
+                )
+            }
+        }
+
+        if (hasAvatar) {
+            IconButton(
+                onClick = onAvatarRemove,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(16.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "移除头像",
+                    modifier = Modifier.size(14.dp),
+                )
+            }
         }
     }
 }
@@ -262,8 +346,7 @@ private fun AccountNameDialog(
     )
 }
 
-/** 待确认的删除请求：名字 + 该账户流水数（-1 表示尚未查到） */
-data class PendingAccountDeletion(
+/** 待确认的删除请求：名字 + 该账户流水数（-1 表示尚未查到） */data class PendingAccountDeletion(
     val accountId: Long,
     val name: String,
     val transactionCount: Int,

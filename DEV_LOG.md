@@ -905,6 +905,9 @@ README.md        settings.gradle.kts
 ### 待办与下一个入口
 
 - ✅ **前置修复已完成 @`e4cdd94`**（单独 commit，未动生产代码）：androidTest 源集恢复可编，`compileDebugAndroidTestKotlin` BUILD SUCCESSFUL，`testDebugUnitTest` 仍全绿。
-- 🔜 **B 路线补跑**：装 `cmdline-tools` → `sdkmanager "system-images;android-34;google_apis;x86_64"` → `avdmanager create avd` → `./gradlew connectedDebugAndroidTest`；跑绿后才允许把本段状态从 🟨 改 ✅（当前 `AppDatabaseMigrationsTest` 已就位，含 schema 校验 / 旧数据落 1 / 复合唯一 / 复合 FK / 空库回归 5 组断言）。
+- 🔜 **B 路线补跑**：装 `cmdline-tools` → `sdkmanager "system-images;android-34;aosp_atd;x86_64"` → `avdmanager create avd` → `./gradlew connectedDebugAndroidTest`；跑绿后才允许把本段状态从 🟨 改 ✅（当前 `AppDatabaseMigrationsTest` 已就位，含 schema 校验 / 旧数据落 1 / 复合唯一 / 复合 FK / 空库回归 5 组断言）。
+  ✅ **本条已完成 @`a3d7dca`**，且实际镜像选型与最初设想不同：用的是 **`aosp_atd`**（专为自动化测试做的轻镜像，AVD 内存占用小、无 Google 服务）而**非** `google_apis`；
+  上一轮台账旧文本里的 `google_apis` 推测已在上面的「阻塞 1」中被实测路径取代。
 - 🔜 记账页**顶部账户切换入口**（当前只能进 Settings 换；计划本 Phase 只要求 Settings 入口，已满足，但常用切换建议下阶段补快捷入口）。
 - ➡️ 下一阶段 Phase 4（头像上传）复用 Phase 2 的 `AttachmentStore` + 单图 PhotoPicker；`UserProfileEntity.avatarUri` 已预留（当前恒 null）。
+  ⚠️ 本行的「复用 `AttachmentStore`」已被 Phase 4 实做推翻（改为新增 `AvatarStorage` 接口 + 独立 `avatars/` 目录），原因见本段下方 Phase 4 记录的「范围与决策」。
