@@ -14,17 +14,18 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
-| 当前 HEAD | `75fca56` |
+| 当前 HEAD | `438a29e` |
 | 当前分支 | `feature/phase-8-reminder`（已 push origin）|
 | 主分支 | `Develop` |
-| 累计 commit 数 | 57（`git rev-list --count HEAD`，含 merge / revert）|
-| 测试用例 | **578 JVM 单测**（`testDebugUnitTest` 实测 0 失败）+ **6 instrumented**（`connectedDebugAndroidTest`，AVD 真跑 0 失败）|
+| 累计 commit 数 | 60（`git rev-list --count HEAD`，含 merge / revert）|
+| 测试用例 | **598 JVM 单测**（`testDebugUnitTest` 实测 0 失败 / 0 错误，70 个 XML 报告）+ **6 instrumented**（`connectedDebugAndroidTest`，AVD 真跑 0 失败；⚠️ 本轮未重跑，Phase 5 迁移未在其中）|
 | 测试环境 | AVD `pm_api34`（API 34 / aosp_atd / x86_64 / WHPX 硬件加速）—— 属本机环境，**不在版本库** |
-| Room 数据库 | **v9**（`user_profiles` 账户表 + 记账域 4 表 `accountId` 隔离）<br>⚠️ 本行旧值写的是“v10 + `events.category_id`”，与代码不符 —— 见下方「台账校正记录」|
+| Room 数据库 | **v10**（Phase 5：`transactions.transferAccountId`/`transferPairId` + `user_profiles.initialBalance` + `index_transactions_accountId_type`）<br>版本号常量已提为 `APP_DATABASE_VERSION`，`@Database` 注解与 `BackupFormatVersion.DB_VERSION` 同源 —— 见下方 Phase 5「踩坑笔记」第 1 条|
 | 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项）|
 | 已完成（本轮新转 ✅） | **阶段 Phase 3（多账户 + 数据隔离）✅** —— Room 迁移已在 AVD `pm_api34` 真跑通过 @`a3d7dca`，原 ⛔ 环境阻塞已解除 |
 | 已完成（本轮新转 ✅） | **阶段 Phase 4（账户头像）✅** —— `c4224c3` 功能 + `75fca56` 真实读写 AVD 真跑；无 DB 变更 / 无新依赖 |
-| 进行中 | （空）—— 阶段 Phase 1~4 均已 ✅；Phase 5+（跨账户转账 / 账户间预算汇总 / 记账页顶部切换快捷入口）待开 |
+| 进行中 | **阶段 Phase 5（跨账户转账 + 预算汇总）🟨** —— 代码已 push（`f86b8be` 数据层 + `438a29e` 功能层），598 JVM 断言全绿；⚠️ **不打 ✅ 的原因**：`Migration_9_10` 的 instrumented 真跑未做（JVM 只证明 SQL 形状对），且转账/总览 UI 未人工目测验收 |
+| 待开 | 阶段 Phase 6+：记账页顶部账户切换快捷入口（Phase 3 遗留）/ 附件旧文件回收（Phase 2 遗留）/ Phase 5 迁移真跑 |
 
 ---
 
@@ -1048,4 +1049,175 @@ README.md        settings.gradle.kts
   否则又是一个「写了方法从来没人调」的死代码（本轮台账就差点因此写错一句）。
 - 🔜 记账页**顶部账户切换快捷入口**（Phase 3 遗留）。
 - ➡️ 下一阶段 Phase 5：跨账户转账 / 账户间预算汇总。
+
+---
+
+## 🧮 阶段 Phase 5：跨账户转账 + 账户余额 + 预算跨账户汇总（DB v9 → v10）
+
+> 对应计划：`.cyrene/docs/plan-20260909-142838.md` 的「Phase 5」（本轮**未另写新计划文件**，直接开工）。
+> 阶段编号沿用 Phase 3/4 的「阶段序号」体系，与前面「Phase 5：提醒系统」的模块编号无关。
+
+### 状态：🟨 进行中（代码已 push + 598 JVM 断言全绿；迁移真跑与 UI 目测未做）
+
+**按维护规则第 2 条，未达「验证通过」不打 ✅。** 本轮 JVM 能证明「SQL 形状对、折叠逻辑对」，
+证明不了「真实 SQLite 上按序执行成功」——那一档必须 instrumented，见「⛔ 阻塞」。
+
+### 已完成的步骤
+
+1. **数据模型（`f86b8be`）**
+   - `transactions` 加 `transferAccountId`（对方账户）+ `transferPairId`（UUID，两行共享）
+   - `user_profiles` 加 `initialBalance`；当前余额是**派生值**不落库：
+     `期初 + 收入 − 支出 + 转入 − 转出`（存 running balance 的话，改任一笔历史流水都要重算，
+     漏一条路径就是一笔永久错账，且没有任何外部真相能发现它）
+   - `TransactionType` 加 `TRANSFER_OUT(2)` / `TRANSFER_IN(3)`；
+     **既有统计 SQL 一条没改** —— 它们全部写死 `type = 0` / `type = 1`，转账天然不进支出/收入/报表/零钱池。
+     这是选「新增 enum 值」而不是「复用支出+收入」的决定性理由
+   - `categories` 加内置「转账」分类（`type = 2`，被 `observeCategories` 过滤，
+     不出现在任何选择器里，只作 `transactions.categoryId` NOT NULL + 复合外键的落点）
+2. **`Migration_9_10`**：4 步纯增量（两条 ADD COLUMN + 一条索引 + 一条 `INSERT…SELECT FROM user_profiles`
+   给**每个存量账户**补转账分类，配 `WHERE NOT EXISTS` 幂等）。不重建任何表 —— Phase 3 之所以要重建，
+   是把单列 FK 升复合 FK（SQLite 不支持 ALTER FK），本轮两者都能直接 ALTER，风险面小一个数量级。
+   值全部引用 `DefaultCategories` 常量，不让 SQL 与 Kotlin 两侧手写歪。
+3. **DAO / Repository**：转账写入（`@Transaction recordTransferPair`，两行必须一起成功）、
+   成对删除（按 pairId 一次删两行）、余额校验、3 条**故意跨账户**的聚合读，
+   以及转账禁止原地编辑 / 禁止走 `deleteTransaction`（DAO + Repository 两层都拦）
+4. **功能层（`438a29e`）**：`TransferSheet`（顶栏 SwapHoriz 入口）、`AccountSummaryCard`（合计+缺口提示+逐账户行）、
+   `ObserveAccountBalancesUseCase`（跨两域拼装）、期初余额设置入口
+   （DAO→Repository→ViewModel→`AccountSettingsCard` 全链路）
+5. **JVM 测试**：`Migration_9_10StatementsTest` 9 条 + `AccountSummaryTest` 11 条 +
+   `AccountIsolationTest` 2 条修正 + `BackupFormatVersionTest` 改真交叉引用
+
+### 验证结果（全部取实测，不信 exit code）
+
+| 档位 | 命令 | 结果 |
+|---|---|---|
+| JVM 单测 | `testDebugUnitTest` | **598 tests / 0 failures / 0 errors**（70 个 XML 报告，时间戳全在同一分钟）|
+| 编译 | `compileDebugKotlin` | BUILD SUCCESSFUL |
+| 仪表编译 | `compileDebugAndroidTestKotlin` | BUILD SUCCESSFUL |
+| **装机档位** | `assembleDebug` | BUILD SUCCESSFUL —— 本轮 ViewModel 新增 3 个注入参数，只有这一档跑完整 Hilt 图（沿用 Phase 4 踩坑笔记第 7 条）|
+| 迁移真跑 | `connectedDebugAndroidTest` | ⛔ **未做**（见下方阻塞）|
+| instrumented 回归 | 同上 | ⚠️ **本轮未重跑**，速览里的「6 instrumented 0 失败」是 Phase 3/4 的旧证据，不含 Phase 5 |
+
+数字自洽核对：587（Phase 5 数据层提交后）+ 11（`AccountSummaryTest`）= 598。
+
+### ⛔ 阻塞（一条，且是能力性的）
+
+**`Migration_9_10` 的 instrumented 真跑没做。** AVD `pm_api34` 与 system image 上一轮已配好、
+本轮 `emulator -list-avds` 确认仍在，但 `adb devices` 为空 —— 需要开机模拟器才能跑。
+
+- 这不是「再试一次就能过」的缺口：JVM 断言只证明 SQL 语句形状正确，
+  **不证明** `runMigrationsAndValidate` 通过（索引/列/defaultValue 任一不符即启动失败），
+  也不证明 `INSERT…SELECT` 在真实有数据的库上按序成功。
+- Phase 3 已经用同一套流程验证过这条路可行（`a3d7dca`），所以只差开机 + 跑一次。
+- 按上一轮的约定，这一步应**单独一个 commit**（`test(migration): Migration_9_10 在模拟器真跑`），
+  与 Phase 5 功能提交解耦。已列入待办。
+
+### 关键变更文件（39 个，+3849 / −38）
+
+新增：`Migration_9_10.kt`、`schemas/…/10.json`、`AccountSummary.kt`、`TransferUseCase.kt`、
+`DeleteTransferUseCase.kt`、`ObserveAccountBalancesUseCase.kt`、`AccountSummaryCard.kt`、`TransferSheet.kt`、
+`Migration_9_10StatementsTest.kt`、`AccountSummaryTest.kt`
+
+改动最大：`FinanceDao.kt`(+290)、`FinanceRepositoryImpl.kt`(+206)、`AccountSettingsCard.kt`、
+`FinanceViewModel.kt`、`FinanceScreen.kt`、`AccountRepository(+Impl)`、`UserProfileDao`、`SettingsViewModel`
+
+### 踩坑笔记
+
+1. **「同步提醒」测试必须是真交叉引用，否则它是假守卫**（本轮最有价值的发现）。
+   `BackupFormatVersionTest` 里写着 `assertEquals(9, DB_VERSION)`，注释吹「以后 `AppDatabase.version`
+   每 +1 本测试会失败提醒」—— 但它**根本不读那个注解**，改注解它照样绿。
+   证据：v8 时 `DB_VERSION` 长期停在 7（台账已记）、升 v9 时也没人改它，两次都是它「该报错却没报」的现场。
+   本轮升到 v10 时它第三次险些漏掉，是我读代码而非测试发现的。
+   **修法**：提 `const val APP_DATABASE_VERSION = 10`，`@Database(version = APP_DATABASE_VERSION)`
+   与测试都引用它 —— 注解成为唯一真相源，只改一处才会红。
+   **判据**：写「提醒同步」类测试时，问一句「被我提醒的那个改动如果发生，这行断言真的会失败吗」。
+2. **版本号、枚举编号这类数字错了不会崩，只会误导下一个人**。本轮差点就去抢已被
+   Event rrule 占用的 `Migration_1_2`；`DB_VERSION`/`version`/`MIGRATION_x_y` 三处都要先查再写。
+3. **中断恢复：todo 和本地记录不能当事实**。本轮恢复时上一轮的中断现场是 17 个未提交文件 / 2604 行，
+   而 todo 仍停在「摸底」。做法是**先 `git status` + 读 diff 建立事实，再改笔记**，
+   没有按 todo 直接往下写 —— 否则会重复实现已存在的转账链路。
+4. **`search_text` / `findstr` 都会假阴性，零命中不能当证据**（本轮两种成因各踩一次）：
+   - `search_text` 默认 `mode=literal`，会把正则的 `|` 当**字面字符**。我第一次用
+     `A|B|C` 查全部零命中，差点得出「UseCase 全没写」的错误结论；它甚至对已亲眼在 diff 里
+     看到的 `getGlobalMonthlySums` 也报零命中。
+   - `findstr` 的中文关键词搜不到（cmd 按系统 ANSI 码页传参，文件是 UTF-8），
+     本轮搜「逐字段比对一致」零命中而文件里确实有。**英文/ASCII 关键词可靠，中文一律不可靠。**
+   **规则**：判断「某符号是否存在 / 是否有调用点」用 `findstr` 搜 **ASCII 标识符**；
+   要搜中文改用 `powershell` + `-Encoding UTF8`，或直接 `read_file` 看上下文。
+5. **`runCatching` 不接 `onFailure` 是静默失败的制造机**（本轮抓到 3 处）。
+   `deleteCurrent` / `save` 都只接 `onSuccess` —— 收支流水很少失败所以无人发现，
+   而转账有 6 类业务拒绝（余额不足 / 目标已删 / 自转 / 缺分类…），
+   结果全是「点了没反应」。转账行点删除**实际删不动且不报错**。
+   **判据**：一个操作有一组「合法但被拒绝」的分支时，必须把拒绝原因显示出来。
+6. **`combine` 的 5 流泛型上限是硬约束**：`FinanceViewModel.uiState` 已占满 5 个，
+   汇总读不能塞进去（改成 list+mapAt 会掉类型安全）。用独立 `StateFlow`，
+   且 `budgetTotals` 由 `accountBudgetSummaries.map(from)` 折叠，而不是再开一条查库流。
+7. **功能可用性 ≠ 编译通过：`initialBalance` 是本轮最大的隐形缺口**。
+   schema、迁移、派生余额、余额校验全都在，但**没有任何地方能设期初**（UI 层零引用、DAO 无 UPDATE 方法）。
+   后果：新账户余额恒为 0，而转账默认拒绝余额不足 → 用户新建账户后**永远转不出钱**，
+   只能先记一笔假收入（会多算收入并错扣零钱池）。编译、单测、lint 全都不报。
+   **判据**：加「会被校验读取」的字段时，同时问「用户从哪条路径能把它变成非零」。
+8. **`apply_patch` 未写完的 hunk 会把 `*** End Patch` 当内容写进文件**（本轮自己造成的一次损坏）。
+   我在一个 hunk 里以 `*** End Patch` 收尾却没写完内容，那行字面量被插进 `AccountSettingsCard.kt:353`。
+   **规则**：补丁里每个 hunk 都要是完整可应用的上下文；写完立刻用 `findstr` 反查补丁标记是否残留。
+9. **自写测试也要怀疑**：`AccountSummaryTest` 浮点容差那条，第一版写 `100.0 + 10.0/3 − 10.0/3` ——
+   误差恰好抵消、两边完全相等，**根本没测到容差边界**，但它会绿。
+   换成确定存在的 `0.1 + 0.2 != 0.3`，并加一条前提断言 `(0.1+0.2) != 0.3`，
+   让「测试前提失效」也能被发现。绿不等于有效。
+10. **删账户的配对清理：写了方法不等于接上了**。DAO 里 `deleteTransactionsAndTransferPartners` /
+    `countTransactionsAndTransferPartners` 是本轮中断前加的，但 `AccountRepositoryImpl`
+    仍在用旧方法（该文件压根不在改动清单里 → 中断正发生在这一步之前）。
+    用 `findstr` 查调用点才发现两个方法**零调用**。已接上，并把二次确认的计数口径一起改齐
+    （弹窗说「删 N 笔」就必须真只动 N 行）。
+
+### 范围与决策
+
+- **转账用「两行配对」而不是单表 + 方向字段**：账户间挪钱必须在两边账本各自可见，
+  单行模型要么让 B 账户查自己的转账时得知道「别人的转出」，要么统计 SQL 全改。
+  代价是转账不能原地编辑 —— 已明确拒绝而非默默支持。
+- **`transferPairId` 与 `transferAccountId` 两列都要**：前者保证「删一笔转账」精确删两行
+  （用金额+日期认对方，用户连点两下产生的两笔相同转账会一起命中，删 1 变删 2），
+  后者让删账户能一句 `WHERE accountId = :id OR transferAccountId = :id` 清掉指向本账户的配对行。
+- **`transferPairId` 不建索引**：只在删一笔时作 WHERE 用一次，转账行数 = 用户主动转账次数，
+  量级远小于普通流水，为一个删除操作维护索引不划算。
+- **转账不提供原地编辑，也不出现在记账页类型选择器**（`TransactionType.manualTypes` 只含收支两项）。
+  要改金额只能删了重转 —— 删会同时清配对，比改一半安全。
+- **余额可设负数**（信用卡 / 负债账户期初就是负的），但 Repository 拒绝 NaN/Infinity
+  （它们会让余额比较默默出错）。UI 允许留空 = 记为 0。
+- **`FinanceRepository` 接口本轮新增了 5 个方法**（Phase 3 刻意一个都没改）：
+  转账是新的业务动作、汇总是新的读需求，藏进现有方法会让签名变成带隐藏参数的怪东西。
+  代价是 `FakeFinanceRepository` 要同步实现 —— 编译立刻提醒，不会漏。
+- **汇总读不过 `flatMapLatest` 到当前账户**（与 Phase 3 铁律不矛盾：它们要的就是所有账户）；
+  这条已写进 `FinanceRepositoryImpl` 类注释，防止后来者「顺手补上过滤」。
+- **文案继续硬编码中文**，与 `SettingsScreen` / `AccountSettingsCard` 现有风格一致（同 Phase 3/4）。
+- **备份字段本轮未动**：新列都在 `@Serializable` Entity 上且有默认值，
+  旧备份解码向后兼容、新备份的 pairId 能原样导入。但**未做 instrumented 往返验证**，见待办。
+
+### 待办与下一个入口
+
+- ⛔ **`Migration_9_10` instrumented 真跑（最高优先，单独一个 commit）**：
+  开机 AVD（`emulator -avd pm_api34 -no-window -no-audio -no-boot-anim -read-only`）→
+  在 `AppDatabaseMigrationsTest` 加 9→10 用例 → `connectedDebugAndroidTest`。
+  **注意上一轮的两条硬教训**：① 测试方法名不能用反引号空格（D8 会拒）；
+  ② 涉及外键断言要 `PRAGMA foreign_keys = ON` 并自证 pragma 已生效。
+  跑通后才把 Phase 5 转 ✅。
+- 🟨 **人工 UI 验收**：真机走一遍「设期初 → 转账 → 看两条账本各多一行 → 删转账 → 总览卡数字」。
+- 🔜 **备份/导入对转账的往返验证**：带 `transferPairId` 的流水导入后配对是否仍完整
+  （CSV 导入路径会不会插进半对转账 —— 现有 `transferImbalanced` 只是提示，不会阻止）。
+- 🔜 **`AttachmentStore.delete()` 仍零生产调用**（Phase 2 遗留，本轮没动）。
+- 🔜 记账页**顶部账户切换快捷入口**（Phase 3 遗留）。
+- ➡️ 下一个阶段：跨账户报表（转账在报表里的独立展示位）或账户级预算模板。
+
+### 台账校正记录（本段核对时发现）
+
+| 旧表述 | 校正为 | 依据 |
+|---|---|---|
+| 速览「Room 数据库 v9」 | **v10**（本轮升版）| `AppDatabase.kt` `version = APP_DATABASE_VERSION`（=10）+ `schemas/…/10.json` 存在且 `database.version: 10`（实测解析）|
+| Phase 4 待办「下一阶段 Phase 5」 | 已完成代码落地，状态 **🟨** | `f86b8be` + `438a29e` 已 push origin；但迁移真跑与 UI 目测未做 |
+
+另外核过一条：`10.json` 与迁移 SQL **逐字段比对一致** ——
+`transferAccountId`（INTEGER, notNull=False, 无 defaultValue）、`transferPairId`（TEXT, 同上）、
+`initialBalance`（REAL, notNull=True, `defaultValue: "0"`，与迁移里 `DEFAULT 0` 逐字对应）、
+transactions 索引 7 个（含新增 `index_transactions_accountId_type`）。
+这层比对只能在 JVM 侧读 JSON 做，真跑时 `runMigrationsAndValidate` 会用同一份 10.json 再校一遍。
 
