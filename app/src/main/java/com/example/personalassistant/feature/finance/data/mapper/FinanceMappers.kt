@@ -33,6 +33,8 @@ internal fun TransactionEntity.toDomain(): Transaction = Transaction(
     createdAt = createdAt,
     source = source,
     attachmentUri = attachmentUri,
+    // Phase 5：转账对方账户。transferPairId **不**映射到领域模型（理由见 Transaction 注释）
+    transferAccountId = transferAccountId,
 )
 
 internal fun Transaction.toEntity(): TransactionEntity = TransactionEntity(

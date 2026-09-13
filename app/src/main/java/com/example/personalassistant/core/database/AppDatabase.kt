@@ -29,6 +29,20 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterDao
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 
 /**
+ * App 数据库 schema version（Phase 5：v10）。
+ *
+ * ## 为什么抽成常量而不是直接写在注解里
+ * 备份模块的 `BackupFormatVersion.DB_VERSION` 必须与它同步，而之前的写法是
+ * 两边各摆一个字面量、靠一条「assertEquals(9, DB_VERSION)」的测试提醒——
+ * 那条测试**根本不读 AppDatabase.version**，改注解不会让它红。
+ * 实测证据：v8 时 DB_VERSION 长期停在 7、升 v9 时也没人改它，都是它“应该报错”却没报的现场。
+ * 现在注解引用本常量，测试拿 DB_VERSION 比本常量，才是真正的交叉引用。
+ *
+ * ⚠️ 升版时必须同步：本常量 + 新 Migration + `BackupFormatVersion.DB_VERSION`。
+ */
+const val APP_DATABASE_VERSION = 10
+
+/**
  * App 主数据库
  *
  * 14 张表：
@@ -76,7 +90,8 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
         // 账户（Phase 3）
         UserProfileEntity::class,
     ],
-    version = 9,
+    // v10（Phase 5）：transactions.transferAccountId + user_profiles.initialBalance
+    version = APP_DATABASE_VERSION,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -110,6 +125,7 @@ abstract class AppDatabase : RoomDatabase() {
                 Migration_6_7,
                 Migration_7_8,
                 Migration_8_9,
+                Migration_9_10,
             )
     }
 }

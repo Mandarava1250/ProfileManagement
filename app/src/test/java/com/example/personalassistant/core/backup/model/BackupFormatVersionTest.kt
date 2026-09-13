@@ -1,5 +1,6 @@
 package com.example.personalassistant.core.backup.model
 
+import com.example.personalassistant.core.database.APP_DATABASE_VERSION
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -37,13 +38,19 @@ class BackupFormatVersionTest {
     }
 
     @Test
-    fun `DB_VERSION 应等于当前 schema version 9`() {
+    fun `DB_VERSION 应等于当前 schema version`() {
         // Phase 8 Sub-step 7：v6（holidays 表 + tasks.holidayStrategy）
         // Phase 8 Sub-step 9：v7（event_categories 表 + events.categoryId）
         // ⚠️ v8 当时没同步改这里（长期停在 7），是一处未被发现的老漂移
         // Phase 3：v9（user_profiles 表 + 记账 4 表 accountId）—— 同时修正老漂移
-        // 以后 AppDatabase.version 每 +1，本测试会失败提醒同步改 BackupFormatVersion.DB_VERSION
-        assertEquals(9, BackupFormatVersion.DB_VERSION)
+        // Phase 5：v10（transactions 转账两列 + user_profiles.initialBalance）
+        //
+        // ⚠️ Phase 5 修正：本测试以前一直写 `assertEquals(9, ...)`，比的是**字面量**。
+        // 改 AppDatabase.version 注解不会让它红，所以上面那条注释吹的
+        // 「每 +1 就会提醒」根本不成立 —— v9 那次漂移就是它漏掉的现场。
+        // 现在改成引用 APP_DATABASE_VERSION（注解自己也用它）：注解是唯一真相源，
+        // 只改其中一处时本测试才会真的失败。
+        assertEquals(APP_DATABASE_VERSION, BackupFormatVersion.DB_VERSION)
     }
 
     @Test

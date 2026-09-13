@@ -28,7 +28,8 @@ import org.junit.Test
  * 2. **旧备份 JSON 向后兼容** —— v8 及更早的 JSON 没有 accountId 字段，
  *    必须靠 @Serializable 默认值解码成 1L（默认账户），而不是抛 MissingField
  * 3. 当前账户变化驱动读流取值 —— 「切账户后 UI 自动换账本」的机制本体
- * 4. DefaultCategories 按账户各 seed 一套（9 个、各带 accountId、id 留给 Room 分配）
+ * 4. DefaultCategories 按账户各 seed 一套（Phase 5 起 10 个：8 支出 + 1 收入 + 1 转账；
+ *    各带 accountId、id 留给 Room 分配）
  *
  * ## 关于测试写法的一条踩坑记录（别再走回头路）
  * 本文件初版用 `backgroundScope.launch { flow.toList(collected) }` + 手动
@@ -197,12 +198,13 @@ class AccountIsolationTest {
     // ===== 4. 分类按账户各一套 =====
 
     @Test
-    fun `内置分类按账户生成 9 个并各自带 accountId`() {
+    fun `内置分类按账户生成 10 个并各自带 accountId`() {
         val forAccountOne = DefaultCategories.build(accountId = 1L)
         val forAccountTwo = DefaultCategories.build(accountId = 2L)
 
-        assertEquals("8 支出 + 1 收入 = 9", 9, forAccountOne.size)
-        assertEquals(9, forAccountTwo.size)
+        // Phase 5 起每账户多一条**转账分类**（type=2）：转账流水的 categoryId 外键落点
+        assertEquals("8 支出 + 1 收入 + 1 转账 = 10", 10, forAccountOne.size)
+        assertEquals(10, forAccountTwo.size)
 
         assertTrue(
             "账户 1 的分类都应挂 accountId=1",
@@ -230,7 +232,7 @@ class AccountIsolationTest {
     @Test
     fun `不传参数时 build 默认落默认账户（兼容旧调用点）`() {
         val categories = DefaultCategories.build()
-        assertEquals(9, categories.size)
+        assertEquals(10, categories.size)
         assertTrue(categories.all { it.accountId == AccountIds.DEFAULT_ACCOUNT_ID })
     }
 }

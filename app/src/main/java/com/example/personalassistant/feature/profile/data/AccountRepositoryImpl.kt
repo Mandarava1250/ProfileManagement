@@ -64,7 +64,12 @@ class AccountRepositoryImpl @Inject constructor(
     }
 
     override suspend fun transactionCount(accountId: Long): Int = withContext(dispatcher) {
-        financeDao.countTransactionsByAccount(accountId)
+        // Phase 5：用**含转账配对行**的计数。该方法的唯一生产调用点是删账户的二次确认弹窗
+        // （SettingsViewModel → AccountSettingsCard「该账户下有 N 笔流水」），
+        // 而下面的 deleteAccount 会连带删掉其他账户指向本账户的配对行。
+        // 两边必须同一口径，否则弹窗说「删 3 笔」、实际动 5 行，
+        // 另一个账户的历史被静默改了 —— 正是本轮要消除的那类错账。
+        financeDao.countTransactionsAndTransferPartners(accountId)
     }
 
     override suspend fun exists(accountId: Long): Boolean = withContext(dispatcher) {
@@ -93,7 +98,11 @@ class AccountRepositoryImpl @Inject constructor(
         }
 
         // 级联清除记账域数据（顺序无关：无 FK 约束指向 user_profiles）
-        financeDao.deleteTransactionsByAccount(accountId)
+        // Phase 5：转账行要**两边一起清**——除了本账户自己的，还有
+        // 其他账户指向本账户的配对行（transferAccountId = 本账户）。
+        // 不带上它们会留下悬空转账：那笔钱永久减在对方账上、显示成
+        // 「转出至（查无此人）」，而且转账禁止原地编辑 → 没有任何恢复路径。
+        financeDao.deleteTransactionsAndTransferPartners(accountId)
         financeDao.deleteCategoriesByAccount(accountId)
         financeDao.deleteBudgetsByAccount(accountId)
         financeDao.deleteDailyPoolsByAccount(accountId)
