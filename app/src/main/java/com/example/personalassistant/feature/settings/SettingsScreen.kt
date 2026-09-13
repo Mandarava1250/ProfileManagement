@@ -201,6 +201,8 @@ fun SettingsScreen(
                     )
                 },
                 onAvatarRemove = viewModel::onAvatarRemoved,
+                // Phase 5：期初余额（不设则新账户余额永远为 0，转账会被拦住）
+                onSetInitialBalance = viewModel::setInitialBalance,
             )
 
             // ===== 主题（Phase 8 Sub-step 6：ThemeMode + dynamicColor 持久化）=====

@@ -67,4 +67,14 @@ interface UserProfileDao {
      */
     @Query("UPDATE user_profiles SET avatarUri = :avatarUri WHERE id = :id")
     suspend fun updateAvatar(id: Long, avatarUri: String?)
+
+    /**
+     * Phase 5：单独更新期初余额。
+     *
+     * 为什么不用现成的 @Update(entity)：那个要先 getById 再 copy 再写回，
+     * 中间窗口里若并发改了名字会被本次写回覆盖（丢字段）。写列级 UPDATE 只动这一列，
+     * 与 [rename] / [updateAvatar] 同一取向。
+     */
+    @Query("UPDATE user_profiles SET initialBalance = :balance WHERE id = :id")
+    suspend fun updateInitialBalance(id: Long, balance: Double)
 }

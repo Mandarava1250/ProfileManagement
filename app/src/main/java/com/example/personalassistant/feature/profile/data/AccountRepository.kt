@@ -68,6 +68,20 @@ interface AccountRepository {
      * 不拆到 UseCase，否则「删账户但漏清文件」会变成只能靠调用方自觉的隐式约定。
      */
     suspend fun setAvatarUri(accountId: Long, avatarUri: String?)
+
+    // ===== Phase 5：期初余额 =====
+
+    /**
+     * 设置账户期初余额（可为负）。当前余额是派生值，不存库；
+     * 这里只改「期初」那一项。
+     *
+     * ## 为什么必须有这个入口（不是可选Decorator）
+     * 余额不足会直接拒转账（`TransferNotAllowedException.INSUFFICIENT_BALANCE`），
+     * 而新建账户的期初余额是 0、没流水时余额也是 0 —— 若没有地方能设期初，
+     * 用户新建一个账户后**永远转不出钱**，只能先往里面记一笔收入。
+     * 那是把真实现金当成收入记账，会多算一笔收入与零钱池 —— 所以必须提供本入口。
+     */
+    suspend fun setInitialBalance(accountId: Long, balance: Double)
 }
 
 /** 仅剩最后一个账户，禁止删除 */

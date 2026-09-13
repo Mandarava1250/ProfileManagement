@@ -5,6 +5,7 @@ import com.example.personalassistant.feature.finance.domain.model.Transaction
 import com.example.personalassistant.feature.finance.domain.model.TransactionType
 import com.example.personalassistant.feature.finance.domain.usecase.AddTransactionUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.DeleteTransactionUseCase
+import com.example.personalassistant.feature.finance.domain.usecase.DeleteTransferUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveCategoriesUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.UpdateTransactionUseCase
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,8 @@ class AddTransactionViewModelTest {
             addTransaction = AddTransactionUseCase(repo),
             updateTransaction = UpdateTransactionUseCase(repo),
             deleteTransaction = DeleteTransactionUseCase(repo),
+            // Phase 5：转账走独立的成对删 UseCase（构造参数新增，旧用例不测转账）
+            deleteTransfer = DeleteTransferUseCase(repo),
             attachmentStore = FakeAttachmentStore(testDispatcher),
         )
     }

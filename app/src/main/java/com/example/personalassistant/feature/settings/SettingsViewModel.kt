@@ -148,6 +148,20 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Phase 5：设置账户期初余额。
+     *
+     * 这是余额链路唯一的「直接改余额」入口（其余都是记账派生），所以反馈要明说改的是期初：
+     * 用户看到新余额与输入值不同时，得知道差在流水上，而不是「输错了」。
+     */
+    fun setInitialBalance(accountId: Long, balance: Double) {
+        viewModelScope.launch {
+            runCatching { accountRepository.setInitialBalance(accountId, balance) }
+                .onSuccess { _statusMessage.value = "期初余额已设为 $balance（当前余额会随之重算）" }
+                .onFailure { e -> _statusMessage.value = "设置失败：${e.message ?: "请输入有效金额"}" }
+        }
+    }
+
+    /**
      * 用户点了删除按钮：先查该账户流水数，回填给二次确认文案。
      *
      * 不在此处直接删 —— 删账户不可恢复，必须让 UI 再确认一次。

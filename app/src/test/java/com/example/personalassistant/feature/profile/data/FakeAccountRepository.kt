@@ -49,6 +49,18 @@ class FakeAccountRepository(
 
     // ===== 本 Phase 不该用到的方法：记下来，断言没人调用 =====
 
+    /**
+     * Phase 5：期初余额与头像同属账户列写入，这里真改内存，
+     * 让「设完期初再读余额」这类链路能在 JVM 测试里跑通。
+     * 记录前缀不同（setInitial），不会混进 [avatarWrites]。
+     */
+    override suspend fun setInitialBalance(accountId: Long, balance: Double) {
+        orderLog.add("setInitial($accountId -> $balance)")
+        items.value = items.value.map {
+            if (it.id == accountId) it.copy(initialBalance = balance) else it
+        }
+    }
+
     override suspend fun createAccount(name: String): Long {
         unexpected.add("createAccount($name)"); return 0L
     }

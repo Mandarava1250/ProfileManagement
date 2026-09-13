@@ -125,4 +125,17 @@ class AccountRepositoryImpl @Inject constructor(
         withContext(dispatcher) {
             userProfileDao.updateAvatar(accountId, avatarUri)
         }
+
+    // ===== Phase 5：期初余额 =====
+
+    /**
+     * 只写 initialBalance 一列（单条 UPDATE），不拼整个实体回去。
+     * 参数守卫：NaN / Infinity 写进 REAL 列会变成无法比较的脏数据（余额与转账校验全部靠它），
+     * 所以在入口就拒掉；isFinite() 一次排除两者。
+     */
+    override suspend fun setInitialBalance(accountId: Long, balance: Double): Unit =
+        withContext(dispatcher) {
+            require(balance.isFinite()) { "期初余额必须是有限数字，实际为 $balance" }
+            userProfileDao.updateInitialBalance(accountId, balance)
+        }
 }

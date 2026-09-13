@@ -125,6 +125,22 @@ fun AddTransactionSheet(
             )
 
             // 操作按钮
+            // Phase 5：转账不可编辑（两行必须成对变动），给明确提示而不是让人白改；
+            // 以及任何写失败的原文都要显示出来，否则只剩「点了没反应」。
+            if (uiState.isEditingTransfer) {
+                Text(
+                    text = "转账不支持修改。要调整金额，请先删除这一笔（会同时清掉对方账户的那一半）再重新转。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            uiState.error?.let { msg ->
+                Text(
+                    text = msg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),

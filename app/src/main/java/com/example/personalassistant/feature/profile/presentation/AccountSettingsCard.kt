@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
@@ -73,11 +74,19 @@ fun AccountSettingsCard(
     onDismissDelete: () -> Unit,
     onAvatarClick: (UserProfileEntity) -> Unit,
     onAvatarRemove: (Long) -> Unit,
+    /**
+     * Phase 5：设置期初余额（余额是派生值，这里只改「期初」那一项）。
+     * 默认空实现：本卡片被预览/测试单独调用时不必强制接线，但 Settings 页必须传，
+     * 否则新账户永远转不出钱（余额 0 会被转账校验拦住）。
+     */
+    onSetInitialBalance: (Long, Double) -> Unit = { _, _ -> },
 ) {
     /** 正在重命名的账户（本地 UI 状态，不进 ViewModel） */
     var renamingAccount by remember { mutableStateOf<UserProfileEntity?>(null) }
     /** 新建对话框 */
     var showCreateDialog by remember { mutableStateOf(false) }
+    /** Phase 5：正在设期初余额的账户 */
+    var balanceAccount by remember { mutableStateOf<UserProfileEntity?>(null) }
 
     val canDelete = accounts.size > 1
 
@@ -112,6 +121,7 @@ fun AccountSettingsCard(
                     onDelete = { onDeleteRequest(account) },
                     onAvatarClick = { onAvatarClick(account) },
                     onAvatarRemove = { onAvatarRemove(account.id) },
+                    onBalanceClick = { balanceAccount = account },
                 )
             }
 
@@ -156,6 +166,19 @@ fun AccountSettingsCard(
         )
     }
 
+    // ===== Phase 5：期初余额 =====
+    balanceAccount?.let { target ->
+        InitialBalanceDialog(
+            accountName = target.name,
+            initialValue = target.initialBalance,
+            onConfirm = { balance ->
+                onSetInitialBalance(target.id, balance)
+                balanceAccount = null
+            },
+            onDismiss = { balanceAccount = null },
+        )
+    }
+
     // ===== 删除二次确认（流水数由 ViewModel 查好后回填） =====
     pendingDelete?.let { pending ->
         AlertDialog(
@@ -196,6 +219,8 @@ private fun AccountRow(
     onDelete: () -> Unit,
     onAvatarClick: () -> Unit,
     onAvatarRemove: () -> Unit,
+    /** Phase 5：打开「设为期初余额」对话框 */
+    onBalanceClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -219,9 +244,32 @@ private fun AccountRow(
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
             )
-            if (isCurrent) {
-                Text("当前使用中", style = MaterialTheme.typography.bodySmall)
+            // Phase 5：期初余额直接标在副行 —— 余额本身是派生值，
+            // 而这里拿得到的是期初；不写清楚的话用户会误以为这就是当前余额。
+            // 本模块自己格式化（不拆 finance 的 MoneyFormat）：profile 表现层不该依赖另一个 feature 的表现层
+            val initialNote = if (account.initialBalance == 0.0) {
+                null
+            } else {
+                "期初 ${formatAmount(account.initialBalance)}"
             }
+            when {
+                isCurrent && initialNote != null -> Text(
+                    "当前使用中 · $initialNote",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                isCurrent -> Text("当前使用中", style = MaterialTheme.typography.bodySmall)
+                initialNote != null -> Text(
+                    initialNote,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        IconButton(onClick = onBalanceClick) {
+            Icon(
+                Icons.Filled.AttachMoney,
+                contentDescription = "设置期初余额",
+                modifier = Modifier.size(18.dp),
+            )
         }
         IconButton(onClick = onAvatarClick) {
             Icon(
@@ -355,4 +403,72 @@ private fun AccountNameDialog(
 @Composable
 private fun IconTitleGap() {
     androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
+}
+
+/** 金额文本：最多 2 位小数，整数不补零（账户名行与期初余额对话框共用） */
+private fun formatAmount(value: Double): String =
+    if (value % 1.0 == 0.0) value.toLong().toString() else "%.2f".format(value)
+
+/**
+ * Phase 5：设置期初余额。
+ *
+ * 与账户名对话框分开而不共用：两者语义完全不同（一个是文本，一个是金额），
+ * 共用一个带 mode 参数的对话框会把校验逻辑搅在一起。
+ *
+ * 允许负数（信用卡/负债类账户期初就是负的）；但不允许非数字，
+ * 因为 NaN/Infinity 写进 REAL 列后余额比较会默默出错（Repository 也有一层 require 守卫）。
+ */
+@Composable
+private fun InitialBalanceDialog(
+    accountName: String,
+    initialValue: Double,
+    onConfirm: (Double) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember {
+        mutableStateOf(if (initialValue == 0.0) "" else formatAmount(initialValue))
+    }
+    val parsed = text.trim().toDoubleOrNull()
+    // 空串按 0 处理（让「清除期初」有个自然入口），但非法文本必须拦住
+    val isValid = text.isBlank() || (parsed != null && parsed.isFinite())
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("期初余额") },
+        text = {
+            Column {
+                Text(
+                    text = "「$accountName」开始记账前已有的金额，可为负。" +
+                        "当前余额 = 期初 + 收入 − 支出 + 转入 − 转出，会随之重算。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                IconTitleGap()
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("期初余额（留空计为 0）") },
+                    singleLine = true,
+                    isError = !isValid,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (!isValid) {
+                    IconTitleGap()
+                    Text(
+                        "请输入数字",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(text.trim().toDoubleOrNull() ?: 0.0) },
+                enabled = isValid,
+            ) { Text("保存") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
 }

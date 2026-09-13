@@ -10,6 +10,7 @@ import com.example.personalassistant.feature.finance.domain.model.Transaction
 import com.example.personalassistant.feature.finance.domain.model.TransactionType
 import com.example.personalassistant.feature.finance.domain.usecase.AddTransactionUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.DeleteTransactionUseCase
+import com.example.personalassistant.feature.finance.domain.usecase.DeleteTransferUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveCategoriesUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.UpdateTransactionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -52,6 +53,7 @@ class AddTransactionViewModel @Inject constructor(
     private val addTransaction: AddTransactionUseCase,
     private val updateTransaction: UpdateTransactionUseCase,
     private val deleteTransaction: DeleteTransactionUseCase,
+    private val deleteTransfer: DeleteTransferUseCase,
     private val attachmentStore: AttachmentStore,
 ) : ViewModel() {
 
@@ -117,6 +119,8 @@ class AddTransactionViewModel @Inject constructor(
     }
 
     fun save(onDone: () -> Unit) {
+        // 每次提交先清掉上一轮的错误，否则错文会一直在屏上挂着
+        _state.value = _state.value.copy(error = null)
         val s = _state.value
         val catId = s.categoryId ?: return
         if (s.amount <= 0.0) return
@@ -154,18 +158,35 @@ class AddTransactionViewModel @Inject constructor(
             }.onSuccess {
                 reset()
                 onDone()
+            }.onFailure {
+                // 不接住就是「点了保存没反应」；转账的业务拦截全走这里
+                _state.value = _state.value.copy(error = it.message ?: "保存失败")
             }
         }
     }
 
     fun deleteCurrent(onDone: () -> Unit) {
         val tx = _state.value.editingTransaction ?: return
+        _state.value = _state.value.copy(error = null)
         viewModelScope.launch {
-            runCatching { deleteTransaction(tx.id) }
-                .onSuccess {
-                    reset()
-                    onDone()
+            runCatching {
+                // Phase 5 分流：转账必须成对删（走普通删会撞 Repository 的守卫）。
+                // 不分开的话：Repository 里的 require 抛异常 → 被 runCatching 吃掉
+                // → 用户点删除什么都没发生，也不报错 —— 静默失败比崩溃更难发现。
+                if (tx.type.isTransfer) {
+                    val n = deleteTransfer(tx.id)
+                    if (n == 0) {
+                        throw IllegalStateException("没找到这笔转账")
+                    }
+                } else {
+                    deleteTransaction(tx.id)
                 }
+            }.onSuccess {
+                reset()
+                onDone()
+            }.onFailure {
+                _state.value = _state.value.copy(error = it.message ?: "删除失败")
+            }
         }
     }
 
@@ -202,11 +223,28 @@ class AddTransactionViewModel @Inject constructor(
         val editingTransaction: Transaction? = null,
         /** 待提交的原始 URI（PhotoPicker 返回的 content:// URI，未压缩） */
         val attachmentUris: List<Uri> = emptyList(),
+        /**
+         * Phase 5：写失败的原因（可直接显示给用户）。
+         *
+         * 为什么现在才加：save/delete 一直用 `runCatching` 但只接 `onSuccess`，
+         * 失败时**什么都不发生也不报错**。收支流水很少失败所以没人发现；
+         * 转账有一堆业务拦截（余额不足 / 目标已删 / 缺转账分类），不接住就全成静默失败。
+         */
+        val error: String? = null,
     ) {
         /** 编辑模式 = editingTransaction != null */
         val isEditing: Boolean get() = editingTransaction != null
 
-        val canSave: Boolean get() = amount > 0.0 && categoryId != null
+        /**
+         * 编辑中的是转账：不得提交修改。
+         *
+         * Repository 与 DAO 两层都会拒编辑转账（会留下半对），UI 必须先把这条路堵上：
+         * 否则用户改了金额点保存，只得到一个错误文案，却不知道根本改不了。
+         */
+        val isEditingTransfer: Boolean
+            get() = editingTransaction?.type?.isTransfer == true
+
+        val canSave: Boolean get() = amount > 0.0 && categoryId != null && !isEditingTransfer
     }
 
     companion object {
