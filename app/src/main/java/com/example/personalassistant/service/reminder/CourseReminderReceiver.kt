@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import com.example.personalassistant.core.utils.NotificationHelper
+import com.example.personalassistant.navigation.DeepLinks
 import java.time.LocalDate
 
 /**
@@ -45,12 +46,14 @@ class CourseReminderReceiver : BroadcastReceiver() {
         }
 
         val notificationId = CourseReminderScheduler.notificationIdFor(courseId, targetDate)
+        val deepLinkIntent = DeepLinks.courseEditIntent(context, courseId)
         NotificationHelper.showNotification(
             context = context,
             channelId = NotificationHelper.CHANNEL_COURSE,
             notificationId = notificationId,
             title = title,
             content = content,
+            intent = deepLinkIntent,
         )
     }
 }

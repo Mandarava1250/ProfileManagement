@@ -5,6 +5,7 @@ import com.example.personalassistant.feature.task.domain.model.Tag
 import com.example.personalassistant.feature.task.domain.model.TaskDisplayPreferences
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
 import com.example.personalassistant.feature.task.domain.model.TaskGroups
+import com.example.personalassistant.feature.task.domain.model.TaskMatrix
 import com.example.personalassistant.feature.task.domain.model.TaskQuadrant
 import com.example.personalassistant.feature.task.domain.model.TaskSort
 import com.example.personalassistant.feature.task.domain.model.TaskViewMode
@@ -55,11 +56,21 @@ data class TaskUiState(
      */
     val activeQuadrants: List<TaskQuadrant>
         get() = when (displayPreferences.viewMode) {
-            TaskViewMode.ALL -> TaskQuadrant.entries.toList()
+            TaskViewMode.ALL, TaskViewMode.MATRIX -> TaskQuadrant.entries.toList()
             TaskViewMode.BY_QUADRANT -> listOfNotNull(
                 displayPreferences.selectedQuadrant ?: TaskQuadrant.P1,
             )
         }
+
+    /**
+     * Phase 8final G2：矩阵视图渲染数据。
+     *
+     * 由 [TaskMatrix.from] 从 [groups] 派生（纯函数、无新分类逻辑）。
+     * 每次读取重新构造，避免在 data class 里缓存可变状态；
+     * 上游 groups 本身已由 Flow 驱动，重组成本可忽略。
+     */
+    val matrix: TaskMatrix
+        get() = TaskMatrix.from(groups)
 
     /**
      * 当前选中 Tab 的任务数（给 TabRow 右上角小角标用）：

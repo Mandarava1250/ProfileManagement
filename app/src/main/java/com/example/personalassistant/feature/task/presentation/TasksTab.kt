@@ -34,6 +34,7 @@ import com.example.personalassistant.feature.task.domain.model.TaskDisplayPrefer
 import com.example.personalassistant.feature.task.domain.model.TaskQuadrant
 import com.example.personalassistant.feature.task.domain.model.TaskSort
 import com.example.personalassistant.feature.task.domain.model.TaskViewMode
+import com.example.personalassistant.feature.task.presentation.components.MatrixViewToggle
 import com.example.personalassistant.feature.task.presentation.components.PriorityTabRow
 import com.example.personalassistant.feature.task.presentation.components.QuadrantSection
 import com.example.personalassistant.feature.task.presentation.components.RenameQuadrantAliasDialog
@@ -41,6 +42,7 @@ import com.example.personalassistant.feature.task.presentation.components.SortMe
 import com.example.personalassistant.feature.task.presentation.components.TagFilterBar
 import com.example.personalassistant.feature.task.presentation.components.TaskFilterBar
 import com.example.personalassistant.feature.task.presentation.components.TaskItem
+import com.example.personalassistant.feature.task.presentation.components.TaskMatrixView
 
 /**
  * 任务 Tab 内容：顶部 FilterBar + TagFilterBar + **PriorityTabRow（Phase 8b'）** + 列表 + 折叠已完成
@@ -54,6 +56,10 @@ import com.example.personalassistant.feature.task.presentation.components.TaskIt
  *           列表渲染根据 [TaskViewMode] 切换 ALL / BY_QUADRANT 两种模式；
  *           通过 5 个新回调（onShowAll / onSelectQuadrant / onLongPressQuadrant / onAliasChange / onDismissRename）
  *           驱动 [TaskViewModel]
+ *
+ * Phase 8final G2：新增 [MatrixViewToggle]（列表 / 矩阵）与 [onShowMatrix] 回调；
+ *           [TaskViewMode.MATRIX] 下渲染 [TaskMatrixView]（2×2 分组 + 未排期独立区），
+ *           数据与 ALL 模式完全一致，仅空间排布不同。矩阵模式下已完成区降级为计数条。
  */
 @Composable
 fun TasksTab(
@@ -72,6 +78,8 @@ fun TasksTab(
     onShowAll: () -> Unit,
     onSelectQuadrant: (TaskQuadrant) -> Unit,
     onAliasChange: (TaskQuadrant, String) -> Unit,
+    // ===== Phase 8final G2 =====
+    onShowMatrix: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // 长按哪个象限就弹哪个的 dialog；null = 不显示
@@ -101,6 +109,13 @@ fun TasksTab(
             onSelectAll = onShowAll,
             onSelectQuadrant = onSelectQuadrant,
             onLongPressQuadrant = { q -> renamingQuadrant = q },
+        )
+
+        // Phase 8final G2：列表 / 矩阵 布局切换
+        MatrixViewToggle(
+            isMatrixMode = state.displayPreferences.viewMode == TaskViewMode.MATRIX,
+            onSelectList = onShowAll,
+            onSelectMatrix = onShowMatrix,
         )
 
         // SortMenu（挂在 FilterBar 的位置之外，由 Box 锚定）
@@ -137,13 +152,31 @@ fun TasksTab(
             return@Column
         }
 
+        // Phase 8final G2：矩阵视图走独立布局（外层不可滚动，不能与下面的 LazyColumn 共用）
+        if (state.displayPreferences.viewMode == TaskViewMode.MATRIX) {
+            TaskMatrixView(
+                matrix = state.matrix,
+                displayPreferences = state.displayPreferences,
+                onToggleComplete = onToggleComplete,
+                onClickTask = onClickTask,
+                onDelete = onDelete,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            )
+            // 已完成区在矩阵模式下只给计数：2×2 外层不滚动，塞不下可展开列表，
+            // 想看已完成请切回列表视图（取舍写进 TaskMatrixView 的 KDoc）
+            CompletedCountHint(count = state.groups.completed.size)
+            return@Column
+        }
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(vertical = 8.dp),
         ) {
             // Phase 8b'：根据 viewMode 选择渲染策略
             when (state.displayPreferences.viewMode) {
-                TaskViewMode.ALL -> {
+                TaskViewMode.ALL, TaskViewMode.MATRIX -> {
                     // ALL：渲染所有象限（P1/P2/P3/P4/UNSCHEDULED）
                     TaskQuadrant.entries.forEach { quadrant ->
                         val tasks = state.groups.byQuadrant[quadrant].orEmpty()
@@ -265,4 +298,23 @@ private fun EmptyTasksHint(modifier: Modifier = Modifier) {
             )
         }
     }
+}
+
+/**
+ * 矩阵视图下的已完成计数条（Phase 8final G2）。
+ *
+ * 只报数不展开：2×2 布局外层不可滚动，再塞一个可展开列表会把格子挤没。
+ * 想看已完成的具体内容，切回列表视图（已完成折叠区在列表视图底部）。
+ * count = 0 时整条隐藏，不占空间。
+ */
+@Composable
+private fun CompletedCountHint(count: Int, modifier: Modifier = Modifier) {
+    if (count == 0) return
+    HorizontalDivider(modifier = modifier)
+    Text(
+        text = "已完成 $count 条（切回列表视图可展开）",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
 }

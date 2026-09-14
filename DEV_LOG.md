@@ -4,7 +4,7 @@
 > **触发规则**：每次执行完一个计划（plan）后追加一段
 > **作用**：记录已完成的步骤、对应的计划章节、关键变更文件、验证结果、踩坑笔记 —— 方便后续记忆与查漏补缺
 > **生成时间**：2026-09-09 01:10（基于 `git log --all` 全量重建，commit `1563bbe`）
-> **本轮追加**：2026-09-09 01:13（Phase 8b 真实完成度复检 + Phase 8b' 待启动）
+> **本轮追加**：2026-09-14 22:55（Phase 8final：通知 deeplink + 任务矩阵视图 @4d2e6c5 @2aded6e）
 
 ---
 
@@ -14,16 +14,19 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
-| 当前 HEAD | `438a29e` |
-| 当前分支 | `feature/phase-8-reminder`（已 push origin）|
+| 当前 HEAD | `2aded6e`（功能）+ 本轮台账 commit |
+| 当前分支 | `feature/phase-8-notification-matrix`（已 push origin）|
 | 主分支 | `Develop` |
-| 累计 commit 数 | 60（`git rev-list --count HEAD`，含 merge / revert）|
-| 测试用例 | **598 JVM 单测**（`testDebugUnitTest` 实测 0 失败 / 0 错误，70 个 XML 报告）+ **6 instrumented**（`connectedDebugAndroidTest`，AVD 真跑 0 失败；⚠️ 本轮未重跑，Phase 5 迁移未在其中）|
+| 累计 commit 数 | 70（`git rev-list --count HEAD`，含 merge / revert）|
+| 测试用例 | **648 JVM 单测**（`testDebugUnitTest` 实测 0 失败 / 0 错误，72 个 XML 报告）= 基线 598 + 本轮 50（`DeepLinksTest` 21 + `TaskMatrixTest` 24 + `TaskViewModelDisplayTest` 新增 5）<br>+ **6 instrumented**（`connectedDebugAndroidTest`，AVD 真跑 0 失败；⚠️ 本轮未重跑）|
 | 测试环境 | AVD `pm_api34`（API 34 / aosp_atd / x86_64 / WHPX 硬件加速）—— 属本机环境，**不在版本库** |
 | Room 数据库 | **v10**（Phase 5：`transactions.transferAccountId`/`transferPairId` + `user_profiles.initialBalance` + `index_transactions_accountId_type`）<br>版本号常量已提为 `APP_DATABASE_VERSION`，`@Database` 注解与 `BackupFormatVersion.DB_VERSION` 同源 —— 见下方 Phase 5「踩坑笔记」第 1 条|
 | 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项）|
 | 已完成（本轮新转 ✅） | **阶段 Phase 3（多账户 + 数据隔离）✅** —— Room 迁移已在 AVD `pm_api34` 真跑通过 @`a3d7dca`，原 ⛔ 环境阻塞已解除 |
 | 已完成（本轮新转 ✅） | **阶段 Phase 4（账户头像）✅** —— `c4224c3` 功能 + `75fca56` 真实读写 AVD 真跑；无 DB 变更 / 无新依赖 |
+| 已完成（本轮新转 ✅） | **Phase 8a 通知 deeplink ✅** —— `4d2e6c5`，3 类提醒点击跳详情页（task/event/course）；`DeepLinksTest` 21/21。⚠️ 真机冷/热启动点击通知仍需人工目测 |
+| 已完成（本轮新转 ✅） | **Phase 8b'' 任务矩阵视图 ✅** —— `2aded6e`，`TaskViewMode.MATRIX` + 2×2 分组 + 未排期独立区 + <600dp 纵向 5 区；`TaskMatrixTest` 24/24。⚠️ 双布局真机截图仍需人工 |
+| 台账纠错 | 第 411 行旧结论「❌ 5 Tab UI + aliases 未做」已过时：8b' 已于 2026-09-09 13:30 完成（见本文件 Phase 8b' 段）。本轮一并修正状态行 |
 | 进行中 | **阶段 Phase 5（跨账户转账 + 预算汇总）🟨** —— 代码已 push（`f86b8be` 数据层 + `438a29e` 功能层），598 JVM 断言全绿；⚠️ **不打 ✅ 的原因**：`Migration_9_10` 的 instrumented 真跑未做（JVM 只证明 SQL 形状对），且转账/总览 UI 未人工目测验收 |
 | 待开 | 阶段 Phase 6+：记账页顶部账户切换快捷入口（Phase 3 遗留）/ 附件旧文件回收（Phase 2 遗留）/ Phase 5 迁移真跑 |
 
@@ -407,14 +410,15 @@
 
 | 编号 | 标题 | 状态 |
 |---|---|---|
-| 8a | 真实提醒调度 | ⏳ 未做（plan 中第一个未做 sub-step，依赖 WorkManager） |
-| 8b | 5 档优先级 + Eisenhower 矩阵 | ✅ **domain 完成**（`TaskPriority` 5 档 + `TaskQuadrant` 四象限 + `TaskGroups` + `ObserveTasksByQuadrantUseCase` + 4 象限 UI 渲染）；❌ 5 Tab UI + aliases 未做 |
+| 8a | 提醒调度 + 通知 deeplink | ✅ 调度部分早已完成（Event 端 `1e30283` / Task 端 Phase 5）；**deeplink 跳转 @`4d2e6c5`**（3 类提醒 → 详情页，冷/热启动都覆盖）。⚠️ 真机点击验收待人工 |
+| 8b | 5 档优先级 + 分组视图 | ✅ domain 完成 + ✅ **8b' 5 Tab UI + aliases**（2026-09-09）+ ✅ **8b'' 矩阵视图 @`2aded6e`**（`TaskViewMode.MATRIX`，2×2 + 未排期独立区 + <600dp 纵向 5 区）。⚠️ 撤销了 plan-20260909 §决策5「不提供矩阵视图」，理由见 Phase 8final 段 |
 | 8c | 附件上传 + 多账户 | ⏳ 未做（DB v6→v8） |
 | 8d | 主题 / 节假日 / 周次范围 | ✅ 主题 / 节假日已完成；周次范围部分未做 |
 | 8e | 全局搜索 | ✅ 已做 |
 | 8f | 备份恢复 | ✅ 已做 |
 | 8g | Sub-step 9（分类 / 重复 / 冲突 / 农历） | ✅ 已做（5 个 step） |
 | 8h | 合并 `feature/phase-8-reminder` 回 `Develop` | ⏳ 未做 |
+| 8f' | 备份导入预览差异 | ✅ 已合并 @`685a551`；🟨 21 个 JVM 单测仍未补 |
 
 ---
 
@@ -1267,3 +1271,80 @@ transactions 索引 7 个（含新增 `index_transactions_accountId_type`）。
 - 🟨 **3 个 JVM 单测 PR**：`BackupDiffCalculatorTest` / `BackupImporterMergeTest` / `BackupPreviewViewModelTest`（21 用例）
 - 🟨 **人工 UI 验收**：真机跑一次「选备份 → 看到 13 张表 diff → 改两张表的策略 → 点确认 → 数据库写入」
 - ➡️ 下一个 Phase 8 子计划：附件旧文件回收 / Phase 3 顶部账户切换 / 8g+ 报表
+
+---
+
+## Phase 8final：通知 deeplink 跳转 + 任务矩阵视图
+
+**计划文件**：[.cyrene/docs/plan-20260914-221000.md](.cyrene/docs/plan-20260914-221000.md)
+**起止**：2026-09-14 22:10 ~ 22:55
+**分支**：`feature/phase-8-notification-matrix`（新建，非沿用 `feature/phase-8-reminder`）
+**触发动机**：盘点发现 8a 唯一真实缺口是「通知点击不跳转」（3 个 Receiver 都没给 `NotificationHelper.showNotification` 传 `intent`）；同时伙伴决定撤销 plan-20260909 §决策 5，把矩阵视图加回来。
+
+### ⚠️ 计划版本与落盘不一致（必须先说明）
+
+plan 文件在磁盘上仍是 **v1**：伙伴批准前给了 4 条修正意见，我回复说「v2 修订已落盘」，**但实际没有写回文件**（本轮开工时读到的仍是 214 行 v1 内容）。
+
+处理方式：**代码按对话确认的 v2 收紧执行**，v1 的 spec 文字未更新。已落地的 4 条修正：
+
+| 修正 | v1 原方案 | v2 实际落地 |
+|---|---|---|
+| 1 DeepLink 实现 | `navDeepLink` + `app://` 自定义 scheme + `handleDeepLink` | **显式 Intent + extras**（`DeepLinks.kt`），NavHost 侧做 route 白名单校验 |
+| 2 术语 | 「四象限 / 重要 vs 不重要」硬轴描述 | 一律「**矩阵视图 / 2×2 分组**」；cell 命名 `CELL_0..3` 只带位置；MEDIUM 不强制映射 |
+| 3 UNSCHEDULED | 「右下角小卡片」 | **独立区域**，不计入 `cellTotal`，KDoc 写死禁拖拽/禁移入移出，固定排最前 |
+| 4 小屏退化 | 「1 列纵向堆叠 4 卡」 | **5 区纵向**（`VERTICAL_ORDER`：未排期在最顶部），断点 600dp 常量 + 单测锁定 |
+
+> 教训：**「已落盘」必须写工具确认真落盘**。plan 文字与实现不一致时，以 DEV_LOG 这段为准；后续若回看 plan 文件看到 v1 的 scheme 方案，不要以为实现走偏了。
+
+### 已完成步骤
+
+| Step | 内容 | 对应计划章节 | 关键文件 |
+|---|---|---|---|
+| 1 | `DeepLinks` 常量 + 3 个 Intent 工厂 + 解析（`Map<String,String?>` 可测化设计） | §2.1（v2 修正 1） | `navigation/DeepLinks.kt` |
+| 2 | 3 个 Receiver 传 `intent`（原先都没传，这就是 8a 的缺口本体） | §Step 3 | `Event/Task/CourseReminderReceiver.kt` |
+| 3 | MainActivity 冷启动 `onCreate` + 热启动 `onNewIntent`（含 `setIntent`）→ `pendingNavRoute` | §Step 1 | `MainActivity.kt` |
+| 4 | AppNavHost 消费 route + **白名单校验** + 补注册 `EditEvent` 路由 | §Step 2 | `navigation/AppNavHost.kt` |
+| 5 | 矩阵数据模型：`MatrixCell`（位置编码）/ `MatrixRegion`（5 区）/ `TaskMatrix`（纯派生） | §2.2 §2.3（v2 修正 2/3/4） | `domain/model/TaskMatrix.kt` |
+| 6 | `TaskViewMode.MATRIX` + VM `showMatrix()` + `TaskUiState.matrix` | §Step 5 | `TaskViewMode.kt`、`TaskViewModel.kt`、`TaskUiState.kt` |
+| 7 | `TaskMatrixView`：2×2 / 纵向 5 区双布局 + `MatrixViewToggle` | §Step 4 | `presentation/components/TaskMatrixView.kt` |
+| 8 | TasksTab / TaskScreen 接入 + PriorityTabRow 矩阵下高亮「全部」 | §Step 5 | `TasksTab.kt`、`TaskScreen.kt`、`PriorityTabRow.kt` |
+| 9 | 单测：domain 24 + VM 5 + deeplink 21 | §Step 1~4 验证栏 | `TaskMatrixTest.kt`、`TaskViewModelDisplayTest.kt`、`DeepLinksTest.kt` |
+| 10 | 本段台账 + merge --no-ff → Develop | §Step 6 | `DEV_LOG.md` |
+
+### 关键设计决策
+
+- **矩阵不重新分类（最重要的一条）**：`MatrixCell` 只做位置编码，内容直接绑定既有 `TaskQuadrant.P1..P4` 的分组结果。
+  原因：`ObserveTasksByQuadrantUseCase.classifyOne` 里 **MEDIUM 横跨 P2 与 P3**（MEDIUM+到期→P2，MEDIUM+未到期→P3），
+  若按「priority × due」重新二分必然与既有分类打架，也会出现「同一个任务在列表视图和矩阵视图落到不同组」的 bug。
+  现在矩阵与列表读同一份 `TaskGroups`，切换视图是**纯可逆**的展示层变化（G3 达成）。
+- **deeplink 不用自定义 scheme 也不用 NavDeepLinkBuilder**：BroadcastReceiver 拿不到 NavController；本 App 无外部来源（分享/浏览器/NFC），scheme 只增加 Manifest 冲突面。改用显式 Intent + extras，NavHost 侧白名单校验防恶意/损坏 Intent 跳任意路径。
+- **解析逻辑可测化**：`parseRouteFromMap(Map<String,String?>)` 与 Intent 工厂分离。JVM 单测下 `Intent.extras` 是 native 调用恒为 null，这层隔离让 21 个用例能真跑。
+- **矩阵内排序不跟随全局 `TaskSort`**：固定 `priority.rank desc → dueDate asc nulls last → title CI asc → id asc`。若格子顺序随顶部 sort 菜单变化，用户会看到内容跳动却找不到原因。
+- **`TaskMatrix.init` 断言 4 格齐全**：空格子必须是 `emptyList()` 而非缺 key，否则 UI 布局跳动且难排查 → 构造期 fail-fast。
+- **PriorityBadge 不做**（plan §2.2.8 明确 MVP 不做，仍留 Phase 9）；plan 的 §3 排除项保持不变（不改 TaskQuadrant/TaskPriority、不动 DB schema、Transaction 类型不接 deeplink）。
+
+### 验证结果
+
+- `:app:compileDebugKotlin` → `BUILD SUCCESSFUL`
+- `:app:testDebugUnitTest :app:assembleDebug` → `BUILD SUCCESSFUL in 2m 11s`，产出 `app-debug.apk`
+- **648 JVM 单测 / 0 失败 / 0 错误 / 72 个 XML 报告**（实测 `<testcase ` 计数）：
+  基线 598 + `DeepLinksTest` 21 + `TaskMatrixTest` 24 + `TaskViewModelDisplayTest` 新增 5（原 11 → 16）
+- 术语合规自查：`TaskMatrix.kt` 内枚举标识符仅 `CELL_0..3` + `UNSCHEDULED`，无重要/紧急类语义轴（并加了防回归断言）
+- 🟨 **未做**：真机冷/热启动点击通知验收；2×2 与纵向 5 区双布局截图（手机 + 平板模拟器各一张）
+
+### 踩坑笔记
+
+1. **`run_verification` 不认 Android 工程**：它找 `package.json`，Gradle 项目直接报「工作区未找到 package.json」。Android 必须走 `gradlew.bat` + `run_shell`。
+2. **cmd 下管道接 unix 工具会静默失败**：`gradlew ... | tail -60` 里 `tail` 不存在，整条命令 exit 255 且看不到编译结果。改成 `> log 2>&1` + `findstr` 挑关键行。
+3. **`search_text` 对中文模式不可靠**：`重要|紧急` 无论 literal 还是 regex 都返回 0 匹配（而「象限」客观存在）。中文审计必须换工具，别把 0 命中当成「干净」。
+4. **PowerShell `[char]+[char]` 是算术不是拼接**：`[char]0x91CD + [char]0x8981` 得到 Int，模式退化成空串 → 每一行都「命中」，17818 行假阳性。要么 `[string][char]X + [string][char]Y`，要么干脆用 `-Encoding`+正则。这脚本已删。
+5. **Kotlin 反引号测试名不能含 `..`**：`` `覆盖 0..3` `` 报 `Name contains illegal characters`。写成「0 到 3」。
+6. **矩阵 2×2 外层不能是可滚动容器**：格子里已经是 `LazyColumn`，外层再套一个垂直滚动就是同方向嵌套滚动（Compose 会异常）。所以 2×2 布局用 `Column` + `weight(1f)` 均分高度、滚动只发生在格子内；已完成折叠区因此降级为一条计数提示（矩阵下想看已完成需切回列表）。
+7. **顺手修掉一个既有缺陷**：`Screen.EditEvent` 路由此前根本没注册，导致 GlobalSearch 点日程结果跳不过去。本轮补了 `EventEditScreen` / `EventEditViewModel` 并注册路由，deeplink 才走得通。
+
+### 下一个入口
+
+- 🟨 **真机人工验收**（8final 收尾条件）：3 类通知点击（冷/热/后台）+ 矩阵双布局截图
+- 🟨 **8f' 遗留**：`BackupDiffCalculatorTest` / `BackupImporterMergeTest` / `BackupPreviewViewModelTest`（21 用例）
+- 🟨 **可选**：把 plan-20260914-221000.md 正文更新成 v2，消除文字与实现的偏差
+- ➡️ Phase 8 剩余子计划：8d 课程周次范围（`startWeek`/`endWeek`）/ 附件旧文件回收 / Phase 3 账户切换快捷入口

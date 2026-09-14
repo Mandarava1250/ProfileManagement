@@ -105,6 +105,8 @@ fun TaskScreen(
                 onShowAll = taskViewModel::showAll,
                 onSelectQuadrant = taskViewModel::selectQuadrant,
                 onAliasChange = taskViewModel::setAlias,
+                // ===== Phase 8final G2 =====
+                onShowMatrix = taskViewModel::showMatrix,
                 modifier = Modifier.fillMaxSize().padding(padding),
             )
             else -> ChecklistTab(

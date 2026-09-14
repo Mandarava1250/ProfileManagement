@@ -1,9 +1,11 @@
 ﻿package com.example.personalassistant.feature.task.presentation
 
+import com.example.personalassistant.feature.task.domain.model.MatrixCell
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Tag
 import com.example.personalassistant.feature.task.domain.model.Task
+import com.example.personalassistant.feature.task.domain.model.TaskGroups
 import com.example.personalassistant.feature.task.domain.model.TaskDisplayPreferences
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
 import com.example.personalassistant.feature.task.domain.model.TaskQuadrant
@@ -284,6 +286,70 @@ class TaskViewModelDisplayTest {
         assertEquals(1, displayRepo.setViewModeCalls)
         assertEquals(1, displayRepo.selectQuadrantCalls)
         assertEquals(TaskQuadrant.P1, displayRepo.lastSelectedQuadrant)
+    }
+
+    @Test
+    fun `showMatrix 只写 viewMode=MATRIX 不动 selectedQuadrant`() = runTest {
+        // Phase 8final G2：矩阵与全部视图共用同一份数据，不应干涉象限选中
+        val (vm, displayRepo) = makeVm()
+        vm.showMatrix()
+        advanceUntilIdle()
+        assertEquals(1, displayRepo.setViewModeCalls)
+        assertEquals(TaskViewMode.MATRIX, displayRepo.lastViewMode)
+        // 关键：不额外调 selectQuadrant（矩阵不依赖它）
+        assertEquals(0, displayRepo.selectQuadrantCalls)
+        assertNull(displayRepo.observe().first().selectedQuadrant)
+    }
+
+    @Test
+    fun `从矩阵切回列表会清掉 selectedQuadrant`() = runTest {
+        val (vm, displayRepo) = makeVm()
+        vm.showMatrix()
+        advanceUntilIdle()
+        vm.showAll()
+        advanceUntilIdle()
+        assertEquals(2, displayRepo.setViewModeCalls)
+        assertEquals(TaskViewMode.ALL, displayRepo.observe().first().viewMode)
+        assertNull(displayRepo.observe().first().selectedQuadrant)
+    }
+
+    @Test
+    fun `点分组 Tab 可以从矩阵退出`() = runTest {
+        // 用户路径：矩阵 → 点 P3 Tab → 切到 BY_QUADRANT
+        val (vm, displayRepo) = makeVm()
+        vm.showMatrix()
+        advanceUntilIdle()
+        vm.selectQuadrant(TaskQuadrant.P3)
+        advanceUntilIdle()
+        val statePrefs = displayRepo.observe().first()
+        assertEquals(TaskViewMode.BY_QUADRANT, statePrefs.viewMode)
+        assertEquals(TaskQuadrant.P3, statePrefs.selectedQuadrant)
+    }
+
+    @Test
+    fun `MATRIX 模式下 activeQuadrants 与 ALL 一致（同一份数据）`() {
+        // 矩阵不重新分类：它看到的全量象限必须等于 ALL
+        val allState = TaskUiState()
+        val matrixState = TaskUiState(
+            displayPreferences = TaskDisplayPreferences(viewMode = TaskViewMode.MATRIX),
+        )
+        assertEquals(allState.activeQuadrants, matrixState.activeQuadrants)
+    }
+
+    @Test
+    fun `matrix 属性从 groups 派生且与 viewMode 无关`() {
+        // 即使不在矩阵模式，matrix 也应能算出同样结果（纯派生，不依赖当前视图）
+        val groups = TaskGroups(
+            byQuadrant = mapOf(TaskQuadrant.P1 to listOf(Task(id = 7L, title = "a", dueDate = 1L))),
+            completed = emptyList(),
+        )
+        val forList = TaskUiState(groups = groups)
+        val forMatrix = TaskUiState(
+            groups = groups,
+            displayPreferences = TaskDisplayPreferences(viewMode = TaskViewMode.MATRIX),
+        )
+        assertEquals(1, forList.matrix.countOf(MatrixCell.CELL_0))
+        assertEquals(forList.matrix, forMatrix.matrix)
     }
 
     @Test

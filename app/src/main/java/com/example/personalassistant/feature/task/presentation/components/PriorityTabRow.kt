@@ -31,6 +31,12 @@ import com.example.personalassistant.feature.task.domain.model.TaskViewMode
  * - 每个 Tab 显示：别名 + 任务计数（"立即执行 (3)"）
  * - 长按 Tab 触发重命名（"全部" Tab 不可长按）
  *
+ * Phase 8final G2：**矩阵视图下高亮「全部」**。
+ * 矩阵与 ALL 是同一份数据（见 [com.example.personalassistant.feature.task.domain.model.TaskMatrix.from]），
+ * 所以 [TaskViewMode.MATRIX] 在 TabRow 里等同于「全部」被选中；
+ * 布局切换由 [MatrixViewToggle] 单独负责，不抢这个 TabRow 的语义。
+ * 点任意分组 Tab 会走 onSelectQuadrant → 切到 BY_QUADRANT，等效退出矩阵。
+ *
  * 实现注意：Material 3 `Tab` 的 onClick 与 onLongClick 不冲突；
  * 这里用 [pointerInput] + [detectTapGestures] 在 Tab 外层包一层 Box 来捕获长按。
  */
@@ -45,7 +51,8 @@ fun PriorityTabRow(
 ) {
     val viewMode = displayPreferences.viewMode
     val selectedQuadrant = displayPreferences.selectedQuadrant
-    val isAllSelected = viewMode == TaskViewMode.ALL
+    // Phase 8final G2：MATRIX 与 ALL 共用同一份数据，视觉上一律高亮「全部」
+    val isAllSelected = viewMode == TaskViewMode.ALL || viewMode == TaskViewMode.MATRIX
     val totalCount = activeQuadrantCount.values.sum()
 
     // BY_QUADRANT 模式下若 selectedQuadrant 为 null，兜底 P1
