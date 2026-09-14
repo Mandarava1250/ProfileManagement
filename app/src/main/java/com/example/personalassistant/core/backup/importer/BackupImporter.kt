@@ -3,7 +3,10 @@ package com.example.personalassistant.core.backup.importer
 import androidx.room.withTransaction
 import com.example.personalassistant.core.backup.model.BackupError
 import com.example.personalassistant.core.backup.model.BackupPayload
+import com.example.personalassistant.core.backup.model.BackupPreview
 import com.example.personalassistant.core.backup.model.BackupResult
+import com.example.personalassistant.core.backup.model.ImportStrategy
+import com.example.personalassistant.core.backup.model.TableDiff
 import com.example.personalassistant.core.backup.validator.BackupValidator
 import com.example.personalassistant.core.backup.validator.ValidationBundle
 import com.example.personalassistant.core.database.AppDatabase
@@ -61,6 +64,13 @@ import javax.inject.Singleton
  *   正好对应一定存在的默认账户（迁移 / DatabaseCallback 都保证了这点）。
  * - 导入成功后要校准 DataStore 里的当前账户 id：备份可能不含当前正在用的那个账户，
  *   不校准的话切到一个不存在的账户 = 记账页永远空白。
+ *
+ * ## Phase 8 Sub-step 4'（plan 8f'）：合并模式
+ * - 新增入口 [importWithPreview]：接收已解码的 [BackupPayload] + [BackupPreview]，
+ *   按每张表的 [ImportStrategy]（ADD / OVERWRITE / SKIP）合并写入 Room。
+ *   任一行失败 → 全表回滚（withTransaction 原子保证）。
+ * - 旧入口 [import] 保留不变：仍走整表替换逻辑，作为「快速替换」按钮的底层路径。
+ *   两者互不影响，调用方按需选择。
  */
 @Singleton
 class BackupImporter @Inject constructor(
@@ -274,5 +284,320 @@ class BackupImporter @Inject constructor(
     ): List<T> {
         if (bytes == null) return emptyList()
         return json.decodeFromString(serializer, bytes.toString(Charsets.UTF_8))
+    }
+
+    // ==================== Phase 8 Sub-step 4'（plan 8f'）：合并模式 ====================
+
+    /**
+     * 合并模式：按 [BackupPreview] 中每张表指定的 [ImportStrategy] 合并写入
+     *
+     * 与 [import] 的本质区别：
+     * - [import] 走 `clearAll + insertAll` 整表替换（外键全 OFF）
+     * - [importWithPreview] 走 per-table 策略（外键全 OFF，但依赖顺序仍按
+     *   [BackupManifest.DEFAULT_TABLES]）
+     *
+     * 事务语义：**整体原子** —— 任一行写入失败 → 全部回滚。
+     *
+     * ## 各表策略语义
+     * - [ImportStrategy.SKIP] 或 [TableDiff.skippedByForeignKey] == true → 跳过该表
+     * - [ImportStrategy.ADD] → `insertAll(toAdd)`（同主键视为冲突 → 让 Room 抛 → 触发回滚）
+     * - [ImportStrategy.OVERWRITE] → `insertAll(toAdd)` + `toOverwrite` 按主键 UPDATE
+     *
+     * ## 账户表（user_profiles）特例
+     * `toOverwrite` 行若 id 与当前表撞车 → UPDATE（Room `@Update`）
+     * `toAdd` 行 id = 0L 或撞车失败 → 走 INSERT（Room 自动分配新 id）
+     *
+     * ## reconcileCurrentAccount
+     * 仅当 user_profiles 的策略非 SKIP 且实际写了至少一行才校准「当前账户」
+     * （其它情况：现有账户清单没变，没必要动 DataStore）。
+     */
+    suspend fun importWithPreview(
+        payload: BackupPayload,
+        preview: BackupPreview,
+    ): BackupResult<BackupPayload> {
+        val strategyByTable: Map<String, TableDiff<*>> = preview.perTable.associateBy { it.tableName }
+        var userProfilesTouched = false
+
+        return try {
+            database.withTransaction {
+                database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = OFF")
+                try {
+                    val taskDao: TaskDao = database.taskDao()
+                    val courseDao: CourseDao = database.courseDao()
+                    val semesterDao: SemesterDao = database.semesterDao()
+                    val tagDao: TagDao = database.tagDao()
+                    val taskTagDao: TaskTagDao = database.taskTagDao()
+                    val eventDao: EventDao = database.eventDao()
+                    val financeDao: FinanceDao = database.financeDao()
+                    val holidayDao: HolidayDao = database.holidayDao()
+                    val userProfileDao: UserProfileDao = database.userProfileDao()
+
+                    // ===== user_profiles =====
+                    strategyByTable["user_profiles"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeUserProfiles(userProfileDao, diff as TableDiff<UserProfileEntity>)
+                            userProfilesTouched = true
+                        }
+                    }
+
+                    // ===== semesters =====
+                    strategyByTable["semesters"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeSemesters(semesterDao, diff as TableDiff<SemesterEntity>)
+                        }
+                    }
+
+                    // ===== courses =====
+                    strategyByTable["courses"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeCourses(courseDao, diff as TableDiff<CourseEntity>)
+                        }
+                    }
+
+                    // ===== tags =====
+                    strategyByTable["tags"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeTags(tagDao, diff as TableDiff<TagEntity>)
+                        }
+                    }
+
+                    // ===== tasks =====
+                    strategyByTable["tasks"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeTasks(taskDao, diff as TableDiff<TaskEntity>)
+                        }
+                    }
+
+                    // ===== sub_tasks =====
+                    strategyByTable["sub_tasks"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeSubTasks(taskDao, diff as TableDiff<SubTaskEntity>)
+                        }
+                    }
+
+                    // ===== task_tag_cross_ref =====
+                    strategyByTable["task_tag_cross_ref"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeCrossRefs(taskTagDao, diff as TableDiff<TaskTagCrossRef>)
+                        }
+                    }
+
+                    // ===== events =====
+                    strategyByTable["events"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeEvents(eventDao, diff as TableDiff<EventEntity>)
+                        }
+                    }
+
+                    // ===== categories =====
+                    strategyByTable["categories"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeCategories(financeDao, diff as TableDiff<CategoryEntity>)
+                        }
+                    }
+
+                    // ===== monthly_budgets =====
+                    strategyByTable["monthly_budgets"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeMonthlyBudgets(financeDao, diff as TableDiff<MonthlyBudgetEntity>)
+                        }
+                    }
+
+                    // ===== daily_pools =====
+                    strategyByTable["daily_pools"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeDailyPools(financeDao, diff as TableDiff<DailyPoolEntity>)
+                        }
+                    }
+
+                    // ===== transactions =====
+                    strategyByTable["transactions"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeTransactions(financeDao, diff as TableDiff<TransactionEntity>)
+                        }
+                    }
+
+                    // ===== holidays =====
+                    strategyByTable["holidays"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeHolidays(holidayDao, diff as TableDiff<HolidayEntity>)
+                        }
+                    }
+                } finally {
+                    database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
+                }
+            }
+            if (userProfilesTouched) reconcileCurrentAccount()
+            BackupResult.Success(payload)
+        } catch (t: Throwable) {
+            BackupResult.Failure(
+                BackupError.IMPORT_FAILED,
+                "数据库写入失败：${t.message ?: t::class.java.simpleName}",
+            )
+        }
+    }
+
+    /**
+     * 该表是否要执行写入
+     * - SKIP 策略 → 否
+     * - skippedByForeignKey == true（被上游拖累） → 否
+     * - 其他 → 是
+     */
+    private fun shouldWrite(diff: TableDiff<*>): Boolean {
+        if (diff.skippedByForeignKey) return false
+        if (diff.strategy == ImportStrategy.SKIP) return false
+        return true
+    }
+
+    // ---------- 13 张表的合并写入（per-strategy） ----------
+
+    private suspend fun mergeUserProfiles(
+        dao: UserProfileDao,
+        diff: TableDiff<UserProfileEntity>,
+    ) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insert(it) }
+            ImportStrategy.OVERWRITE -> {
+                diff.toAdd.forEach { dao.insert(it) }
+                diff.toOverwrite.forEach { existing -> dao.update(existing) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeSemesters(dao: SemesterDao, diff: TableDiff<SemesterEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insert(it) }
+            ImportStrategy.OVERWRITE -> {
+                diff.toAdd.forEach { dao.insert(it) }
+                diff.toOverwrite.forEach { dao.update(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeCourses(dao: CourseDao, diff: TableDiff<CourseEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> dao.insertAll(diff.toAdd)
+            ImportStrategy.OVERWRITE -> {
+                dao.insertAll(diff.toAdd)
+                diff.toOverwrite.forEach { dao.update(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeTags(dao: TagDao, diff: TableDiff<TagEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insert(it) }
+            ImportStrategy.OVERWRITE -> {
+                // TagDao.insert 是 IGNORE 语义（同 normalized name 视为重复）；
+                // OVERWRITE 需要“重建”，所以先按 id 删除旧行再插新行
+                diff.toOverwrite.forEach { dao.deleteById(it.id) }
+                diff.toAdd.forEach { dao.insert(it) }
+                diff.toOverwrite.forEach { dao.insert(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeTasks(dao: TaskDao, diff: TableDiff<TaskEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insert(it) }
+            ImportStrategy.OVERWRITE -> {
+                diff.toAdd.forEach { dao.insert(it) }
+                diff.toOverwrite.forEach { dao.update(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeSubTasks(dao: TaskDao, diff: TableDiff<SubTaskEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insertSubTask(it) }
+            ImportStrategy.OVERWRITE -> {
+                diff.toAdd.forEach { dao.insertSubTask(it) }
+                diff.toOverwrite.forEach { dao.insertSubTask(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeCrossRefs(dao: TaskTagDao, diff: TableDiff<TaskTagCrossRef>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> diff.toAdd.forEach { dao.attach(it) }
+            ImportStrategy.OVERWRITE -> {
+                (diff.toAdd + diff.toOverwrite).forEach { dao.attach(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeEvents(dao: EventDao, diff: TableDiff<EventEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> dao.insertAll(diff.toAdd)
+            ImportStrategy.OVERWRITE -> {
+                dao.insertAll(diff.toAdd)
+                diff.toOverwrite.forEach { dao.update(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeCategories(dao: FinanceDao, diff: TableDiff<CategoryEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insertCategory(it) }
+            ImportStrategy.OVERWRITE -> {
+                diff.toAdd.forEach { dao.insertCategory(it) }
+                diff.toOverwrite.forEach { dao.updateCategory(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeMonthlyBudgets(dao: FinanceDao, diff: TableDiff<MonthlyBudgetEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> diff.toAdd.forEach { dao.setMonthlyBudget(it) }
+            ImportStrategy.OVERWRITE -> {
+                diff.toAdd.forEach { dao.setMonthlyBudget(it) }
+                diff.toOverwrite.forEach { dao.setMonthlyBudget(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeDailyPools(dao: FinanceDao, diff: TableDiff<DailyPoolEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insertDailyPool(it) }
+            ImportStrategy.OVERWRITE -> {
+                diff.toAdd.forEach { dao.insertDailyPool(it) }
+                diff.toOverwrite.forEach { dao.insertDailyPool(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeTransactions(dao: FinanceDao, diff: TableDiff<TransactionEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insertTransaction(it) }
+            ImportStrategy.OVERWRITE -> {
+                diff.toAdd.forEach { dao.insertTransaction(it) }
+                diff.toOverwrite.forEach { dao.updateTransaction(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    private suspend fun mergeHolidays(dao: HolidayDao, diff: TableDiff<HolidayEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> dao.insertAll(diff.toAdd)
+            ImportStrategy.OVERWRITE -> {
+                // HolidayDao 只提供 clearAll()（节假日表全表是冷数据，覆盖语义上
+                // 清空重建与「逐行删 + 插」等价）。OVERWRITE 路径：清空后重插 all。
+                dao.clearAll()
+                dao.insertAll(diff.toAdd + diff.toOverwrite)
+            }
+            ImportStrategy.SKIP -> Unit
+        }
     }
 }

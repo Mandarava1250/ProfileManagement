@@ -25,6 +25,7 @@ import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSea
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHitType
 import com.example.personalassistant.feature.globalsearch.presentation.GlobalSearchScreen
 import com.example.personalassistant.feature.settings.SettingsScreen
+import com.example.personalassistant.feature.settings.backup.BackupPreviewScreen
 import com.example.personalassistant.feature.task.TaskScreen
 import com.example.personalassistant.feature.task.presentation.detail.TaskDetailScreen
 import com.example.personalassistant.feature.task.presentation.edit.TaskEditScreen
@@ -125,6 +126,13 @@ fun AppNavHost() {
                             }
                         }
                     },
+                )
+            }
+
+            // === Phase 8 Sub-step 4'（plan 8f'）：备份预览 + 三档策略导入 ===
+            composable(Screen.BackupPreview.route) {
+                BackupPreviewScreen(
+                    onBack = { navController.popBackStack() },
                 )
             }
         }

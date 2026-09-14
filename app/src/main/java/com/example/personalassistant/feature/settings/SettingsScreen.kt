@@ -56,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.example.personalassistant.feature.profile.presentation.AccountSettingsCard
 import com.example.personalassistant.feature.settings.theme.ThemeMode
+import com.example.personalassistant.navigation.Screen
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -127,7 +128,7 @@ fun SettingsScreen(
         }
     }
 
-    // ===== 立即恢复 launcher（打开 .zip） =====
+    // ===== 立即恢复 launcher（打开 .zip，走「快速替换」路径：整表替换） =====
     val openBackupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -138,6 +139,10 @@ fun SettingsScreen(
             }
         }
     }
+
+    // ===== Phase 8 Sub-step 4'（plan 8f'）：预览后导入 launcher =====
+    // 不需要额外 launcher ——「预览后导入」按钮直接 navigate 到 BackupPreview 页，
+    // 该页自己拉 SAF（见 [BackupPreviewScreen]）。这里的 launcher 只为兼容老「从备份恢复」按钮。
 
     // ===== Phase 8 Sub-step 8：提前通知 TimePicker 状态 =====
     var showEveningTimePicker by remember { mutableStateOf(false) }
@@ -416,21 +421,36 @@ fun SettingsScreen(
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-                    // 立即备份 / 立即恢复
+                    // 立即备份
+                    Button(
+                        onClick = {
+                            createBackupLauncher.launch("cyrene-backup-${System.currentTimeMillis()}.zip")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.Backup, contentDescription = null)
+                        Spacer8()
+                        Text("立即备份")
+                    }
+
+                    Spacer8()
+
+                    // 恢复备份：两个入口 —— 「预览后导入」走新流程，
+                    // 「快速替换」走旧路径（整表替换、无预览）
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Button(
+                        // 「预览后导入」：跳到 BackupPreviewScreen，由用户确认每张表的策略
+                        OutlinedButton(
                             onClick = {
-                                createBackupLauncher.launch("cyrene-backup-${System.currentTimeMillis()}.zip")
+                                navController.navigate(Screen.BackupPreview.route)
                             },
                             modifier = Modifier.weight(1f),
                         ) {
-                            Icon(Icons.Filled.Backup, contentDescription = null)
-                            Spacer8()
-                            Text("立即备份")
+                            Text("预览后导入")
                         }
+                        // 「快速替换」：保留旧逻辑（整表替换、不预览）。老用户/自动化一键恢复
                         OutlinedButton(
                             onClick = {
                                 openBackupLauncher.launch(arrayOf("application/zip"))
@@ -439,7 +459,7 @@ fun SettingsScreen(
                         ) {
                             Icon(Icons.Filled.Restore, contentDescription = null)
                             Spacer8()
-                            Text("从备份恢复")
+                            Text("快速替换")
                         }
                     }
                 }

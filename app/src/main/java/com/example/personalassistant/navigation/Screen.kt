@@ -52,6 +52,9 @@ sealed class Screen(val route: String) {
 
     /** Phase 8 Sub-step 3：全局搜索（点击命中项后跳对应详情页） */
     data object GlobalSearch : Screen("globalsearch")
+
+    /** Phase 8 Sub-step 4'（plan 8f'）：备份预览 + 三档策略导入 */
+    data object BackupPreview : Screen("settings/backup-preview")
 }
 
 /**

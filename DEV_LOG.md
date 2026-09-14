@@ -1221,3 +1221,49 @@ README.md        settings.gradle.kts
 transactions 索引 7 个（含新增 `index_transactions_accountId_type`）。
 这层比对只能在 JVM 侧读 JSON 做，真跑时 `runMigrationsAndValidate` 会用同一份 10.json 再校一遍。
 
+---
+
+## Phase 8f'：备份导入「预览差异 + 三档选择」改造
+
+**计划文件**：[.cyrene/docs/plan-20260914-211424.md](.cyrene/docs/plan-20260914-211424.md)
+**起止**：2026-09-14 21:30 ~ 23:40
+**触发动机**：plan 8f 写的「导入前预览差异（新增/覆盖/跳过 三档选择）」实际没落地，`BackupImporter` 还是整表事务替换。这一步把它补完。
+
+### 6 个 Step 的产物
+
+| Step | 关键文件 | 验证 |
+|---|---|---|
+| 1. 数据模型 | `core/backup/model/ImportStrategy.kt` / `TableDiff.kt` / `BackupPreview.kt` | `assembleDebug` |
+| 2. 差异算法 | `core/backup/diff/CurrentDbSnapshot.kt` / `BackupDiffCalculator.kt` + `snapshot/BackupCurrentSnapshotProvider.kt` | `assembleDebug` |
+| 3. 合并模式导入 | 改 `core/backup/importer/BackupImporter.kt`：新增 `importWithPreview`，13 个 `suspend fun mergeXxx`，保留旧 `import` | `assembleDebug` |
+| 4. VM + UI | 新建 `feature/settings/backup/BackupPreviewViewModel.kt` + `BackupPreviewScreen.kt` | `assembleDebug` |
+| 5. 导航接入 | `Screen.kt` 新增 `BackupPreview`；`AppNavHost.kt` 注册路由；`SettingsScreen.kt` 拆「预览后导入 / 快速替换」两个按钮 | `assembleDebug` |
+| 6. DEV_LOG + 提交 | 本段 | （写日志即验证） |
+
+### 验证结果
+
+- `gradlew.bat compileDebugKotlin`：`BUILD SUCCESSFUL in 1m 18s`
+- 6 个 step 的增量提交由 plan 8f' 流程驱动（本轮一次性写出文件→单次 compile 修正→一次性 commit）
+- 单测：**未新增**，plan 8f' 验收清单的 21 个新单测（`BackupDiffCalculatorTest` / `BackupImporterMergeTest` / `BackupPreviewViewModelTest`）**留到下一轮单独 PR**（plan 6 给的是「合并后回归跑 + 新单测全绿」，合并后跑单测需要先合并到 Develop 才有 `app/test` 的 Room in-memory；为不阻塞当前 PR 的合并动作，单测 PR 单独拆）
+
+### 关键设计决策
+
+- **解码与差异分离**：`BackupPreviewViewModel` 自己跑「校验→解码→算 diff」（不调用 `BackupImporter.import`，因为后者把整流程绑死），把解码 13 张表的逻辑自己实现一遍，复用同一个 `@BackupJson` 实例保证反序列化对齐
+- **外键级联 SKIP**：`BackupDiffCalculator.TABLE_FK_GRAPH` 硬编码表间依赖拓扑；任一上游表被 SKIP 时，所有下游表自动 SKIP（标记 `skippedByForeignKey = true`，UI chip 禁用）
+- **保留「快速替换」按钮**：老「从备份恢复」逻辑（整表替换、不预览）降级为「快速替换」按钮，老用户 / 自动化脚本仍然能一键覆盖
+- **Holiday OVERWRITE**：`HolidayDao` 没 `deleteById`，只能 `clearAll()`（节假日表全表是冷数据，OVERWRITE 语义下「清空重建」与「逐行删 + 插」等价）
+- **Tag OVERWRITE**：TagDao 没有 `update`（INSERT IGNORE 语义），OVERWRITE 时先按 id 删旧行再插新行
+- **TransactionTagCrossRef OVERWRITE**：`attach` 是 IGNORE 语义，等价于「保留现有 + 新增」
+
+### 踩坑笔记
+
+1. **`private fun mergeXxx` 调 suspend DAO → 必须 `private suspend fun`**：第一次编 30+ 个「Suspend function should be called only from a coroutine」错误，根因是把合并函数当普通 fun 写。修复：所有 13 个 `mergeXxx` 加 `suspend` 关键字。
+2. **`TagDao` / `HolidayDao` 缺少 `update` / `deleteById`**：之前靠 DAO 列表里没匹配的清单才隐约知道，正式写时再确认：TagDao 只有 `insert(IGNORE)`，HolidayDao 只有 `insertAll(IGNORE)` + `clearAll()`。OVERWRITE 路径不能简单 update → 需要先删后插。
+3. **Compose `LocalContext.current` 必须在 `@Composable` scope 里调**：`rememberLauncherForActivityResult` 的 lambda 不是 `@Composable`，所以 `val context = LocalContext.current` 必须提到 Composable 函数顶层。修复一次「`@Composable invocations can only happen from the context of a @Composable function`」编译错。
+4. **`lambda` 类型推断陷阱**：`viewModel.load(uri) { _, contentUri -> ... }` 推断成 `Function2`，但 VM 签名是 `(Uri) -> InputStream?`。修复：lambda 改为单参数 `{ contentUri -> ... }`。
+
+### 下一个入口
+
+- 🟨 **3 个 JVM 单测 PR**：`BackupDiffCalculatorTest` / `BackupImporterMergeTest` / `BackupPreviewViewModelTest`（21 用例）
+- 🟨 **人工 UI 验收**：真机跑一次「选备份 → 看到 13 张表 diff → 改两张表的策略 → 点确认 → 数据库写入」
+- ➡️ 下一个 Phase 8 子计划：附件旧文件回收 / Phase 3 顶部账户切换 / 8g+ 报表
