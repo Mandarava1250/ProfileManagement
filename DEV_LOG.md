@@ -412,7 +412,7 @@
 |---|---|---|
 | 8a | 提醒调度 + 通知 deeplink | ✅ 调度部分早已完成（Event 端 `1e30283` / Task 端 Phase 5）；**deeplink 跳转 @`4d2e6c5`**（3 类提醒 → 详情页，冷/热启动都覆盖）。⚠️ 真机点击验收待人工 |
 | 8b | 5 档优先级 + 分组视图 | ✅ domain 完成 + ✅ **8b' 5 Tab UI + aliases**（2026-09-09）+ ✅ **8b'' 矩阵视图 @`2aded6e`**（`TaskViewMode.MATRIX`，2×2 + 未排期独立区 + <600dp 纵向 5 区）。⚠️ 撤销了 plan-20260909 §决策5「不提供矩阵视图」，理由见 Phase 8final 段 |
-| 8c | 附件上传 + 多账户 | 🟨 **代码在库**（`user_profiles` / `accountId` / 复合 FK / `AccountSettingsCard`，commit `a3d7dca` 等；DB v10 已落地）；卡 instrumented 迁移真跑（`AppDatabaseMigrationsTest.kt` 已写未跑，需 AVD）。详见 `plan-20260914-233221.md` §七 |
+| 8c | 附件上传 + 多账户 | 🟨 **代码在库**（`user_profiles` / `accountId` / 复合 FK / `AccountSettingsCard`，commit `a3d7dca` 等；DB v10 已落地）。**8c.1 迁移真跑进度**：androidTest 9→10 已写 @`36c792f`（`migrate9To10ValidatesSchemaAndAddsTransferFields` + `migrate9To10IsSafeForFreshV9DatabaseWithoutAnyTransfer`），**AVD 真跑留明早**（凌晨不再起 AVD，详见 `.cyrene/docs/phase-8-master-plan.md` §4.3 + 本文件「✅ Phase 8h」段）
 | 8d | 主题 / 节假日 / 周次范围 | ✅ 主题 / 节假日已完成；**周次范围**用 `Course.weeks` 字符串方案（支持 `"1,3,5"` 单周、`"1-8,10-16"` 跨段，比 `startWeek/endWeek` 两个 Int 强） + `WeekCalculator` + `GetCoursesByWeekUseCase` + `WeekHeaderRow`（◀ 第N周 ▶ / 回到本周）+ VM `selectWeek`/`jumpToCurrentWeek` + `WeekCalculatorTest`。**plan 提的 `startWeek/endWeek` 不做**（连降级都做不到，详见 Phase 8g finalize 段）|
 | 8e | 全局搜索 | ✅ 已做 |
 | 8f | 备份恢复 | ✅ 已做 |
@@ -1510,4 +1510,70 @@ plan 文件在磁盘上仍是 **v1**：伙伴批准前给了 4 条修正意见�
 - 🟨 **P7（8a 真机通知点击）** —— AVD 集群第 3 件事
 - 🟨 **P8（8b'' 矩阵视图双布局截图）** —— AVD 集群第 4 件事
 - ⬜ **P3（8f'.2 BackupPreviewViewModelTest）** —— 纯 JVM 单测，无需 AVD
-- ⬜ **P9（8f'.1 不可测项处置文档化）** —— 15 min 纯文档
+- ⬜ **P9（8f'.1 不可测项处置文档化）** —— 15 min 纯文档---
+
+## 🟨 Phase 8c.1（2026-09-15 01:50 部分完成） —— Migration_9_10 androidTest 已写，AVD 真跑留明早
+
+### 计划来源
+
+`.cyrene/docs/phase-8-master-plan.md` §4.3 子项 8c.1（Migration_9_10 真跑）
+
+### 已完成步骤
+
+| Step | 内容 | 状态 |
+|---|---|---|
+| 1 | 读 `Migration_9_10.kt`（生产代码）+ JVM 测试 `Migration_9_10StatementsTest.kt` + `AppDatabase.kt` 确认注册 + `DefaultCategories.kt` 拿常量 + `9.json` 拿 v9 表结构 | ✅ |
+| 2 | 在 `AppDatabaseMigrationsTest.kt` 加 2 个测试方法：`migrate9To10ValidatesSchemaAndAddsTransferFields`（主测试）+ `migrate9To10IsSafeForFreshV9DatabaseWithoutAnyTransfer`（空库回归）| ✅ |
+| 3 | 功能 commit + push @`36c792f` | ✅ |
+| 4 | AVD 真跑验证（`./gradlew :app:connectedDebugAndroidTest`）| ⬜ **留明早** |
+
+### 关键事实
+
+- **plan §4.3 描述 stale（重要！）**：
+  - plan 文件原话："`events.category` String → `events.category_id` Long 外键迁移"
+  - 实际 `Migration_9_10.kt`：**跨账户转账 + 账户余额**（Phase 5，commit `535c73d`）—— 加 `user_profiles.initialBalance` + `transactions.transferAccountId`/`transferPairId` + 索引 `index_transactions_accountId_type` + 每账户补 type=2 转账分类
+  - 这是 plan 与实现脱节的典型例子（与扩展 A 中「Phase 8b 真实完成度盘点」同款问题）
+- **androidTest 写的内容**：
+  - 造 v9 数据：默认账户 + 一条支出分类 + 一条收入分类 + 一笔 v9 时代旧流水
+  - 跑 `Migration_9_10` → v10
+  - 验证：initialBalance 默认 0 / transferAccountId 与 transferPairId 默认 NULL / 索引存在 / 转账分类（type=2）已补到默认账户
+- **JVM 测与 androidTest 的关系**：
+  - JVM `Migration_9_10StatementsTest` 7 个测断言「SQL 字符串形状对」
+  - androidTest 9→10 测断言「在真实 SQLite 上按序执行成功 + 结果符合 v10 schema」—— **互补**，不可替代
+
+### 关键变更文件
+
+- `app/src/androidTest/java/com/example/personalassistant/core/database/AppDatabaseMigrationsTest.kt`（+2 个测试方法）
+- `DEV_LOG.md`（line 415 8c 行更新）
+
+### 验证结果
+
+- 编译未跑（gradle 没起，预计明早跑 AVD 时一并 `connectedDebugAndroidTest` 验证编译）
+- AVD `pm_ui36` 已起过 + boot 成功（已 kill，明早重启）
+
+### 踩坑笔记
+
+1. **plan §4.3 子项 8c.1 描述 stale**：plan 把 Migration_9_10 错记成「events.category 迁移」。真实代码是 Phase 5 的「跨账户转账 + 账户余额」。下个迭代要更新 plan 文档：8c.1 描述改成「Migration_9_10 真跑：跨账户转账 + 账户余额」。
+2. **MigrationTestHelper 不会 seed**：用 `helper.createDatabase(TEST_DB, 9)` 重建库只建 schema，**不会**调用 `RoomDatabase.Callback.onCreate`。所以默认账户不会被自动建；测试必须显式 INSERT user_profiles。如果不 INSERT，迁移最后一步的 `INSERT ... SELECT FROM user_profiles` 会因为表空而 0 行插入，但不会炸 —— 用户首次走 onCreate 路径仍然由 Phase 3 seed 建默认账户。
+3. **9→10 迁移的 v9→v10 增量是 ALTER，不重建任何表**：跟 Migration_8_9（需要重建 transactions）完全不一样，风险面小一个数量级。JVM `Migration_9_10StatementsTest` 里有专门的「本轮是纯增量迁移不得重建任何表」断言。
+4. **「默认账户已 seed」是错误断言**（已修正）：第一版写的「默认账户应已 seed」是错的，因为 MigrationTestHelper 不调 onCreate seed。改成「空库无 user_profiles / categories」更准确。
+5. **AVD boot 较慢**：`pm_ui36`（API 36）在没有硬件加速的 sandbox 里 boot 要 1-2 分钟，加上 SDK 加载总共 ~3 分钟。凌晨时段不值得再起。
+
+### 下一个入口
+
+- ⬜ **明早 P0 AVD 真跑**：`./gradlew :app:connectedDebugAndroidTest`（建议用 `-Pandroid.testInstrumentationRunnerArguments.class=com.example.personalassistant.core.database.AppDatabaseMigrationsTest` 只跑这个文件，跑 9→10 + 8→9 共 4 个测，5 min 搞定）
+- ⬜ **明早 P0 收口**：跑过 → DEV_LOG 8c 行改 ✅，追加 commit 引用 `36c792f`
+- ⬜ **明早 P2（8f'.3 DailyAutoBackupWorkerTest）**：先找 `DailyAutoBackupWorker` 类 + 写 4~6 个 `androidTest` 用例（用 `work-testing` 库）
+- ⬜ **明早 P7 / P8**：人工目测任务，写好验收脚本指南
+
+### plan §4.3 8c.1 描述订正（留给下一轮 commit 顺手改 plan）
+
+把 plan 文件里 8c.1 那段：
+
+> **子项 8c.1 —— Migration_9_10 模拟器真跑**
+> - **背景**：`events.category` String → `events.category_id` Long 外键，迁移代码在 `535c73d`...
+
+改成：
+
+> **子项 8c.1 —— Migration_9_10 模拟器真跑**
+> - **背景**：`transactions` 加 `transferAccountId` / `transferPairId` 两列 + `user_profiles` 加 `initialBalance` + 索引 `index_transactions_accountId_type` + 每账户补 type=2 转账分类，迁移代码在 `535c73d`...
