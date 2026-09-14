@@ -1,12 +1,16 @@
 package com.example.personalassistant.feature.finance.data.repository
 
+import com.example.personalassistant.feature.finance.domain.model.AccountBalanceSum
+import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
+import com.example.personalassistant.feature.finance.domain.model.GlobalMonthlySums
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
 import com.example.personalassistant.feature.finance.domain.model.Transaction
 import com.example.personalassistant.feature.finance.domain.model.TransactionType
 import com.example.personalassistant.feature.finance.domain.repository.CategoryInUseException
 import com.example.personalassistant.feature.finance.domain.repository.FinanceRepository
+import com.example.personalassistant.feature.finance.domain.repository.TransferNotAllowedException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -42,6 +46,27 @@ class FakeFinanceRepository : FinanceRepository {
     var lastRefreshToday: Long = 0L
         private set
 
+    /**
+     * 转账流水 id → pairId（Phase 5）。
+     *
+     * 为什么不放进领域模型：pairId 只服务「删一条要连带删另一条」，属于存储细节，
+     * 放进 [Transaction] 等于让 UI 层多一个永远用不到、还可能误用的字段。
+     * 所以真库存在 Entity 列里，Fake 存在这张表里。
+     */
+    private val pairIdByTxId = mutableMapOf<Long, String>()
+
+    /**
+     * 跨账户汇总读的可编程桩（Phase 5）。
+     *
+     * 这三个**不自己算**：真值是 DAO 聚合 SQL 的结果，在 JVM 里算等于
+     * 把 SQL 用 Kotlin 重写一遍再测自己——测试会绿得毫无意义。
+     * 所以这里直接让测试喂数据，只用来测上层（UseCase / ViewModel / UI 派生字段）。
+     * SQL 本身的正确归 androidTest（真 SQLite）管。
+     */
+    val budgetSummariesState = MutableStateFlow<List<AccountBudgetSummary>>(emptyList())
+    val balanceSumsState = MutableStateFlow<List<AccountBalanceSum>>(emptyList())
+    val globalMonthlySumsState = MutableStateFlow<GlobalMonthlySums?>(null)
+
     // ===== Transactions =====
 
     override suspend fun addTransaction(
@@ -50,6 +75,7 @@ class FakeFinanceRepository : FinanceRepository {
         categoryId: Long,
         note: String?,
         date: Long,
+        attachmentUri: String?,
     ): Long {
         val id = nextTxId++
         transactionsState.value = transactionsState.value + Transaction(
@@ -61,13 +87,99 @@ class FakeFinanceRepository : FinanceRepository {
             note = note,
             createdAt = System.currentTimeMillis(),
             source = "手动",
+            attachmentUri = attachmentUri,
         )
         return id
     }
 
     override suspend fun deleteTransaction(id: Long) {
+        // Phase 5 跟真实现一致：转账不得走普通删除。
+        // 这条守卫住在 Fake 里是有意义的：上层 UseCase 测试可以验证
+        // 「拿到转账流水时它选了正确的仓库方法」而不只是验证并集行为。
+        val target = transactionsState.value.firstOrNull { it.id == id }
+        if (target != null && target.type.isTransfer) {
+            throw TransferNotAllowedException(
+                TransferNotAllowedException.Reason.TRANSFER_NEEDS_PAIR_DELETE,
+                "转账流水请走 deleteTransfer()",
+            )
+        }
         transactionsState.value = transactionsState.value.filter { it.id != id }
+        pairIdByTxId.remove(id)
     }
+
+    // ===== Phase 5：跨账户转账 =====
+
+    /**
+     * 真实成对写入（不像上面三个汇总那样做桩）。
+     *
+     * 因为「一笔转账 = 两行」就是本轮要测的核心不变量；
+     * Fake 若只写一行，那所有关于配对的测试都在测一个假事实。
+     *
+     * Fake 不区分账户（单账本内存模型），所以这里**不校验余额与账户存在性** ——
+     * 那些是 RepositoryImpl 的职责，由它的单测与 androidTest 覆盖。
+     */
+    override suspend fun transfer(
+        toAccountId: Long,
+        amount: Double,
+        note: String?,
+        date: Long,
+        allowNegativeBalance: Boolean,
+    ): Long {
+        if (amount <= 0.0) {
+            throw TransferNotAllowedException(
+                TransferNotAllowedException.Reason.INVALID_AMOUNT,
+                "转账金额必须大于 0",
+            )
+        }
+        val pairId = "pair-${nextTxId}"
+        val outId = nextTxId++
+        val inId = nextTxId++
+        val trimmed = note?.trim()?.takeIf { it.isNotEmpty() }
+        val base = Transaction(
+            id = outId,
+            amount = amount,
+            type = TransactionType.TRANSFER_OUT,
+            categoryId = TRANSFER_CATEGORY_ID,
+            date = date,
+            note = trimmed,
+            createdAt = System.currentTimeMillis(),
+            source = "转账",
+            transferAccountId = toAccountId,
+        )
+        pairIdByTxId[outId] = pairId
+        pairIdByTxId[inId] = pairId
+        transactionsState.value = transactionsState.value +
+            base +
+            base.copy(
+                id = inId,
+                type = TransactionType.TRANSFER_IN,
+                transferAccountId = CURRENT_ACCOUNT_ID,
+            )
+        transferCallCount += 1
+        lastTransferToAccountId = toAccountId
+        return outId
+    }
+
+    /** 转账调用次数与最近目标账户（供上层断言「真的只调了一次」） */
+    var transferCallCount: Int = 0
+        private set
+    var lastTransferToAccountId: Long? = null
+        private set
+
+    override suspend fun deleteTransfer(id: Long): Int {
+        val pairId = pairIdByTxId[id] ?: return 0
+        val victims = pairIdByTxId.filterValues { it == pairId }.keys
+        transactionsState.value = transactionsState.value.filter { it.id !in victims }
+        pairIdByTxId.keys.removeAll(victims)
+        return victims.size
+    }
+
+    override fun observeAccountBudgetSummaries(): Flow<List<AccountBudgetSummary>> =
+        budgetSummariesState
+
+    override fun observeBalanceSums(): Flow<List<AccountBalanceSum>> = balanceSumsState
+
+    override fun observeGlobalMonthlySums(): Flow<GlobalMonthlySums?> = globalMonthlySumsState
 
     /**
      * 7b 新增：编辑流水。
@@ -81,6 +193,7 @@ class FakeFinanceRepository : FinanceRepository {
         categoryId: Long,
         note: String?,
         date: Long,
+        attachmentUri: String?,
     ) {
         transactionsState.value = transactionsState.value.map {
             if (it.id == id) it.copy(
@@ -89,6 +202,7 @@ class FakeFinanceRepository : FinanceRepository {
                 categoryId = categoryId,
                 note = note,
                 date = date,
+                attachmentUri = attachmentUri,
             ) else it
         }
     }
@@ -218,11 +332,17 @@ class FakeFinanceRepository : FinanceRepository {
         transactionsState.value = emptyList()
         budgetsState.value = emptyList()
         dailyPoolsState.value = emptyList()
+        budgetSummariesState.value = emptyList()
+        balanceSumsState.value = emptyList()
+        globalMonthlySumsState.value = null
+        pairIdByTxId.clear()
         nextCategoryId = 1L
         nextTxId = 1L
         nextBudgetId = 1L
         nextPoolId = 1L
         refreshDailyPoolCallCount = 0
+        transferCallCount = 0
+        lastTransferToAccountId = null
         lastRefreshToday = 0L
     }
 
@@ -256,7 +376,12 @@ class FakeFinanceRepository : FinanceRepository {
         return id
     }
 
-    /** 快速建一笔交易（走 Repository 接口等价路径），返回 id */
+    /**
+     * 快速建一笔交易（走 Repository 接口等价路径），返回 id
+     *
+     * ⚠️ Phase 5：本方法**不能**传转账类型。转账必须成对写入，
+     * 单传一行会让下游测试跑在一个真库永远不会出现的数据形状上。
+     */
     suspend fun seedTransaction(
         type: TransactionType,
         amount: Double,
@@ -264,6 +389,17 @@ class FakeFinanceRepository : FinanceRepository {
         note: String?,
         date: Long,
     ): Long {
-        return addTransaction(type, amount, categoryId, note, date)
+        require(!type.isTransfer) {
+            "seedTransaction 不支持转账类型：请改用 transfer()，它会成对写入"
+        }
+        return addTransaction(type, amount, categoryId, note, date, attachmentUri = null)
+    }
+
+    private companion object {
+        /** Fake 里的转账分类占位 id（真库靠查表拿，Fake 不需要外键） */
+        const val TRANSFER_CATEGORY_ID = -2L
+
+        /** Fake 单账本模型下「当前账户」的固定 id，仅用于填 transferAccountId */
+        const val CURRENT_ACCOUNT_ID = 1L
     }
 }

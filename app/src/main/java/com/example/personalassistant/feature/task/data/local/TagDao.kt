@@ -52,6 +52,11 @@ interface TagDao {
 
     @Query("SELECT * FROM tags WHERE displayName LIKE '%' || :query || '%' ORDER BY createdAt ASC")
     suspend fun searchByDisplayNameLike(query: String): List<TagEntity>
+
+    // ===== Phase 8 Sub-step 4：备份导出快照 =====
+
+    @Query("SELECT * FROM tags")
+    suspend fun getAllTags(): List<TagEntity>
 }
 
 /**

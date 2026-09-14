@@ -48,6 +48,24 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE dueDate BETWEEN :start AND :end AND isCompleted = 0 ORDER BY priority DESC, dueDate ASC")
     fun observeBetween(start: Long, end: Long): Flow<List<TaskEntity>>
 
+    /**
+     * Phase 8 Sub-step 3：全局搜索 — 在 tasks 表 title / description / category 任一字段 LIKE 匹配。
+     *
+     * - :keyword 为原始关键字，调用方负责 prepend/append `%`
+     * - 大小写敏感（与 FinanceDao.searchTransactions 一致）
+     * - 排序：priority DESC, dueDate ASC NULLS LAST, updatedAt DESC
+     */
+    @Query(
+        """
+        SELECT * FROM tasks
+        WHERE title LIKE :keyword
+           OR description LIKE :keyword
+           OR category LIKE :keyword
+        ORDER BY priority DESC, dueDate IS NULL, dueDate ASC, updatedAt DESC
+        """
+    )
+    fun searchTasks(keyword: String): Flow<List<TaskEntity>>
+
     @Query("UPDATE tasks SET isCompleted = :completed, updatedAt = :now WHERE id = :id")
     suspend fun setCompleted(id: Long, completed: Boolean, now: Long = System.currentTimeMillis())
 
@@ -94,6 +112,14 @@ interface TaskDao {
 
     @Query("DELETE FROM sub_tasks WHERE parentTaskId = :parentId")
     suspend fun deleteSubTasksByParent(parentId: Long)
+
+    // ===== Phase 8 Sub-step 4：备份导出快照 =====
+
+    @Query("SELECT * FROM tasks")
+    suspend fun getAllTasks(): List<TaskEntity>
+
+    @Query("SELECT * FROM sub_tasks")
+    suspend fun getAllSubTasks(): List<SubTaskEntity>
 
     // ===== 统计查询 =====
 

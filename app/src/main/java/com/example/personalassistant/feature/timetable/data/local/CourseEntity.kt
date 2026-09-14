@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * 课程实体（一节具体的课）
@@ -33,6 +34,7 @@ import androidx.room.PrimaryKey
         )
     ]
 )
+@Serializable
 data class CourseEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,

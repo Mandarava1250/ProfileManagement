@@ -113,4 +113,14 @@ interface CalendarRepository {
      * @param today 今日 00:00 时间戳（用于 isToday 标志）
      */
     fun observeMonthSummary(monthStart: Long, monthEnd: Long, today: Long): Flow<MonthSummary>
+
+    // ===== Phase 8 Sub-step 3 全局搜索 =====
+
+    /**
+     * 关键字搜索事件（在 title / note / category 任一字段 LIKE 匹配）。
+     *
+     * - [keyword] 接收**已包好 `%...%` 通配符**的字符串
+     * - 区分大小写
+     */
+    fun searchEvents(keyword: String): Flow<List<Event>>
 }

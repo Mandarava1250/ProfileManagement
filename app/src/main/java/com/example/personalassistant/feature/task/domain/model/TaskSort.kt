@@ -47,6 +47,7 @@ enum class TaskSort {
  * RepositoryImpl 与同包测试都可以直接复用，**确保测试和生产代码用的是同一份逻辑**。
  */
 internal fun TaskSort.toComparator(): Comparator<Task> = when (this) {
+    // Phase 8 Sub-step 2：5 档权重 URGENT(9) > HIGH(7) > MEDIUM(5) > NORMAL(3) > LOW(1)
     TaskSort.PRIORITY_DUE_ASC -> compareByDescending<Task> { it.priority.rank }
         .thenBy { it.dueDate ?: Long.MAX_VALUE }
     TaskSort.DUE_DATE_ASC -> compareBy { it.dueDate ?: Long.MAX_VALUE }
@@ -55,10 +56,4 @@ internal fun TaskSort.toComparator(): Comparator<Task> = when (this) {
     TaskSort.TITLE_ASC -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
     TaskSort.MANUAL_ORDER -> compareBy<Task> { it.manualOrder ?: Long.MAX_VALUE }
         .thenBy { it.id }
-}
-
-internal val TaskPriority.rank: Int get() = when (this) {
-    TaskPriority.HIGH -> 2
-    TaskPriority.MEDIUM -> 1
-    TaskPriority.LOW -> 0
 }

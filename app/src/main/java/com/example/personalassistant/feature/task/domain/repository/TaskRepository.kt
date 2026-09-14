@@ -114,4 +114,15 @@ interface TaskRepository {
      * - 不在列表里的任务 manualOrder 保持不变
      */
     suspend fun reorderTasks(orderedIds: List<Long>)
+
+    // ===== Phase 8 Sub-step 3 全局搜索 =====
+
+    /**
+     * 关键字搜索任务（在 title / description / category 任一字段 LIKE 匹配）。
+     *
+     * - [keyword] 接收**已包好 `%...%` 通配符**的字符串（DAO 层不再额外拼）
+     * - 区分大小写
+     * - 大小写敏感时返回空数据，请用空字符串 `%%` 调用以拿到全部任务
+     */
+    fun searchTasks(keyword: String): Flow<List<Task>>
 }

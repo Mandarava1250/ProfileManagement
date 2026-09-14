@@ -14,23 +14,24 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import com.example.personalassistant.feature.settings.theme.ThemeMode
 
 /**
  * App 主题入口
  *
- * @param themeMode "light" | "dark" | "system"
+ * @param themeMode 主题模式（[ThemeMode.SYSTEM] 默认，跟随系统）
  * @param dynamicColor Android 12+ 是否使用 Material You 动态色（默认开启）
  */
 @Composable
 fun PersonalAssistantTheme(
-    themeMode: String = "system",
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {
-        "light" -> false
-        "dark" -> true
-        else -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
     }
 
     val colorScheme = when {

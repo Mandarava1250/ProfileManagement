@@ -57,4 +57,14 @@ interface TimetableRepository {
 
     /** 删除学期 */
     suspend fun deleteSemester(name: String)
+
+    // ===== Phase 8 Sub-step 3 全局搜索 =====
+
+    /**
+     * 关键字搜索课程（在 name / teacher / location / note 任一字段 LIKE 匹配）。
+     *
+     * - [keyword] 接收**已包好 `%...%` 通配符**的字符串
+     * - 区分大小写
+     */
+    fun searchCourses(keyword: String): Flow<List<Course>>
 }

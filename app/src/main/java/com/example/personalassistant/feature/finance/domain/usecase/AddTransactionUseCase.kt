@@ -22,9 +22,17 @@ class AddTransactionUseCase @Inject constructor(
         categoryId: Long,
         note: String?,
         date: Long,
+        attachmentUri: String? = null,
     ): Long {
         require(amount > 0.0) { "金额必须大于 0" }
         require(categoryId > 0L) { "分类 id 非法" }
-        return repository.addTransaction(type, amount, categoryId, note?.takeIf { it.isNotBlank() }, date)
+        return repository.addTransaction(
+            type = type,
+            amount = amount,
+            categoryId = categoryId,
+            note = note?.takeIf { it.isNotBlank() },
+            date = date,
+            attachmentUri = attachmentUri,
+        )
     }
 }

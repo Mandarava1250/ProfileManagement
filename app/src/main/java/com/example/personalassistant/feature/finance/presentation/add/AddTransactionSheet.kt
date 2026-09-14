@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -103,6 +104,14 @@ fun AddTransactionSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            // Phase 2：附件选择区（最多 3 张，已选满后按钮隐藏）
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            AttachmentSection(
+                uris = uiState.attachmentUris,
+                onPicked = viewModel::onPickedAttachments,
+                onRemove = viewModel::onRemoveAttachment,
+            )
+
             // 分类选择（按当前 type 过滤）
             Text(
                 text = "分类",
@@ -116,6 +125,22 @@ fun AddTransactionSheet(
             )
 
             // 操作按钮
+            // Phase 5：转账不可编辑（两行必须成对变动），给明确提示而不是让人白改；
+            // 以及任何写失败的原文都要显示出来，否则只剩「点了没反应」。
+            if (uiState.isEditingTransfer) {
+                Text(
+                    text = "转账不支持修改。要调整金额，请先删除这一笔（会同时清掉对方账户的那一半）再重新转。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            uiState.error?.let { msg ->
+                Text(
+                    text = msg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),

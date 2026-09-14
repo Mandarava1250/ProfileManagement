@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -70,6 +71,11 @@ object IconRegistry {
         "Flight" to Icons.Filled.Flight,
         "CardGiftcard" to Icons.Filled.CardGiftcard,
         "DirectionsCar" to Icons.Filled.DirectionsCar,
+        // Phase 5：内置「转账」分类的图标。
+        // 故意**不**加进 availableIconNames：那是 IconPickerSheet 的渲染源，
+        // 加了就等于让用户能给自己建的收支分类选上「转账」图标，
+        // 一笔消费被标成转账语义 —— 不该给这个选项。
+        "SwapHoriz" to Icons.Filled.SwapHoriz,
     )
 
     val DEFAULT_ICON: ImageVector = Icons.Filled.Category

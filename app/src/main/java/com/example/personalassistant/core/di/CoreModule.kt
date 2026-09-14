@@ -10,8 +10,11 @@ import androidx.room.Room
 import com.example.personalassistant.core.database.AppDatabase
 import com.example.personalassistant.core.database.DatabaseCallback
 import com.example.personalassistant.core.database.DatabaseCallbackHolder
+import com.example.personalassistant.core.holiday.data.HolidayDao
+import com.example.personalassistant.feature.calendar.data.local.EventCategoryDao
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
+import com.example.personalassistant.feature.profile.data.local.UserProfileDao
 import com.example.personalassistant.feature.task.data.local.TagDao
 import com.example.personalassistant.feature.task.data.local.TaskDao
 import com.example.personalassistant.feature.task.data.local.TaskTagDao
@@ -105,6 +108,27 @@ object CoreModule {
 
     @Provides
     fun provideFinanceDao(db: AppDatabase): FinanceDao = db.financeDao()
+
+    /**
+     * Phase 8 Sub-step 7：节假日 DAO 绑定（与其它 DAO 模式一致）。
+     */
+    @Provides
+    fun provideHolidayDao(db: AppDatabase): HolidayDao = db.holidayDao()
+
+    /**
+     * Phase 8 Sub-step 9：事件分类 DAO 绑定（与其它 DAO 模式一致）。
+     */
+    @Provides
+    fun provideEventCategoryDao(db: AppDatabase): EventCategoryDao = db.eventCategoryDao()
+
+    /**
+     * Phase 3：账户 DAO 绑定（与其它 DAO 同款 @Provides，从 AppDatabase 取实例）。
+     *
+     * 注：计划稿里写过「Hilt 通过 @DatabaseView 暴露」—— @DatabaseView 是只读 SQL 视图注解，
+     * 与 Hilt 无关，那样写会编译失败。按现有 9 个 DAO 的一致做法走。
+     */
+    @Provides
+    fun provideUserProfileDao(db: AppDatabase): UserProfileDao = db.userProfileDao()
 
     // ========== DataStore（SettingsRepository 用）==========
 

@@ -73,6 +73,9 @@ class UpsertCourseUseCaseTest {
         override suspend fun getSemesterByName(name: String): Semester? = null
         override suspend fun upsertSemester(semester: Semester) {}
         override suspend fun deleteSemester(name: String) {}
+
+        // Phase 8 Sub-step 3 全局搜索（占位实现 — 此 UseCase 测试不关心搜索）
+        override fun searchCourses(keyword: String): Flow<List<Course>> = flowOf(emptyList())
     }
 
     @Test

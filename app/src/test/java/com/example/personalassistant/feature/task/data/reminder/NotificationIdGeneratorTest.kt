@@ -93,4 +93,61 @@ class NotificationIdGeneratorTest {
             assertTrue("id=$id must be >= base", id >= NotificationIdGenerator.TASK_NOTIFICATION_ID_BASE)
         }
     }
+
+    // ===== Phase 8 Sub-step 1：forEvent =====
+
+    @Test
+    fun `positive eventId returns event base plus low31 bits`() {
+        assertEquals(300_001, NotificationIdGenerator.forEvent(1L))
+    }
+
+    @Test
+    fun `zero eventId returns event base`() {
+        assertEquals(NotificationIdGenerator.EVENT_NOTIFICATION_ID_BASE, NotificationIdGenerator.forEvent(0L))
+    }
+
+    @Test
+    fun `same eventId always returns same id`() {
+        val eventId = 42L
+        val id1 = NotificationIdGenerator.forEvent(eventId)
+        val id2 = NotificationIdGenerator.forEvent(eventId)
+        assertEquals(id1, id2)
+    }
+
+    @Test
+    fun `different eventIds produce different ids`() {
+        val a = NotificationIdGenerator.forEvent(1L)
+        val b = NotificationIdGenerator.forEvent(2L)
+        val c = NotificationIdGenerator.forEvent(100L)
+        assertNotEquals(a, b)
+        assertNotEquals(b, c)
+        assertNotEquals(a, c)
+    }
+
+    @Test
+    fun `event notification id never collides with task or course base`() {
+        // 事件段基址 300_000，必须不与任务段（200_000）/ 课程段（100_000）撞码。
+        val base = NotificationIdGenerator.EVENT_NOTIFICATION_ID_BASE
+        val samples = listOf(0L, 1L, 42L, Long.MAX_VALUE, Long.MIN_VALUE, -1L)
+        for (eventId in samples) {
+            val id = NotificationIdGenerator.forEvent(eventId)
+            assertTrue("id=$id for eventId=$eventId must be >= $base", id >= base)
+            assertTrue("id=$id for eventId=$eventId must be < Int.MAX_VALUE", id < Int.MAX_VALUE)
+        }
+        // 同 id 段内 forTask vs forEvent 也不撞（因为 base 不同）
+        for (i in listOf(1L, 42L, 1000L)) {
+            assertNotEquals(
+                "task and event ids must not collide for i=$i",
+                NotificationIdGenerator.forTask(i),
+                NotificationIdGenerator.forEvent(i),
+            )
+        }
+    }
+
+    @Test
+    fun `negative eventId uses absolute low31 bits safely`() {
+        val id = NotificationIdGenerator.forEvent(Long.MIN_VALUE)
+        assertTrue("id=$id must be in valid range", id >= NotificationIdGenerator.EVENT_NOTIFICATION_ID_BASE)
+        assertTrue("id=$id must not overflow", id > 0)
+    }
 }

@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * Phase 6c：标签实体（全局共享标签库）
@@ -25,6 +26,7 @@ import androidx.room.PrimaryKey
         Index("colorSource"),
     ]
 )
+@Serializable
 data class TagEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,

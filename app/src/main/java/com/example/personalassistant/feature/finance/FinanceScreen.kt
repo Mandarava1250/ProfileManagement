@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -56,6 +57,10 @@ import com.example.personalassistant.feature.finance.presentation.components.Dai
 import com.example.personalassistant.feature.finance.presentation.components.MonthlyReportCard
 import com.example.personalassistant.feature.finance.presentation.components.SearchBar
 import com.example.personalassistant.feature.finance.presentation.components.TransactionRow
+import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
+import com.example.personalassistant.feature.finance.domain.model.BudgetSummaryTotals
+import com.example.personalassistant.feature.finance.presentation.components.AccountSummaryCard
+import com.example.personalassistant.feature.finance.presentation.transfer.TransferSheet
 import com.example.personalassistant.feature.finance.presentation.util.FinanceDateUtils
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
 import com.example.personalassistant.feature.finance.domain.model.Transaction
@@ -77,11 +82,22 @@ fun FinanceScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val searchKeyword by viewModel.searchKeyword.collectAsStateWithLifecycle()
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    // Phase 5：跨账户汇总（独立于 uiState 的两条流，避开 combine 的 5 流上限）
+    val budgetTotals by viewModel.budgetTotals.collectAsStateWithLifecycle()
+    val budgetRows by viewModel.accountBudgetSummaries.collectAsStateWithLifecycle()
+    val accountBalances by viewModel.accountBalances.collectAsStateWithLifecycle()
+    // 转账行要显示「转出至 / 转入自 哪个账户」；用余额列表做 id→名字映射，
+    // 不为此再开一条 observeAccounts（两者本质是同一批账户）
+    val accountNameById = remember(accountBalances) {
+        accountBalances.associate { it.accountId to it.accountName }
+    }
     var showSheet by remember { mutableStateOf(false) }
     var editingTx by remember { mutableStateOf<Transaction?>(null) }
     var showBudgetSheet by remember { mutableStateOf(false) }
     var showCategoryScreen by remember { mutableStateOf(false) }
     var showImportDialog by remember { mutableStateOf(false) }
+    // Phase 5：转账面板
+    var showTransferSheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -118,6 +134,11 @@ fun FinanceScreen(
                     IconButton(onClick = { showCategoryScreen = true }) {
                         Icon(Icons.Filled.Category, contentDescription = "分类管理")
                     }
+                    // Phase 5：转账入口。放顶栏而不是 FAB：FAB 是「记一笔收支」，
+                    // 转账不是记账而是调拨，两者语义不同不该挤同一个按钮
+                    IconButton(onClick = { showTransferSheet = true }) {
+                        Icon(Icons.Filled.SwapHoriz, contentDescription = "账户间转账")
+                    }
                 },
             )
         },
@@ -140,6 +161,17 @@ fun FinanceScreen(
             },
             onSearchKeywordChange = viewModel::setSearchKeyword,
             searchKeyword = searchKeyword,
+            // Phase 5：跨账户总览与转账行的对方账户名
+            budgetTotals = budgetTotals,
+            budgetRows = budgetRows,
+            accountNameById = accountNameById,
+        )
+    }
+
+    if (showTransferSheet) {
+        TransferSheet(
+            viewModel = viewModel,
+            onDismiss = { showTransferSheet = false },
         )
     }
 
@@ -207,6 +239,10 @@ private fun FinanceContent(
     onTransactionClick: (Transaction) -> Unit,
     onSearchKeywordChange: (String) -> Unit,
     searchKeyword: String,
+    // ===== Phase 5 =====
+    budgetTotals: BudgetSummaryTotals,
+    budgetRows: List<AccountBudgetSummary>,
+    accountNameById: Map<Long, String>,
 ) {
     if (uiState.isLoading) {
         Box(
@@ -255,6 +291,15 @@ private fun FinanceContent(
             )
         }
 
+        // Phase 5：跨账户预算总览（仅 >=2 个账户时显示，判断在卡片内部）
+        item {
+            AccountSummaryCard(
+                totals = budgetTotals,
+                rows = budgetRows,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+        }
+
         // 流水列表
         if (uiState.transactions.isEmpty()) {
             item {
@@ -276,6 +321,7 @@ private fun FinanceContent(
                 DaySection(
                     day = day,
                     categoryById = uiState.categoryById,
+                    accountNameById = accountNameById,
                     onTransactionClick = onTransactionClick,
                 )
             }
@@ -287,6 +333,8 @@ private fun FinanceContent(
 private fun DaySection(
     day: DayGroup,
     categoryById: Map<Long, com.example.personalassistant.feature.finance.domain.model.Category>,
+    /** 转账行用（accountId → 账户名）；普通收支行用不到 */
+    accountNameById: Map<Long, String> = emptyMap(),
     onTransactionClick: (Transaction) -> Unit,
 ) {
     Column(
@@ -328,6 +376,8 @@ private fun DaySection(
             TransactionRow(
                 transaction = tx,
                 category = categoryById[tx.categoryId],
+                // Phase 5：转账的对方账户名。拿不到时 TransactionRow 自己降级成不显示自/至
+                counterpartyName = tx.transferAccountId?.let { accountNameById[it] },
                 onClick = { onTransactionClick(tx) },
             )
             HorizontalDivider(

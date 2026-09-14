@@ -1,5 +1,7 @@
 package com.example.personalassistant.feature.task.domain.model
 
+import com.example.personalassistant.core.holiday.model.HolidayStrategy
+
 /**
  * 任务（Domain 模型）
  *
@@ -36,4 +38,13 @@ data class Task(
      * 与 [TaskEntity.manualOrder] 一一对应；只由 [TaskSort.MANUAL_ORDER] 路径触发落库。
      */
     val manualOrder: Long? = null,
+
+    /**
+     * Phase 8 Sub-step 7+8：节假日处理策略（仅对重复任务生效）。
+     *
+     * - 默认 [HolidayStrategy.SKIP]（遇到节假日跳过本次）
+     * - 非重复任务（repeatType == NONE）该字段无效，保留默认值
+     * - 用户在 TaskEditScreen 选择后通过 [Task.holidayStrategy] 写回 Entity
+     */
+    val holidayStrategy: HolidayStrategy = HolidayStrategy.SKIP,
 )

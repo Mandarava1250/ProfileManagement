@@ -2,24 +2,39 @@ package com.example.personalassistant.feature.calendar.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.personalassistant.core.lunar.LunarCalendar
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
+import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.calendar.domain.model.EventCategory
+import com.example.personalassistant.feature.calendar.domain.model.EventConflictInfo
 import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
 import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.CancelEventReminderUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventCategoryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.DetectEventLiveConflictsUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.DetectEventSavedConflictsUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayDetailUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.ObserveEventCategoriesUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.UpsertEventCategoryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -40,8 +55,9 @@ import javax.inject.Inject
  * - [dismissDayDetail]：取消选中
  *
  * @OptIn(ExperimentalCoroutinesApi::class) for [flatMapLatest]
+ * @OptIn(FlowPreview::class) for [debounce]
  */
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class CalendarViewModel @Inject constructor(
     private val observeMonthSummary: ObserveMonthSummaryUseCase,
@@ -49,6 +65,17 @@ class CalendarViewModel @Inject constructor(
     private val addEvent: AddEventUseCase,
     private val updateEvent: UpdateEventUseCase,
     private val deleteEventUseCase: DeleteEventUseCase,
+    private val scheduleEventReminder: ScheduleEventReminderUseCase,
+    private val cancelEventReminder: CancelEventReminderUseCase,
+    // Phase 8 Sub-step 9：事件分类管理
+    private val observeEventCategories: ObserveEventCategoriesUseCase,
+    private val upsertEventCategory: UpsertEventCategoryUseCase,
+    private val deleteEventCategory: DeleteEventCategoryUseCase,
+    // Phase 8 Sub-step 9 Step 4.2：事件冲突检测
+    private val detectLiveConflict: DetectEventLiveConflictsUseCase,
+    private val detectSavedConflict: DetectEventSavedConflictsUseCase,
+    // Phase 8 Sub-step 9 Step 5：农历日期转换（用于月视图角标）
+    private val lunarCalendar: LunarCalendar,
 ) : ViewModel() {
 
     private val _currentYearMonth = MutableStateFlow(DateUtils.currentYearMonth())
@@ -72,6 +99,50 @@ class CalendarViewModel @Inject constructor(
     private val _editorError = MutableStateFlow<String?>(null)
     val editorError: StateFlow<String?> = _editorError.asStateFlow()
 
+    /**
+     * Phase 8 Sub-step 9：事件分类列表（Flow）
+     *
+     * - 由 EventCategoryRepository.observeAll() 提供
+     * - UI 用：EditEventSheet 里的 CategorySelectorRow + CategoryManagementDialog
+     */
+    val eventCategories: StateFlow<List<EventCategory>> = observeEventCategories()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
+    /**
+     * Phase 8 Sub-step 9：分类管理 Dialog 显示状态
+     */
+    private val _showCategoryManager = MutableStateFlow(false)
+    val showCategoryManager: StateFlow<Boolean> = _showCategoryManager.asStateFlow()
+
+    /**
+     * Phase 8 Sub-step 9：分类管理错误信息
+     */
+    private val _categoryManagerError = MutableStateFlow<String?>(null)
+    val categoryManagerError: StateFlow<String?> = _categoryManagerError.asStateFlow()
+
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：编辑实时冲突（debounce 后）
+     *
+     * - null = 编辑器未打开（_editingState == null）
+     * - 非 null = [detectLiveConflict] 的最新结果（含整天 / 学期外等空冲突场景）
+     */
+    private val _liveConflictInfo = MutableStateFlow<EventConflictInfo?>(null)
+    val liveConflictInfo: StateFlow<EventConflictInfo?> = _liveConflictInfo.asStateFlow()
+
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：已保存事件冲突 map
+     *
+     * - key = event.id
+     * - value = 该事件对应的 EventConflictInfo
+     * - selectedDayDetail 为 null / weekNumber 为空 → map 为空
+     */
+    private val _savedConflictsByEventId = MutableStateFlow<Map<Long, EventConflictInfo>>(emptyMap())
+    val savedConflictsByEventId: StateFlow<Map<Long, EventConflictInfo>> = _savedConflictsByEventId.asStateFlow()
+
     private val today: Long = DateUtils.todayStartMillis()
 
     /**
@@ -80,13 +151,17 @@ class CalendarViewModel @Inject constructor(
      * `_currentYearMonth` 变化 → flatMapLatest 重新订阅 ObserveMonthSummaryUseCase
      * 拿到新月份的 MonthSummary → 客户端转 42 个 cell。
      */
-    val uiState: StateFlow<CalendarUiState> = _currentYearMonth
-        .flatMapLatest { yearMonth ->
+    val uiState: StateFlow<CalendarUiState> = combine(
+        _currentYearMonth.flatMapLatest { yearMonth ->
             val monthStart = DateUtils.monthStartMillis(yearMonth)
             val monthEnd = DateUtils.monthEndMillis(yearMonth)
             observeMonthSummary(monthStart, monthEnd, today)
-        }
-        .map { summary -> buildUiState(summary) }
+        },
+        _liveConflictInfo,
+        _savedConflictsByEventId,
+    ) { summary, live, saved ->
+        buildUiState(summary, live, saved)
+    }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -133,6 +208,45 @@ class CalendarViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList(),
         )
+
+    // 注意：本 init 块必须放在 uiState / selectedDayDetail / weekCells 之后。
+    // viewModelScope 的调度器是 Dispatchers.Main.immediate，构造期 launch 的协程体
+    // 会在主线程上内联立即执行一次；若此时下方属性尚未按声明顺序完成初始化，
+    // selectedDayDetail 读到的就是 null，filterNotNull() 内部 collect 直接 NPE，
+    // 表现为「一进日历 Tab 就崩溃」。
+    init {
+        // 1. 编辑实时冲突：_editingState debounce(150ms) → detectLiveConflict
+        // 关闭编辑器（state=null）时短路 emit null
+        // 不用 flatMapLatest 是为了让 collect 内可以做"状态判定 → null or detect"
+        // （flow { emit(...) } + flowOf(null) 的类型推断会让结果退化为 Flow<Nothing?>）
+        //
+        // 防御性 runCatching：草稿态 title="" 时 [EventEditState.toEvent] 会触发 Event.require()。
+        // 我们先显式判断 title.isBlank() 跳过 detect（草稿态 emit null 表示"无冲突"），
+        // 再用 runCatching 兜底，避免异常泄露到 viewModelScope。
+        viewModelScope.launch {
+            _editingState
+                .debounce(150L)
+                .collect { state ->
+                    val info = when {
+                        state == null -> null
+                        state.title.isBlank() -> null
+                        else -> runCatching {
+                            detectLiveConflict(state.toEvent(0L, 0L))
+                        }.getOrNull()
+                    }
+                    _liveConflictInfo.value = info
+                }
+        }
+
+        // 2. 已保存冲突：selectedDayDetail 变化 → 对每个有 id 的 event 串行检测
+        // weekNumber 为空时直接短路返回 emptyMap
+        viewModelScope.launch {
+            selectedDayDetail
+                .filterNotNull()
+                .map { detail -> buildSavedConflicts(detail) }
+                .collect { _savedConflictsByEventId.value = it }
+        }
+    }
 
     fun goToPrevMonth() {
         _currentYearMonth.value = shiftMonth(_currentYearMonth.value, -1)
@@ -240,6 +354,74 @@ class CalendarViewModel @Inject constructor(
     }
 
     /**
+     * Phase 8 Sub-step 9：分类选择变化（EditEventSheet 内的 Chip 切换）
+     *
+     * - [categoryId] = null → 无分类
+     * - [categoryId] != null → 关联到该分类
+     *
+     * 只修改 [editingState] 的 categoryId，不持久化（等 saveEvent 才落库）
+     */
+    fun onEventCategoryChange(categoryId: Long?) {
+        _editingState.value?.let { current ->
+            _editingState.value = current.copy(categoryId = categoryId)
+        }
+    }
+
+    /**
+     * Phase 8 Sub-step 9：打开分类管理 Dialog
+     */
+    fun openCategoryManager() {
+        _categoryManagerError.value = null
+        _showCategoryManager.value = true
+    }
+
+    /**
+     * Phase 8 Sub-step 9：关闭分类管理 Dialog
+     */
+    fun closeCategoryManager() {
+        _showCategoryManager.value = false
+        _categoryManagerError.value = null
+    }
+
+    /**
+     * Phase 8 Sub-step 9：upsert 分类（新建/编辑）
+     *
+     * - 失败时写 [_categoryManagerError]，Dialog 显示
+     * - 成功时 Flow 自动 emit 新列表（eventCategories 自动更新）
+     */
+    fun upsertCategory(category: EventCategory) {
+        viewModelScope.launch {
+            try {
+                upsertEventCategory(category)
+                _categoryManagerError.value = null
+            } catch (e: IllegalArgumentException) {
+                _categoryManagerError.value = e.message ?: "保存分类失败"
+            }
+        }
+    }
+
+    /**
+     * Phase 8 Sub-step 9：删除分类
+     */
+    fun deleteCategory(id: Long) {
+        viewModelScope.launch {
+            try {
+                deleteEventCategory(id)
+                _categoryManagerError.value = null
+            } catch (e: IllegalArgumentException) {
+                _categoryManagerError.value = e.message ?: "删除分类失败"
+            }
+        }
+    }
+
+    /**
+     * Phase 8 Sub-step 9：清除分类管理错误状态（Dialog 关闭时调用）
+     */
+    fun clearCategoryManagerError() {
+        _categoryManagerError.value = null
+    }
+
+    /**
      * 清除错误状态（Snackbar 显示后调用）。
      */
     fun clearError() {
@@ -255,18 +437,26 @@ class CalendarViewModel @Inject constructor(
      * 失败时（require 抛 IllegalArgumentException）写 _editorError，成功则清空编辑器。
      *
      * 设计取舍：createdAt / updatedAt 都用 System.currentTimeMillis()。
-     * 更新场景下"保留原 createdAt"会引入额外的 repo 查询，收益小，先简化。
+     * 更新场景下保留原 createdAt 会引入额外的 repo 查询，收益小，先简化。
+     *
+     * ## Phase 8 Sub-step 1：提醒同步
+     * 事件写入成功后，根据 reminderMinutes / startTime 决定：
+     * - 都有效 → schedule 一次（覆盖旧的 PendingIntent）
+     * - 任意无效 → 如果是更新场景（originalId > 0），额外 cancel 一次（清残留）
+     * - 新建场景下无效无需 cancel（本来就没旧提醒）
      */
     fun saveEvent(state: EventEditState) {
         viewModelScope.launch {
             try {
                 val now = System.currentTimeMillis()
-                val event = state.toEvent(createdAt = now, updatedAt = now)
+                var event = state.toEvent(createdAt = now, updatedAt = now)
                 if (state.originalId == 0L) {
-                    addEvent(event)
+                    val newId = addEvent(event)
+                    event = event.copy(id = newId)
                 } else {
                     updateEvent(event)
                 }
+                syncReminder(event, isUpdate = state.originalId > 0L)
                 _editingState.value = null
                 _editorError.value = null
             } catch (e: IllegalArgumentException) {
@@ -276,10 +466,29 @@ class CalendarViewModel @Inject constructor(
     }
 
     /**
+     * 根据 event 当前 reminder 状态与调度器同步。
+     *
+     * - reminder 非空 + startTime 非空 → schedule
+     * - reminder 空 / startTime 空：
+     *   - 更新场景：cancel 一次，清掉可能存在的旧 PendingIntent
+     *   - 新建场景：什么都不做（数据库里没旧记录）
+     */
+    private suspend fun syncReminder(event: Event, isUpdate: Boolean) {
+        val canSchedule = event.reminder != null && event.startTime != null
+        if (canSchedule) {
+            scheduleEventReminder(event)
+        } else if (isUpdate && event.id > 0L) {
+            cancelEventReminder(event.id)
+        }
+    }
+
+    /**
      * 删除当前编辑器里的事件（仅 originalId > 0 的情况下有意义）。
      *
-     * 新建模式下保存失败也可用于「放弃草稿」，但 UseCase 内部会 require id > 0。
+     * 新建模式下保存失败也可用于放弃草稿，但 UseCase 内部会 require id > 0。
      * 失败写 _editorError，成功关闭编辑器。
+     *
+     * 删除时同时取消闹钟（即使 reminder 为 null 也要 cancel，避免旧 PendingIntent 残留）。
      */
     fun deleteEventFromEditor() {
         val current = _editingState.value ?: return
@@ -291,6 +500,7 @@ class CalendarViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 deleteEventUseCase(current.originalId)
+                cancelEventReminder(current.originalId)
                 _editingState.value = null
                 _editorError.value = null
             } catch (e: IllegalArgumentException) {
@@ -301,9 +511,17 @@ class CalendarViewModel @Inject constructor(
 
     // ===== 内部 =====
 
-    private fun buildUiState(summary: MonthSummary): CalendarUiState {
+    private fun buildUiState(
+        summary: MonthSummary,
+        liveConflict: EventConflictInfo?,
+        savedConflicts: Map<Long, EventConflictInfo>,
+    ): CalendarUiState {
         val yearMonth = _currentYearMonth.value
         val cells = generateMonthCells(yearMonth, summary, today)
+        // Phase 8 Sub-step 9 Step 5：农历角标一次性生成 42 格的 label
+        val lunarLabels = cells.associate { cell ->
+            cell.date to buildLunarLabel(cell.date)
+        }
         return CalendarUiState(
             yearMonth = yearMonth,
             monthCells = cells,
@@ -311,7 +529,44 @@ class CalendarViewModel @Inject constructor(
             today = today,
             viewType = _viewType.value,
             selectedDate = _selectedDate.value,
+            liveConflictInfo = liveConflict,
+            savedConflictsByEventId = savedConflicts,
+            monthLunarLabels = lunarLabels,
         )
+    }
+
+    /**
+     * Phase 8 Sub-step 9 Step 5：计算单个 cell 的农历角标。
+     *
+     * - 用 [LunarCalendar.displayLabel] 拿到最终要显示的字符串
+     * - 用 [LunarCalendar.toLunarDate] 看是否有节日，决定是否走 tertiary 高亮
+     */
+    private fun buildLunarLabel(dateMillis: Long): CalendarUiState.LunarCellLabel {
+        val lunarDate = lunarCalendar.toLunarDate(dateMillis)
+        val isFestival = lunarDate.festivals.isNotEmpty() || lunarDate.solarFestivals.isNotEmpty()
+        return CalendarUiState.LunarCellLabel(
+            text = lunarCalendar.displayLabel(lunarDate),
+            isFestival = isFestival,
+        )
+    }
+
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：构造 selectedDayDetail 中每个 event 的冲突 map
+     *
+     * 规则：
+     * - weekNumber == null（无学期 / 学期外）→ emptyMap
+     * - 串行调用 detectSavedConflict(event)：单日 events ≤ 10，串行开销可接受
+     * - event.id <= 0 跳过（理论上 DayDetail.events 都是已保存的，但防御性过滤）
+     */
+    private suspend fun buildSavedConflicts(detail: DayDetail): Map<Long, EventConflictInfo> {
+        if (detail.weekNumber == null) return emptyMap()
+        val map = mutableMapOf<Long, EventConflictInfo>()
+        for (event in detail.events) {
+            if (event.id > 0L) {
+                map[event.id] = detectSavedConflict(event)
+            }
+        }
+        return map
     }
 
     companion object {

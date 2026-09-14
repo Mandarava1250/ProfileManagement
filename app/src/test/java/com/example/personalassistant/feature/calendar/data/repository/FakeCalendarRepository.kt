@@ -83,22 +83,46 @@ class FakeCalendarRepository : CalendarRepository {
 
     // ===== 联动聚合（Sub-step 2） — 占位实现 =====
 
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：测试用 —— 让 [observeDayDetail] 返回指定 weekNumber。
+     *
+     * - null = 默认占位（不返回 weekNumber）
+     * - 1..N = 让 DayDetail.weekNumber = N，触发 VM 的 saved conflicts 计算路径
+     */
+    var weekNumberForTest: Int? = null
+
     override fun observeDayDetail(date: Long): Flow<DayDetail> =
         eventsState.map { _ ->
-            // 简化版：只返回事件 + 默认空 tasks/courses
-            // 真实场景需要 mock taskDao / courseDao / semesterDao，但这里只测试 events 链路
             DayDetail(
                 date = date,
                 dayOfWeek = 1,
                 events = eventsState.value.filter { it.date == date },
                 tasks = emptyList(),
                 courses = emptyList(),
-                weekNumber = null,
+                weekNumber = weekNumberForTest,
             )
         }
 
     override fun observeMonthSummary(monthStart: Long, monthEnd: Long, today: Long): Flow<MonthSummary> =
         eventsState.map { _ -> emptyMap() }
+
+    // ===== Phase 8 Sub-step 3 全局搜索 =====
+
+    /**
+     * Phase 8 Sub-step 3：测试用搜索实现。
+     *
+     * - :keyword 形如 `%xxx%`，去掉首尾 `%` 后在 title / note / category 三字段子串匹配
+     * - 区分大小写
+     */
+    override fun searchEvents(keyword: String): Flow<List<Event>> =
+        eventsState.map { list ->
+            val needle = keyword.removePrefix("%").removeSuffix("%")
+            list.filter { event ->
+                event.title.contains(needle, ignoreCase = false) ||
+                    (event.note?.contains(needle, ignoreCase = false) == true) ||
+                    (event.category?.contains(needle, ignoreCase = false) == true)
+            }
+        }
 
     // ===== 测试辅助 helpers =====
 

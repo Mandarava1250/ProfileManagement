@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.calendar.presentation
 
 import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.calendar.domain.recurrence.RecurrenceRule
 
 /**
  * Phase 7c Sub-step 5：事件编辑状态（Compose 表单状态）
@@ -39,11 +40,25 @@ data class EventEditState(
     val startMinute: Int? = null,
     val endHour: Int? = null,
     val endMinute: Int? = null,
+    /**
+     * Phase 8 Sub-step 9：分类 ID（替代旧 category String）
+     *
+     * - null → 无分类
+     * - 保存时同时写 categoryId，旧 [category] 字段保留（只读兼容，可空）
+     */
+    val categoryId: Long? = null,
     val category: String = "",
     val note: String = "",
     val reminderMinutes: Int? = null,
     val color: Int = Event.DEFAULT_COLOR,
     val linkedTaskId: Long? = null,
+    /**
+     * Phase 8 Sub-step 9 Step 3：RRULE 重复规则（编辑状态）
+     *
+     * - null → 不重复
+     * - 非 null → 提交时 toRfcString() 写入 DB 的 [Event.rrule]
+     */
+    val recurrence: RecurrenceRule? = null,
 ) {
     /** 当前是否为「新建」模式（originalId == 0） */
     val isNew: Boolean get() = originalId == 0L
@@ -102,8 +117,12 @@ data class EventEditState(
             color = color,
             reminder = reminderMinutes,
             note = note.ifBlank { null },
+            // Phase 8 Sub-step 9：保存 categoryId，旧 category 字符串保留（只读兼容）
+            categoryId = categoryId,
             category = category.ifBlank { null },
             linkedTaskId = linkedTaskId,
+            // Phase 8 Sub-step 9 Step 3：表单 recurrence → Event.recurrence
+            recurrence = recurrence,
             createdAt = createdAt,
             updatedAt = updatedAt,
         )
@@ -135,11 +154,14 @@ data class EventEditState(
                 startMinute = start?.minute,
                 endHour = end?.hour,
                 endMinute = end?.minute,
+                // Phase 8 Sub-step 9：categoryId 优先；旧 category 字符串作为后备
+                categoryId = event.categoryId,
                 category = event.category.orEmpty(),
-                note = event.note.orEmpty(),
                 reminderMinutes = event.reminder,
                 color = event.color,
                 linkedTaskId = event.linkedTaskId,
+                // Phase 8 Sub-step 9 Step 3：回填 recurrence（rrule 已通过 mapper 转好）
+                recurrence = event.recurrence,
             )
         }
 

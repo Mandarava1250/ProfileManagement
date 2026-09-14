@@ -69,4 +69,9 @@ interface TaskTagDao {
      */
     @Query("SELECT taskId, tagId FROM task_tag_cross_ref")
     fun observeAllTaskTagPairs(): Flow<List<TaskTagCrossRef>>
+
+    // ===== Phase 8 Sub-step 4：备份导出快照 =====
+
+    @Query("SELECT taskId, tagId FROM task_tag_cross_ref")
+    suspend fun getAllCrossRefs(): List<TaskTagCrossRef>
 }

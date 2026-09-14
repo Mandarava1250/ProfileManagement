@@ -85,6 +85,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- 日程事件提醒精确闹钟接收器（Phase 8 Sub-step 1）-->
+        <receiver
+            android:name=".feature.calendar.data.reminder.EventReminderReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.personalassistant.action.EVENT_REMINDER" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>

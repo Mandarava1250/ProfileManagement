@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.calendar.domain.model.EventConflictInfo
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.core.utils.DateUtils
@@ -63,6 +64,12 @@ fun DayDetailSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     onEventClick: (Event) -> Unit = {},
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：event.id → EventConflictInfo 映射
+     * - 来自 [CalendarViewModel.savedConflictsByEventId]
+     * - 每个事件行根据 [conflictsByEventId][event.id] 是否存在冲突决定是否显示 [ConflictBadge]
+     */
+    conflictsByEventId: Map<Long, EventConflictInfo> = emptyMap(),
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val zone = remember { ZoneId.systemDefault() }
@@ -169,7 +176,12 @@ fun DayDetailSheet(
                             )
                         }
                         items(dayDetail.events, key = { "event-${it.id}" }) { event ->
-                            SheetEventRow(event = event, onClick = { onEventClick(event) })
+                            val conflict = conflictsByEventId[event.id]
+                            SheetEventRow(
+                                event = event,
+                                onClick = { onEventClick(event) },
+                                conflict = conflict,
+                            )
                         }
                     }
                 }
@@ -203,7 +215,16 @@ private fun SheetSectionHeader(
 }
 
 @Composable
-private fun SheetEventRow(event: Event, onClick: () -> Unit = {}) {
+private fun SheetEventRow(
+    event: Event,
+    onClick: () -> Unit = {},
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：当前事件的冲突结果
+     * - null = 无冲突（默认）
+     * - 非 null → 行末显示 [ConflictBadge]
+     */
+    conflict: EventConflictInfo? = null,
+) {
     val timeText = when {
         event.isEffectivelyAllDay -> "全天"
         event.startTime != null -> {
@@ -246,6 +267,15 @@ private fun SheetEventRow(event: Event, onClick: () -> Unit = {}) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+        // Phase 8 Sub-step 9 Step 4.2：行末冲突角标
+        // 仅当 conflict 非空且存在实际冲突时显示（conflict 组件内部 hasConflict=false 时短路）
+        if (conflict != null) {
+            Spacer(Modifier.width(8.dp))
+            ConflictBadge(
+                hasConflict = conflict.hasConflict,
+                count = conflict.conflictingCourses.size,
+            )
         }
     }
 }

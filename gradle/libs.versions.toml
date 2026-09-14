@@ -41,6 +41,12 @@ kotlinx-serialization = "1.6.2"
 # Material
 material = "1.11.0"
 
+# Lunar Calendar (cn.6tail:lunar — 已发布到 Maven Central)
+lunar = "1.7.5"
+
+# Image loading (Coil Compose — 附件缩略图用)
+coil = "2.7.0"
+
 # Test
 junit = "4.13.2"
 junit-android = "1.1.5"
@@ -101,10 +107,19 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 # Material
 google-material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 
+# Lunar Calendar
+lunar = { group = "cn.6tail", name = "lunar", version.ref = "lunar" }
+
+# Image loading
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
 # Test
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junit-android" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
+# Phase 3：Room 迁移 instrumented 测试（需要设备/模拟器才能跑）
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+androidx-test-core = { group = "androidx.test", name = "core", version = "1.5.0" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 # Phase 5b: VM 单测需要 set Main dispatcher

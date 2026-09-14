@@ -21,26 +21,39 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.Task
+import com.example.personalassistant.feature.task.domain.model.TaskDisplayPreferences
 import com.example.personalassistant.feature.task.domain.model.TaskQuadrant
 import com.example.personalassistant.feature.task.domain.model.TaskSort
+import com.example.personalassistant.feature.task.domain.model.TaskViewMode
+import com.example.personalassistant.feature.task.presentation.components.PriorityTabRow
 import com.example.personalassistant.feature.task.presentation.components.QuadrantSection
+import com.example.personalassistant.feature.task.presentation.components.RenameQuadrantAliasDialog
 import com.example.personalassistant.feature.task.presentation.components.SortMenu
 import com.example.personalassistant.feature.task.presentation.components.TagFilterBar
 import com.example.personalassistant.feature.task.presentation.components.TaskFilterBar
 import com.example.personalassistant.feature.task.presentation.components.TaskItem
 
 /**
- * 任务 Tab 内容：顶部 FilterBar + TagFilterBar + P1-P4 + 未排期 分组 + 底部折叠已完成
+ * 任务 Tab 内容：顶部 FilterBar + TagFilterBar + **PriorityTabRow（Phase 8b'）** + 列表 + 折叠已完成
  *
  * Phase 4b：顶部 FilterBar（filter chips + sort 入口）+ 排序下拉菜单
  * Phase 6b：onEditTask 重命名为 onClickTask（编辑走详情页内编辑按钮）
  * Phase 6c：在 TaskFilterBar 下新增 [TagFilterBar]；onFilterChange 类型改 [FilterExpression]；
  *         新增 onTagToggle + onClearTag 用于标签筛选
+ *
+ * Phase 8b'：在 TagFilterBar 下新增 [PriorityTabRow] 6-Tab 切换 + 长按重命名 dialog；
+ *           列表渲染根据 [TaskViewMode] 切换 ALL / BY_QUADRANT 两种模式；
+ *           通过 5 个新回调（onShowAll / onSelectQuadrant / onLongPressQuadrant / onAliasChange / onDismissRename）
+ *           驱动 [TaskViewModel]
  */
 @Composable
 fun TasksTab(
@@ -55,8 +68,15 @@ fun TasksTab(
     onSortClick: () -> Unit,
     onSortSelected: (TaskSort) -> Unit,
     onSortDismiss: () -> Unit,
+    // ===== Phase 8b' =====
+    onShowAll: () -> Unit,
+    onSelectQuadrant: (TaskQuadrant) -> Unit,
+    onAliasChange: (TaskQuadrant, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // 长按哪个象限就弹哪个的 dialog；null = 不显示
+    var renamingQuadrant by remember { mutableStateOf<TaskQuadrant?>(null) }
+
     Column(modifier = modifier.fillMaxSize()) {
         // 顶部 FilterBar（分类）
         TaskFilterBar(
@@ -74,6 +94,15 @@ fun TasksTab(
             onClear = onClearTag,
         )
 
+        // Phase 8b'：5 Tab 切换 + 任务计数
+        PriorityTabRow(
+            displayPreferences = state.displayPreferences,
+            activeQuadrantCount = state.groups.byQuadrant.mapValues { it.value.size },
+            onSelectAll = onShowAll,
+            onSelectQuadrant = onSelectQuadrant,
+            onLongPressQuadrant = { q -> renamingQuadrant = q },
+        )
+
         // SortMenu（挂在 FilterBar 的位置之外，由 Box 锚定）
         Box(modifier = Modifier.fillMaxWidth()) {
             SortMenu(
@@ -81,6 +110,20 @@ fun TasksTab(
                 currentSort = state.sort,
                 onSortSelected = onSortSelected,
                 onDismiss = onSortDismiss,
+            )
+        }
+
+        // Phase 8b'：重命名 dialog
+        renamingQuadrant?.let { q ->
+            val alias = TaskDisplayPreferences.aliasOf(state.displayPreferences, q)
+            RenameQuadrantAliasDialog(
+                quadrant = q,
+                currentAlias = alias,
+                onConfirm = { newAlias ->
+                    onAliasChange(q, newAlias)
+                    renamingQuadrant = null
+                },
+                onDismiss = { renamingQuadrant = null },
             )
         }
 
@@ -98,18 +141,35 @@ fun TasksTab(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(vertical = 8.dp),
         ) {
-            // 按象限顺序渲染 P1, P2, P3, P4 + UNSCHEDULED
-            TaskQuadrant.entries.forEach { quadrant ->
-                val tasks = state.groups.byQuadrant[quadrant].orEmpty()
-                if (tasks.isNotEmpty()) {
-                    item(key = "header-${quadrant.name}") {
-                        QuadrantSection(
-                            quadrant = quadrant,
-                            count = tasks.size,
-                        )
+            // Phase 8b'：根据 viewMode 选择渲染策略
+            when (state.displayPreferences.viewMode) {
+                TaskViewMode.ALL -> {
+                    // ALL：渲染所有象限（P1/P2/P3/P4/UNSCHEDULED）
+                    TaskQuadrant.entries.forEach { quadrant ->
+                        val tasks = state.groups.byQuadrant[quadrant].orEmpty()
+                        if (tasks.isNotEmpty()) {
+                            item(key = "header-${quadrant.name}") {
+                                QuadrantSection(
+                                    quadrant = quadrant,
+                                    count = tasks.size,
+                                    displayName = TaskDisplayPreferences.aliasOf(state.displayPreferences, quadrant),
+                                )
+                            }
+                            items(tasks, key = { it.id }) { task ->
+                                TaskRow(task, onToggleComplete, onClickTask, onDelete)
+                            }
+                        }
                     }
-                    items(tasks, key = { it.id }) { task ->
-                        TaskRow(task, onToggleComplete, onClickTask, onDelete)
+                }
+
+                TaskViewMode.BY_QUADRANT -> {
+                    // BY_QUADRANT：只渲染 selectedQuadrant（兜底 P1）
+                    val target = state.displayPreferences.selectedQuadrant ?: TaskQuadrant.P1
+                    val tasks = state.groups.byQuadrant[target].orEmpty()
+                    if (tasks.isNotEmpty()) {
+                        items(tasks, key = { it.id }) { task ->
+                            TaskRow(task, onToggleComplete, onClickTask, onDelete)
+                        }
                     }
                 }
             }

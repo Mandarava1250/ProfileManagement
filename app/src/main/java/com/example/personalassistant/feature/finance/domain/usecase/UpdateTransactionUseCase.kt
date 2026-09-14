@@ -29,6 +29,7 @@ class UpdateTransactionUseCase @Inject constructor(
         categoryId: Long,
         note: String?,
         date: Long,
+        attachmentUri: String? = null,
     ) {
         require(amount > 0.0) { "金额必须大于 0" }
         require(categoryId > 0L) { "分类 id 非法" }
@@ -39,6 +40,7 @@ class UpdateTransactionUseCase @Inject constructor(
             categoryId = categoryId,
             note = note?.takeIf { it.isNotBlank() },
             date = date,
+            attachmentUri = attachmentUri,
         )
     }
 }

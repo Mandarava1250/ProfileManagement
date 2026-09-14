@@ -135,11 +135,20 @@ dependencies {
     // ---- Material Components（仅用于 Splash / Snackbar 等少数 Compose 未覆盖的场景）----
     implementation(libs.google.material)
 
+    // ---- Lunar Calendar (农历日期转换，驱动月视图角标) ----
+    implementation(libs.lunar)
+
+    // ---- Image loading (Coil — Phase 2 附件缩略图) ----
+    implementation(libs.coil.compose)
+
     // ---- Test ----
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    // Phase 3：Room MigrationTestHelper（真跑迁移需要设备，无设备时仅保证编译通过）
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }
