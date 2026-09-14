@@ -4,7 +4,7 @@
 > **触发规则**：每次执行完一个计划（plan）后追加一段
 > **作用**：记录已完成的步骤、对应的计划章节、关键变更文件、验证结果、踩坑笔记 —— 方便后续记忆与查漏补缺
 > **生成时间**：2026-09-09 01:10（基于 `git log --all` 全量重建，commit `1563bbe`）
-> **本轮追加**：2026-09-14 22:55（Phase 8final：通知 deeplink + 任务矩阵视图 @4d2e6c5 @2aded6e）
+> **本轮追加**：2026-09-15 00:55（扩展 A：force 整理台账订正 + plan-20260914-233221 §二事实订正 + SHA 锚点真实状态补充）
 
 ---
 
@@ -14,14 +14,14 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
-| 当前 HEAD | `2aded6e`（功能）+ 本轮台账 commit |
-| 当前分支 | `feature/phase-8-notification-matrix`（已 push origin）|
+| 当前 HEAD | `9ae72f1`（Phase 8g finalize merge）+ 本轮台账 commit |
+| 当前分支 | `Develop`（已 push origin）|
 | 主分支 | `Develop` |
-| 累计 commit 数 | 70（`git rev-list --count HEAD`，含 merge / revert）|
+| 累计 commit 数 | 79（`git rev-list --count HEAD`，含 merge / revert）|
 | 测试用例 | **648 JVM 单测**（`testDebugUnitTest` 实测 0 失败 / 0 错误，72 个 XML 报告）= 基线 598 + 本轮 50（`DeepLinksTest` 21 + `TaskMatrixTest` 24 + `TaskViewModelDisplayTest` 新增 5）<br>+ **6 instrumented**（`connectedDebugAndroidTest`，AVD 真跑 0 失败；⚠️ 本轮未重跑）|
 | 测试环境 | AVD `pm_api34`（API 34 / aosp_atd / x86_64 / WHPX 硬件加速）—— 属本机环境，**不在版本库** |
 | Room 数据库 | **v10**（Phase 5：`transactions.transferAccountId`/`transferPairId` + `user_profiles.initialBalance` + `index_transactions_accountId_type`）<br>版本号常量已提为 `APP_DATABASE_VERSION`，`@Database` 注解与 `BackupFormatVersion.DB_VERSION` 同源 —— 见下方 Phase 5「踩坑笔记」第 1 条|
-| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项）|
+| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项 + 8g finalize 收口）|
 | 已完成（本轮新转 ✅） | **阶段 Phase 3（多账户 + 数据隔离）✅** —— Room 迁移已在 AVD `pm_api34` 真跑通过 @`a3d7dca`，原 ⛔ 环境阻塞已解除 |
 | 已完成（本轮新转 ✅） | **阶段 Phase 4（账户头像）✅** —— `c4224c3` 功能 + `75fca56` 真实读写 AVD 真跑；无 DB 变更 / 无新依赖 |
 | 已完成（本轮新转 ✅） | **Phase 8a 通知 deeplink ✅** —— `4d2e6c5`，3 类提醒点击跳详情页（task/event/course）；`DeepLinksTest` 21/21。⚠️ 真机冷/热启动点击通知仍需人工目测 |
@@ -412,27 +412,30 @@
 |---|---|---|
 | 8a | 提醒调度 + 通知 deeplink | ✅ 调度部分早已完成（Event 端 `1e30283` / Task 端 Phase 5）；**deeplink 跳转 @`4d2e6c5`**（3 类提醒 → 详情页，冷/热启动都覆盖）。⚠️ 真机点击验收待人工 |
 | 8b | 5 档优先级 + 分组视图 | ✅ domain 完成 + ✅ **8b' 5 Tab UI + aliases**（2026-09-09）+ ✅ **8b'' 矩阵视图 @`2aded6e`**（`TaskViewMode.MATRIX`，2×2 + 未排期独立区 + <600dp 纵向 5 区）。⚠️ 撤销了 plan-20260909 §决策5「不提供矩阵视图」，理由见 Phase 8final 段 |
-| 8c | 附件上传 + 多账户 | ⏳ 未做（DB v6→v8） |
+| 8c | 附件上传 + 多账户 | 🟨 **代码在库**（`user_profiles` / `accountId` / 复合 FK / `AccountSettingsCard`，commit `a3d7dca` 等；DB v10 已落地）；卡 instrumented 迁移真跑（`AppDatabaseMigrationsTest.kt` 已写未跑，需 AVD）。详见 `plan-20260914-233221.md` §七 |
 | 8d | 主题 / 节假日 / 周次范围 | ✅ 主题 / 节假日已完成；**周次范围**用 `Course.weeks` 字符串方案（支持 `"1,3,5"` 单周、`"1-8,10-16"` 跨段，比 `startWeek/endWeek` 两个 Int 强） + `WeekCalculator` + `GetCoursesByWeekUseCase` + `WeekHeaderRow`（◀ 第N周 ▶ / 回到本周）+ VM `selectWeek`/`jumpToCurrentWeek` + `WeekCalculatorTest`。**plan 提的 `startWeek/endWeek` 不做**（连降级都做不到，详见 Phase 8g finalize 段）|
 | 8e | 全局搜索 | ✅ 已做 |
 | 8f | 备份恢复 | ✅ 已做 |
 | 8g | Sub-step 9（分类 / 重复 / 冲突 / 农历） | ✅ 已做（5 个 step） |
-| 8h | 合并 `feature/phase-8-reminder` 回 `Develop` | ⏳ 未做 |
+| 8h | 合并 phase-8 三个 feature 分支 → `Develop` | 🟨 **部分完成**：`feature/phase-8-finalize` 已折叠 @`eb0d402`（空 squash，拓扑保留）；`feature/phase-8-reminder`（顶部 `b5bf109`）+ `feature/phase-8-notification-matrix`（顶部 `90daf6c`）**仍是独立分支**，未合并到 `feature/phase-8` 也未删除，留给下一轮收尾阶段统一处理 |
 | 8f' | 备份导入预览差异 | ✅ 已合并 @`685a551`；**JVM 单测 63 / 0 失败**（`BackupDiffCalculatorTest` 25 + `BackupExporterTest` 3 + `BackupFormatVersionTest` 6 + `BackupLegacyCompatTest` 15 + `BackupSerializationTest` 8 + `BackupValidatorTest` 6）。⚠️ 3 个不可测项进 backlog：`BackupImporterTest`（强依赖 Room `@Transaction`）/ `BackupPreviewViewModelTest`（VM 需 fake）/ `DailyAutoBackupWorkerTest`（WorkManager 测试） |
 
 ---
 
 ## 📌 下次继续时的入口
 
-**当前最新 commit**：`1563bbe`（DEV_LOG 全量重建，覆盖 Phase 1~8 全部 38 个 commit）
+**当前最新 commit**：`9ae72f1`（Phase 8g finalize merge @`9ae72f1`，见上文「完成项目」第 6 条 + 本文件 §「Phase 8g finalize」段）
 
-**本轮盘点结果（2026-09-09 01:13）**：Phase 8b 实际状态重新复检 —— **domain 层 100% 完成**（5 档优先级 + 4 象限分组 + `TaskGroups` + `ObserveTasksByQuadrantUseCase` + 4 象限 UI 渲染均已存在），**只剩 5 Tab 切换 UI + aliases 自定义档名未做**。拆分为 `Phase 8b'` 单独执行。
+**历史背景（2026-09-09 01:13）**：Phase 8b 实际状态复检 —— **domain 层 100% 完成**（5 档优先级 + 4 象限分组 + `TaskGroups` + `ObserveTasksByQuadrantUseCase` + 4 象限 UI 渲染均已存在），**只剩 5 Tab 切换 UI + aliases 自定义档名未做**。拆分为 `Phase 8b'` 单独执行（已 ✅ @2026-09-09，见上方「已完成（本轮新转 ✅）」第 5 条）。
 
-**待办候选**（按推荐顺序）：
-1. **Phase 8b' 5 Tab UI + aliases**（方案 A：domain 已完成，仅补 UI）—— **下次推荐**
-2. Phase 8a 真实提醒调度
-3. Phase 8c 附件上传 + 多账户
-4. Phase 8h 合并 `feature/phase-8-reminder` → `Develop`
+**历史待办候选 4 条 vs 真实状态**（2026-09-15 00:55 订正）：
+
+| 原候选项 | 真实状态 |
+|---|---|
+| 1. Phase 8b' 5 Tab UI + aliases | ✅ 已完成（2026-09-09） |
+| 2. Phase 8a 真实提醒调度 | ✅ 调度部分早已完成（Event 端 `1e30283` / Task 端 Phase 5）；**deeplink @`4d2e6c5`** 完成；🟨 真机点击仍需人工 |
+| 3. Phase 8c 附件上传 + 多账户 | 🟨 代码在库，卡 instrumented 迁移真跑（详见上方「进度明细」8c 行） |
+| 4. Phase 8h 合并 `feature/phase-8-reminder` → `Develop` | 🟨 部分完成（详见上方「进度明细」8h 行） |
 
 ---
 
@@ -1396,3 +1399,57 @@ plan 文件在磁盘上仍是 **v1**：伙伴批准前给了 4 条修正意见�
 - 🟨 **8f' 不可测 backlog**：`BackupImporterTest` / `BackupPreviewViewModelTest` / `DailyAutoBackupWorkerTest`
 - 🟨 Phase 8 剩余子计划：附件旧文件回收 / Phase 3 账户切换快捷入口
 - ⏸ **Phase 8 之后**：等用户决定下一步（Phase 9 设计 / 直接 release / 项目归档）
+
+---
+
+## 🧹 扩展 A（2026-09-15 00:55） —— force 整理台账订正 + plan §二事实订正 + SHA 锚点真实状态
+
+> **触发**：用户要求"扩展 A，同时将所有的错误都修正"——指 §「进度明细」中 `8c` / `8h` 两条 stale（⏳ 未做），加上「顶部速览」HEAD/分支/commit 数、「下一入口」当前最新 commit 与 4 条候选、`plan-20260914-233221.md` §二里的 `8f' 21 单测` 与「环境实测 exit 1」两处与代码/环境不符的事实陈述。
+>
+> 本轮**纯文档订正**，不新增功能、不动 DB schema、不改业务逻辑。参照 plan §六风险表的「用 `str_replace` 做局部替换」建议，每处改动带证据（commit / 文件路径 / 实测数字）。
+
+### 已完成步骤
+
+| Step | 内容 | 证据 |
+|---|---|---|
+| 1 | **顶部速览 line 7「本轮追加」**：从 `2026-09-14 22:55（Phase 8final...）` 改为 `2026-09-15 00:55（扩展 A：...）` | 当前 commit |
+| 2 | **顶部速览 line 17/18/20/24**：HEAD `2aded6e` → `9ae72f1`；分支 `feature/phase-8-notification-matrix` → `Develop`；commit 数 70 → 79（`git rev-list --count HEAD`）；已完成 Phase 加注「8g finalize 收口」 | `git rev-list --count HEAD` 实测 79 |
+| 3 | **进度明细 8c 行**：⏳ → 🟨（代码在库：user_profiles/accountId/AccountSettingsCard，DB v10 已落地；卡 instrumented 迁移真跑） | commit `a3d7dca` + plan §七 |
+| 4 | **进度明细 8h 行**：⏳ → 🟨 部分完成（`feature/phase-8-finalize` 已折叠 @`eb0d402`；`feature/phase-8-reminder` + `feature/phase-8-notification-matrix` 仍是独立分支） | `git rev-parse --short` 三个分支顶部实测 |
+| 5 | **下一入口 line 427**：当前最新 commit `1563bbe` → `9ae72f1` | 与顶部速览一致 |
+| 6 | **下一入口 4 条候选**：原候选项全部刷新为真实状态（详见上方表格） | 同 step 3、4 |
+| 7 | **plan-20260914-233221.md §二 H2 / 8c / 8f' / 环境 4 行**：8f' 21 单测 → 实测 63 / 0 失败；环境 exit 1 → SDK 路径已知 `D:\Software\Code\Android\Sdk`（用户提供） | `git show 9ae72f1` 后 DEV_LOG 8g finalize 段已记 6 suite 数字 |
+
+### 关键事实（钉到台账的真相）
+
+- **三个 phase-8 分支的真实拓扑**（2026-09-15 00:55 `git rev-parse --short` 实测）：
+  - `feature/phase-8` = `49fa408`（顶部，**已存在**，包含本轮 G 工作）
+  - `feature/phase-8-finalize` = `2afbecf`（已折叠到 `feature/phase-8` @`eb0d402` 空 squash，**分支本体仍存在未删**）
+  - `feature/phase-8-reminder` = `b5bf109`（Phase 8f' 之前，独立分支未折叠）
+  - `feature/phase-8-notification-matrix` = `90daf6c`（Phase 8final 之前，独立分支未折叠）
+- **三 SHA 锚点真实可达性**（钉在 `plan-20260914-233221.md §八`，本轮不再调整；下面只补当前可达性，不改计划原文）：
+  - `38c1844` —— **reachable on `feature/phase-8`**（仍在分支链上）
+  - `2afbecf` —— **reachable on `feature/phase-8` + `feature/phase-8-finalize`**（双引用）
+  - `7bcaf20` —— **dangling**（force 整理前的 merge commit，branches 字段空，object store 仍存，可通过 `git cat-file -p 7bcaf20` 读取内容）；其 parent 是 `defce3f` + `2afbecf`，与当前 `9ae72f1`（parent `defce3f` + `49fa408`）**路径不同**
+- **本轮 force 整理**事实上**没有触发**（"把 2afbecf/38c1844 挪到 feature/phase-8 上" 这一步**实际上由 `eb0d402`（折叠 finalize）+ 当前 `feature/phase-8 = 49fa408` 的拓扑已经完成**——三个 phase-8 分支的工作内容已通过不同路径落到 Develop）
+
+### 验证结果
+
+- `git diff DEV_LOG.md` 改动集中于顶部速览、进度明细、下一入口三段；旧 8g finalize 段不动 ✅
+- `git diff plan-20260914-233221.md` 改动集中于 §一 H2、§二事实表 5 行；§八 SHA 锚点不动 ✅
+- `git status` 改动文件 = `DEV_LOG.md` + `.cyrene/docs/plan-20260914-233221.md` 两个文件
+
+### 踩坑笔记
+
+1. **「下一入口」段其实是"历史快照"**：原 line 425-435 写的"下次推荐 8b' "是 2026-09-09 的实时建议，到 2026-09-15 已经全部关闭。**不能简单改成空段或删除**——保留历史快照能告诉将来翻账的人"8b' 在 9-9 还没做"，再用「真实状态」表格对齐当前。**比纯删除更诚实**。
+2. **`str_replace` 多行替换（`edits` 数组）单次调用完成**：每次只对一个文件一处，避免脏 diff。
+3. **`findstr /R "8c|8h|..."` 在 powershell 内歧义大**（`|` 是 alternation 而 `'` 在 findstr 里是 quote）；这次改用 `findstr /N /C:"8c" DEV_LOG.md` 单字符串查询，更稳。
+4. **`7bcaf20` 是真实存在的 dangling commit**：force 整理没触发、reflog 过期后，object store 仍存。这是 Git GC 之前的安全网；想做彻底清理需要 `git reflog expire --expire=now --all && git gc --prune=now`，但**本轮不触发**（风险：彻底丢 7bcaf20 任何未引用的内容；目前 0 ahead，仅靠 object hash 找不回 topology）。
+
+### 下一个入口
+
+- 🟨 **真机人工验收**（同上）
+- 🟨 **8f' 不可测 backlog**（同上）
+- 🟨 **Phase 8 三个独立分支收尾**：`feature/phase-8-reminder` + `feature/phase-8-notification-matrix` 是否删除？是否 merge -s ours 拓扑保留？留给收尾阶段处理
+- 🟨 **Phase 8 剩余子计划**：附件旧文件回收 / Phase 3 账户切换快捷入口
+- ⏸ **Phase 8 之后**：等用户决定下一步
