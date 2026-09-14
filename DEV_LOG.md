@@ -26,7 +26,7 @@
 | 已完成（本轮新转 ✅） | **阶段 Phase 4（账户头像）✅** —— `c4224c3` 功能 + `75fca56` 真实读写 AVD 真跑；无 DB 变更 / 无新依赖 |
 | 已完成（本轮新转 ✅） | **Phase 8a 通知 deeplink ✅** —— `4d2e6c5`，3 类提醒点击跳详情页（task/event/course）；`DeepLinksTest` 21/21。⚠️ 真机冷/热启动点击通知仍需人工目测 |
 | 已完成（本轮新转 ✅） | **Phase 8b'' 任务矩阵视图 ✅** —— `2aded6e`，`TaskViewMode.MATRIX` + 2×2 分组 + 未排期独立区 + <600dp 纵向 5 区；`TaskMatrixTest` 24/24。⚠️ 双布局真机截图仍需人工 |
-| 台账纠错 | 第 411 行旧结论「❌ 5 Tab UI + aliases 未做」已过时：8b' 已于 2026-09-09 13:30 完成（见本文件 Phase 8b' 段）。本轮一并修正状态行 |
+| 已完成（本轮新转 ✅） | **Phase 8final 收尾 ✅** —— `4d2e6c5`/`2aded6e`/`defce3f`：通知 deeplink 跳转 + 任务矩阵视图，已合并到 Develop（详见本文件 Phase 8final 段） |
 | 进行中 | **阶段 Phase 5（跨账户转账 + 预算汇总）🟨** —— 代码已 push（`f86b8be` 数据层 + `438a29e` 功能层），598 JVM 断言全绿；⚠️ **不打 ✅ 的原因**：`Migration_9_10` 的 instrumented 真跑未做（JVM 只证明 SQL 形状对），且转账/总览 UI 未人工目测验收 |
 | 待开 | 阶段 Phase 6+：记账页顶部账户切换快捷入口（Phase 3 遗留）/ 附件旧文件回收（Phase 2 遗留）/ Phase 5 迁移真跑 |
 
@@ -413,12 +413,12 @@
 | 8a | 提醒调度 + 通知 deeplink | ✅ 调度部分早已完成（Event 端 `1e30283` / Task 端 Phase 5）；**deeplink 跳转 @`4d2e6c5`**（3 类提醒 → 详情页，冷/热启动都覆盖）。⚠️ 真机点击验收待人工 |
 | 8b | 5 档优先级 + 分组视图 | ✅ domain 完成 + ✅ **8b' 5 Tab UI + aliases**（2026-09-09）+ ✅ **8b'' 矩阵视图 @`2aded6e`**（`TaskViewMode.MATRIX`，2×2 + 未排期独立区 + <600dp 纵向 5 区）。⚠️ 撤销了 plan-20260909 §决策5「不提供矩阵视图」，理由见 Phase 8final 段 |
 | 8c | 附件上传 + 多账户 | ⏳ 未做（DB v6→v8） |
-| 8d | 主题 / 节假日 / 周次范围 | ✅ 主题 / 节假日已完成；周次范围部分未做 |
+| 8d | 主题 / 节假日 / 周次范围 | ✅ 主题 / 节假日已完成；**周次范围**用 `Course.weeks` 字符串方案（支持 `"1,3,5"` 单周、`"1-8,10-16"` 跨段，比 `startWeek/endWeek` 两个 Int 强） + `WeekCalculator` + `GetCoursesByWeekUseCase` + `WeekHeaderRow`（◀ 第N周 ▶ / 回到本周）+ VM `selectWeek`/`jumpToCurrentWeek` + `WeekCalculatorTest`。**plan 提的 `startWeek/endWeek` 不做**（连降级都做不到，详见 Phase 8g finalize 段）|
 | 8e | 全局搜索 | ✅ 已做 |
 | 8f | 备份恢复 | ✅ 已做 |
 | 8g | Sub-step 9（分类 / 重复 / 冲突 / 农历） | ✅ 已做（5 个 step） |
 | 8h | 合并 `feature/phase-8-reminder` 回 `Develop` | ⏳ 未做 |
-| 8f' | 备份导入预览差异 | ✅ 已合并 @`685a551`；🟨 21 个 JVM 单测仍未补 |
+| 8f' | 备份导入预览差异 | ✅ 已合并 @`685a551`；**JVM 单测 63 / 0 失败**（`BackupDiffCalculatorTest` 25 + `BackupExporterTest` 3 + `BackupFormatVersionTest` 6 + `BackupLegacyCompatTest` 15 + `BackupSerializationTest` 8 + `BackupValidatorTest` 6）。⚠️ 3 个不可测项进 backlog：`BackupImporterTest`（强依赖 Room `@Transaction`）/ `BackupPreviewViewModelTest`（VM 需 fake）/ `DailyAutoBackupWorkerTest`（WorkManager 测试） |
 
 ---
 
@@ -1345,6 +1345,54 @@ plan 文件在磁盘上仍是 **v1**：伙伴批准前给了 4 条修正意见�
 ### 下一个入口
 
 - 🟨 **真机人工验收**（8final 收尾条件）：3 类通知点击（冷/热/后台）+ 矩阵双布局截图
-- 🟨 **8f' 遗留**：`BackupDiffCalculatorTest` / `BackupImporterMergeTest` / `BackupPreviewViewModelTest`（21 用例）
-- 🟨 **可选**：把 plan-20260914-221000.md 正文更新成 v2，消除文字与实现的偏差
-- ➡️ Phase 8 剩余子计划：8d 课程周次范围（`startWeek`/`endWeek`）/ 附件旧文件回收 / Phase 3 账户切换快捷入口
+- 🟨 **8f' 不可测 backlog**：`BackupImporterTest` / `BackupPreviewViewModelTest` / `DailyAutoBackupWorkerTest`（3 项均需 Robolectric / Instrumented / WorkManager 测试，本轮不硬塞）
+- 🗑 **已闭合（不再追）**：
+  - ~~把 plan-20260914-221000.md 正文更新成 v2~~ —— 已确认 plan 当前就是 v2，无需修改
+  - ~~Phase 8d 课程周次范围（`startWeek`/`endWeek`）~~ —— 现有 `Course.weeks` 字符串方案已覆盖单周/跨段，提案连降级都做不到
+- ➡️ Phase 8 剩余子计划：附件旧文件回收 / Phase 3 账户切换快捷入口
+
+---
+
+## 🧹 Phase 8g finalize（2026-09-15 00:25） —— 落盘核对 + 台账纠错 + plan v2 验收
+
+> 对应计划：`.cyrene/docs/plan-20260914-233221.md`（8g · finalize）。
+> 本轮**未写新代码**，纯核对 + 文档订正：把 plan 估错、台账 stale、phase 8d 误判 三处事实对齐到代码现状。
+
+### 已完成步骤
+
+| Step | 内容 | 关键结论 |
+|---|---|---|
+| 1 | **plan-20260914-221000.md 落盘核对** | 用 `read_file` 读全文 282 行，确认已经是 v2（头部明确「修订依据 = 已落地实现」、差异表 / 风险 / 决策 / step 状态齐全）。**8g 计划里 T1「正文更新成 v2」= 0 改动**。 |
+| 2 | **8f' backup 测试覆盖盘点** | `findstr @Test` + `:app:testDebugUnitTest --tests 'core.backup.*'` 实跑：**6 个 suite / 63 用例 / 0 失败**（diff 25 + exporter 3 + format 6 + legacy 15 + serialization 8 + validator 6）。8g 计划里「diff 与 importer 零测试」是 stale 误判——**实写代码不含 importer**，且 importer 强依赖 Room `@Transaction` 不能纯 JVM 测。 |
+| 3 | **DEV_LOG 台账纠错** | 删除 stale「台账纠错」行；改写「8f' 备份」21 用例 → 63 用例 + 3 项不可测 backlog；改写「8d 周次范围」标注 `Course.weeks` 字符串方案已覆盖、plan 提的 `startWeek/endWeek` 不做。 |
+| 4 | **下一入口清理** | 把 4 条已闭合事项用 ~~删除线~~ 标出，留给将来翻账时不被再翻出来；真机验收、3 个不可测项、剩余子计划转入正常 backlog。 |
+| 5 | **本段阶段记录** | 写到 DEV_LOG 末尾，commit `chore(dev_log): Phase 8g finalize 落盘核对` |
+
+### 关键事实（钉到台账的真相）
+
+- **`plan-20260914-221000.md` = v2 现状**（282 行，含 v1→v2 差异表 / 决策反转 / step 全 ✅ / 风险表 / 提交节奏）
+- **backup JVM 单测 = 63 / 0 失败**（不是 21）
+- **`BackupDiffCalculator` 是纯函数**，无任何 Room/IO 依赖——可纯 JVM 测（这就是 diff 有 25 个测试的原因）
+- **`BackupImporter` 强依赖 Room `@Transaction` + 8 个 DAO**——需要 Robolectric / instrumented，本轮按 plan 风险表要求**只测纯函数层，3 个不可测项如实进 backlog**
+- **DB schema = v10**（已在 2026-09-12 升版；plan 写的「v9」是 stale）
+- **8d 周次范围 = 已完成**（`Course.weeks` 字符串方案 + `WeekCalculator` + UI），提案的 `startWeek/endWeek` 两个 Int 不做（能力更弱）
+
+### 验证结果
+
+- `:app:testDebugUnitTest --tests 'com.example.personalassistant.core.backup.*' --rerun` → **BUILD SUCCESSFUL**，6 个 suite 全绿、63 用例 0 失败
+- `read_file plan-20260914-221000.md` → 已 v2、无需改
+- `read_file DEV_LOG.md` 第 416 行 / 第 421 行 → 已订正
+
+### 踩坑笔记
+
+1. **`run_shell` 的 `findstr /R` 在 powershell 内无法匹 emoji**——这次用 `search_text` 直接搜中文「21 个 JVM」才定位到正确行；emoji 字符必须用 unicode 码点或完整文本匹配。
+2. **台账里用 🟨 表示「进行中」vs ⚠️ 表示「待人工验收」**，两者语义不同；本轮订正时统一换成 ⚠️ 标注「不可测」（不是「进行中」）。
+3. **「8f' 21 个单测」这种估算本来就过时**——下次 plan 估数应该 `findstr @Test` + 实跑 `--rerun` 拿真实数，不要凭印象写数字。
+4. **`str_replace` 的 old_string 严格匹配 emoji 字节**——一处错就 "old_string 未找到"；需要先用 `search_text` 看精确字符。
+
+### 下一个入口
+
+- 🟨 **真机人工验收**（8final 收尾条件）：3 类通知点击（冷/热/后台）+ 矩阵双布局截图
+- 🟨 **8f' 不可测 backlog**：`BackupImporterTest` / `BackupPreviewViewModelTest` / `DailyAutoBackupWorkerTest`
+- 🟨 Phase 8 剩余子计划：附件旧文件回收 / Phase 3 账户切换快捷入口
+- ⏸ **Phase 8 之后**：等用户决定下一步（Phase 9 设计 / 直接 release / 项目归档）
