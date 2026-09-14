@@ -222,6 +222,8 @@ class TaskViewModel @Inject constructor(
      *
      * - 切到 [TaskViewMode.ALL]：selectedQuadrant 保持不变（不影响展示）
      * - 切到 [TaskViewMode.BY_QUADRANT]：若 selectedQuadrant 为 null，强制回落到 P1（最常用）
+     * - 切到 [TaskViewMode.MATRIX]：不动 selectedQuadrant（矩阵不依赖它）；
+     *   持久化层会在模式 != BY_QUADRANT 时自动不读该值（见 TaskDisplayRepositoryImpl.parseSelected）
      */
     fun setViewMode(mode: TaskViewMode) {
         viewModelScope.launch {
@@ -253,6 +255,18 @@ class TaskViewModel @Inject constructor(
         viewModelScope.launch {
             taskDisplayRepository.setViewMode(TaskViewMode.ALL)
             taskDisplayRepository.selectQuadrant(null)
+        }
+    }
+
+    /**
+     * 切到「矩阵视图 / 2×2 分组」（Phase 8final G2，持久化）
+     *
+     * 与 [showAll] 的差异只在 viewMode：数据仍是同一份 [TaskGroups]，
+     * 不重新分类、不影响 selectedQuadrant（矩阵不用它）。
+     */
+    fun showMatrix() {
+        viewModelScope.launch {
+            taskDisplayRepository.setViewMode(TaskViewMode.MATRIX)
         }
     }
 }
