@@ -145,40 +145,6 @@ class CalendarViewModel @Inject constructor(
 
     private val today: Long = DateUtils.todayStartMillis()
 
-    init {
-        // 1. 编辑实时冲突：_editingState debounce(150ms) → detectLiveConflict
-        // 关闭编辑器（state=null）时短路 emit null
-        // 不用 flatMapLatest 是为了让 collect 内可以做"状态判定 → null or detect"
-        // （flow { emit(...) } + flowOf(null) 的类型推断会让结果退化为 Flow<Nothing?>）
-        //
-        // 防御性 runCatching：草稿态 title="" 时 [EventEditState.toEvent] 会触发 Event.require()。
-        // 我们先显式判断 title.isBlank() 跳过 detect（草稿态 emit null 表示"无冲突"），
-        // 再用 runCatching 兜底，避免异常泄露到 viewModelScope。
-        viewModelScope.launch {
-            _editingState
-                .debounce(150L)
-                .collect { state ->
-                    val info = when {
-                        state == null -> null
-                        state.title.isBlank() -> null
-                        else -> runCatching {
-                            detectLiveConflict(state.toEvent(0L, 0L))
-                        }.getOrNull()
-                    }
-                    _liveConflictInfo.value = info
-                }
-        }
-
-        // 2. 已保存冲突：selectedDayDetail 变化 → 对每个有 id 的 event 串行检测
-        // weekNumber 为空时直接短路返回 emptyMap
-        viewModelScope.launch {
-            selectedDayDetail
-                .filterNotNull()
-                .map { detail -> buildSavedConflicts(detail) }
-                .collect { _savedConflictsByEventId.value = it }
-        }
-    }
-
     /**
      * 主 UI State。
      *
@@ -242,6 +208,45 @@ class CalendarViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList(),
         )
+
+    // 注意：本 init 块必须放在 uiState / selectedDayDetail / weekCells 之后。
+    // viewModelScope 的调度器是 Dispatchers.Main.immediate，构造期 launch 的协程体
+    // 会在主线程上内联立即执行一次；若此时下方属性尚未按声明顺序完成初始化，
+    // selectedDayDetail 读到的就是 null，filterNotNull() 内部 collect 直接 NPE，
+    // 表现为「一进日历 Tab 就崩溃」。
+    init {
+        // 1. 编辑实时冲突：_editingState debounce(150ms) → detectLiveConflict
+        // 关闭编辑器（state=null）时短路 emit null
+        // 不用 flatMapLatest 是为了让 collect 内可以做"状态判定 → null or detect"
+        // （flow { emit(...) } + flowOf(null) 的类型推断会让结果退化为 Flow<Nothing?>）
+        //
+        // 防御性 runCatching：草稿态 title="" 时 [EventEditState.toEvent] 会触发 Event.require()。
+        // 我们先显式判断 title.isBlank() 跳过 detect（草稿态 emit null 表示"无冲突"），
+        // 再用 runCatching 兜底，避免异常泄露到 viewModelScope。
+        viewModelScope.launch {
+            _editingState
+                .debounce(150L)
+                .collect { state ->
+                    val info = when {
+                        state == null -> null
+                        state.title.isBlank() -> null
+                        else -> runCatching {
+                            detectLiveConflict(state.toEvent(0L, 0L))
+                        }.getOrNull()
+                    }
+                    _liveConflictInfo.value = info
+                }
+        }
+
+        // 2. 已保存冲突：selectedDayDetail 变化 → 对每个有 id 的 event 串行检测
+        // weekNumber 为空时直接短路返回 emptyMap
+        viewModelScope.launch {
+            selectedDayDetail
+                .filterNotNull()
+                .map { detail -> buildSavedConflicts(detail) }
+                .collect { _savedConflictsByEventId.value = it }
+        }
+    }
 
     fun goToPrevMonth() {
         _currentYearMonth.value = shiftMonth(_currentYearMonth.value, -1)
