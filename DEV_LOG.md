@@ -417,7 +417,7 @@
 | 8e | 全局搜索 | ✅ 已做 |
 | 8f | 备份恢复 | ✅ 已做 |
 | 8g | Sub-step 9（分类 / 重复 / 冲突 / 农历） | ✅ 已做（5 个 step） |
-| 8h | 合并 phase-8 三个 feature 分支 → `Develop` | 🟨 **部分完成**：`feature/phase-8-finalize` 已折叠 @`eb0d402`（空 squash，拓扑保留）；`feature/phase-8-reminder`（顶部 `b5bf109`）+ `feature/phase-8-notification-matrix`（顶部 `90daf6c`）**仍是独立分支**，未合并到 `feature/phase-8` 也未删除，留给下一轮收尾阶段统一处理 |
+| 8h | 分支标签归档 → archive/ + 本地删除 | ✅ **已归档**（索引文档 @`f885cf5`）：**B 组合方案**（本地全删 + 远端 `archive/feature-phase-8-*` + `docs/branch-archive.md`）。4 个 phase-8 分支全部按「先子后父」顺序处理：`feature/phase-8-finalize`（顶端 `2afbecf`）/ `feature/phase-8-notification-matrix`（顶端 `90daf6c`）/ `feature/phase-8-reminder`（顶端 `b5bf109`）/ `feature/phase-8`（本地顶端 `49fa408`，归档时祖先已全部在 Develop）—— 原 4 个 phase-8 分支的 commit 全部已在 `Develop` 历史里，归档后保留 `archive/` 远端标签 + 本索引文档做可追溯锚点。详见 `.cyrene/docs/phase-8-master-plan.md` §4.8 + `docs/branch-archive.md` |
 | 8f' | 备份导入预览差异 | ✅ 已合并 @`685a551`；**JVM 单测 63 / 0 失败**（`BackupDiffCalculatorTest` 25 + `BackupExporterTest` 3 + `BackupFormatVersionTest` 6 + `BackupLegacyCompatTest` 15 + `BackupSerializationTest` 8 + `BackupValidatorTest` 6）。⚠️ 3 个不可测项进 backlog：`BackupImporterTest`（强依赖 Room `@Transaction`）/ `BackupPreviewViewModelTest`（VM 需 fake）/ `DailyAutoBackupWorkerTest`（WorkManager 测试） |
 
 ---
@@ -1452,4 +1452,62 @@ plan 文件在磁盘上仍是 **v1**：伙伴批准前给了 4 条修正意见�
 - 🟨 **8f' 不可测 backlog**（同上）
 - 🟨 **Phase 8 三个独立分支收尾**：`feature/phase-8-reminder` + `feature/phase-8-notification-matrix` 是否删除？是否 merge -s ours 拓扑保留？留给收尾阶段处理
 - 🟨 **Phase 8 剩余子计划**：附件旧文件回收 / Phase 3 账户切换快捷入口
-- ⏸ **Phase 8 之后**：等用户决定下一步
+- ⏸ **Phase 8 之后**：等用户决定下一步---
+
+## ✅ Phase 8h（2026-09-15 01:25 完成） —— 分支标签归档（B 组合）
+
+### 计划来源
+
+`.cyrene/docs/phase-8-master-plan.md` §4.8（Sub-step 8h「三个 phase-8 分支折叠」）+ §九「建议执行顺序」第 1 条
+
+### 完成清单
+
+| Step | 内容 | 关键操作 / 文件 | 状态 |
+|---|---|---|---|
+| 1 | 选定方案 | B 组合（本地全删 + 远端 `archive/feature-phase-8-*` + `docs/branch-archive.md`）—— 用户拍板 | ✅ |
+| 2 | 写归档索引文档 | `docs/branch-archive.md`（新增 100 行：分支映射表 + 选定方案说明 + 救援方法 + SHA 锚点） | ✅ |
+| 3 | 功能 commit + push | `f885cf5` docs(branch-archive): 归档 phase-8 系列 feature 分支索引（B 组合） | ✅ |
+| 4 | 远端 archive/ 重命名（4 个） | `git push origin <old>:refs/heads/archive/feature-phase-8-<old>`（先子后父） | ✅ |
+| 5 | 删除原 4 个远端分支 | `git push origin --delete feature/phase-8*`（4 个） | ✅ |
+| 6 | 删除本地 4 个分支 | `git branch -D feature/phase-8*`（4 个，先子后父） | ✅ |
+| 7 | 更新 DEV_LOG 8h 行 | 🟨 → ✅（line 420 台账行） + 引用 H1 `f885cf5` | ✅ |
+| 8 | 维护规则「不要做的事」 | ✅ 未 force-push / 未重写 origin/Develop / 未动 phase-5/6/7 分支 | ✅ |
+
+### 关键事实
+
+- **分支处理结果**（`git branch -a` 实测）：
+  - 删除本地：`feature/phase-8-finalize`（顶端 `2afbecf`）/ `feature/phase-8-notification-matrix`（顶端 `90daf6c`）/ `feature/phase-8-reminder`（顶端 `b5bf109`）/ `feature/phase-8`（顶端 `49fa408`）
+  - 远端 archive/：`archive/feature-phase-8-{finalize,notification-matrix,reminder,phase-8}` 4 个全部创建
+  - 远端原 `feature/phase-8*` 4 个全部删除
+  - 保留：`feature/phase-5-reminder` / `feature/phase-6` / `feature/phase-7-calendar` / `feature/phase-7-finance`（按 plan §五剔除原则不动）
+- **本地 `feature/phase-8` 顶端是 `49fa408`**（与 plan 文档 §4.8 表格记录的 `9ae72f1` 不同）—— 这是因为本轮 G 工作（force 整理在 `feature/phase-8` 上做）已经把分支推进到了 `49fa408`；**不影响归档事实**，commit 链完整保留
+- **4 个 phase-8 分支的 commit 都已在 Develop 历史里**（plan §4.8 merge-base 实测验证过），归档后只剩标签变更；commit 本身永存
+- **下一步恢复路径**：
+  - 90 天内：`git reflog --all | grep <SHA 前缀>`
+  - 永久：`git checkout archive/feature-phase-8-<x>` 或 `git checkout <顶端 SHA>`
+
+### 验证结果
+
+- `git branch -a` —— 4 个本地 phase-8 分支已删 + 4 个 `remotes/origin/archive/feature-phase-8-*` 存在 ✅
+- `git ls-remote origin 'refs/heads/feature/phase-8*'` —— 已无输出（原 4 个全部删除）✅
+- `git ls-remote origin 'refs/heads/archive/*'` —— 4 个归档分支全部存在 ✅
+- `git log --oneline -5` —— Develop HEAD 已推进到含 `f885cf5`（docs/branch-archive）✅
+- `git push origin Develop`（台账提交后）—— push 成功 ✅
+
+### 踩坑笔记
+
+1. **refspec 重命名比直接 push 安全**：`git push origin <old>:refs/heads/archive/<new>` 而不是 `git push origin <old>:<new>` —— 前者显式声明这是「创建新 ref」操作，避免某些 Git 客户端把 `<new>` 解析成本地路径
+2. **「先子后父」是硬约束**：删除顺序错会留下临时 tag ref；本轮严格按 finalize → notification-matrix → reminder → phase-8 顺序处理，每步独立验证 `git ls-remote`
+3. **本地顶端 SHA 与 plan 文档不一致 ≠ 拓扑错**：plan §4.8 记录的 `9ae72f1` 是 2026-09-15 00:55 的快照，本轮 G 工作（force 整理）又把 `feature/phase-8` 推进到了 `49fa408`；归档只看「commit 是否在 Develop 里」，不看具体 SHA
+4. **archive/ 远端分支建议保留 6 个月以上**再考虑清理（plan §4.8「回退」判断 + 本文件 §branch-archive 维护规则第 2 条）；不要急着删
+5. **删除远端分支是不可逆动作**：本轮选 B 组合（archive/ 前缀）就是为了避免不可逆；下次有同类需求同样建议走 archive/ 路径
+
+### 下一个入口
+
+- ✅ Phase 8h 已完成（分支归档收口）
+- 🟨 **P0（8c.1 Migration_9_10 真跑）** —— AVD 集群第 1 件事
+- 🟨 **P2（8f'.3 DailyAutoBackupWorkerTest）** —— AVD 集群第 2 件事
+- 🟨 **P7（8a 真机通知点击）** —— AVD 集群第 3 件事
+- 🟨 **P8（8b'' 矩阵视图双布局截图）** —— AVD 集群第 4 件事
+- ⬜ **P3（8f'.2 BackupPreviewViewModelTest）** —— 纯 JVM 单测，无需 AVD
+- ⬜ **P9（8f'.1 不可测项处置文档化）** —— 15 min 纯文档
