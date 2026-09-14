@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.personalassistant.core.utils.NotificationHelper
 import com.example.personalassistant.feature.task.data.reminder.NotificationIdGenerator
+import com.example.personalassistant.navigation.DeepLinks
 
 /**
  * Phase 8 Sub-step 1：日历事件提醒接收器（AlarmManager 分支触发）。
@@ -52,14 +53,16 @@ class EventReminderReceiver : BroadcastReceiver() {
         }
 
         val notificationId = NotificationIdGenerator.forEvent(eventId)
+        val deepLinkIntent = DeepLinks.eventEditIntent(context, eventId)
+        Log.i(TAG, "🟩 [Receiver] fired notification id=$notificationId event=$eventId title='$title' deeplink=${DeepLinks.parseRoute(deepLinkIntent)}")
         NotificationHelper.showNotification(
             context = context,
             channelId = NotificationHelper.CHANNEL_EVENT,
             notificationId = notificationId,
             title = title,
             content = body.ifBlank { "日程即将开始" },
+            intent = deepLinkIntent,
         )
-        Log.i(TAG, "🟩 [Receiver] fired notification id=$notificationId event=$eventId title='$title'")
     }
 
     companion object {

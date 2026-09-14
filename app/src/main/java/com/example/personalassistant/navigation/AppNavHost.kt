@@ -8,9 +8,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -36,14 +39,38 @@ import com.example.personalassistant.feature.timetable.presentation.edit.CourseE
  * 全局导航图：BottomBar 承载 4 个主 Tab + 设置页作为隐式入口
  *
  * 各 Screen 的详细实现位于 feature/<module>/presentation/ 目录下
+ *
+ * **通知 deeplink 处理（plan 8final §2.1 v2）**：
+ * - [pendingNavRoute] 由 [com.example.personalassistant.MainActivity] 写入
+ * - `LaunchedEffect(pendingNavRoute)` 监听值变化 → 校验 → `navController.navigate`
+ * - **route 白名单**：仅允许已注册的 `Screen.route` 前缀，防止恶意 Intent 跳到未注册路径
  */
 @Composable
-fun AppNavHost() {
+fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
     val showBottomBar = currentRoute in BottomTab.entries.map { it.screen.route }
+
+    // === 通知 deeplink 消费：监听 pendingNavRoute，命中白名单则 navigate ===
+    val pendingRoute = pendingNavRoute?.value
+    LaunchedEffect(pendingRoute) {
+        val route = pendingRoute ?: return@LaunchedEffect
+        if (!isKnownDeepLinkRoute(route)) {
+            return@LaunchedEffect
+        }
+        navController.navigate(route) {
+            // 保留 BottomBar 起始栈（让用户能 navigate 回去），不 saveState 避免与 BottomBar 状态冲突
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = false
+                inclusive = false
+            }
+            launchSingleTop = true
+        }
+        // 消费后清空，防止 recomposition 重复触发
+        pendingNavRoute?.value = null
+    }
 
     Scaffold(
         bottomBar = {
@@ -106,6 +133,32 @@ fun AppNavHost() {
                 )
             }
 
+            // === Phase 8 Sub-step 1 日程编辑页（plan 8final 补完：之前未注册导致 GlobalSearch 跳不过去）===
+            composable(
+                route = Screen.EditEvent.route,
+                arguments = listOf(navArgument(Screen.EditEvent.ARG_EVENT_ID) {
+                    type = NavType.LongType
+                    defaultValue = -1L
+                }),
+            ) { entry ->
+                val eventId = entry.arguments?.getLong(Screen.EditEvent.ARG_EVENT_ID) ?: -1L
+                com.example.personalassistant.feature.calendar.presentation.edit.EventEditScreen(
+                    eventId = eventId,
+                    onBack = { navController.popBackStack() },
+                    onOpenInCalendar = {
+                        // 跳到 Calendar 主屏（popBackStack + navigate 重置 BottomBar 选中态）
+                        navController.popBackStack()
+                        navController.navigate(Screen.Calendar.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = false
+                                inclusive = false
+                            }
+                            launchSingleTop = true
+                        }
+                    },
+                )
+            }
+
             // === Phase 8 Sub-step 3 全局搜索 ===
             composable(Screen.GlobalSearch.route) {
                 GlobalSearchScreen(
@@ -139,9 +192,31 @@ fun AppNavHost() {
     }
 }
 
+/**
+ * 通知 deeplink 路由白名单（plan 8final §2.1 v2 要求）
+ *
+ * **只** 接受已注册到 NavHost 的 route 前缀。新增 Screen 时必须同步更新此处。
+ *
+ * **避免 hack**：用硬编码前缀字面量，不用 `removeSuffix("{xxx}")` —— 后者一旦
+ * 模板占位符改名会误判。
+ */
+private fun isKnownDeepLinkRoute(route: String): Boolean {
+    return route == Screen.Timetable.route ||
+        route == Screen.Tasks.route ||
+        route == Screen.Finance.route ||
+        route == Screen.Calendar.route ||
+        route == Screen.Settings.route ||
+        route == Screen.GlobalSearch.route ||
+        route == Screen.BackupPreview.route ||
+        route.startsWith("timetable/edit/") ||
+        route.startsWith("tasks/edit/") ||
+        route.startsWith("tasks/detail/") ||
+        route.startsWith("calendar/edit/")
+}
+
 @Composable
 private fun AppBottomBar(
-    navController: androidx.navigation.NavHostController,
+    navController: NavHostController,
     currentRoute: String?
 ) {
     NavigationBar {
@@ -166,3 +241,6 @@ private fun AppBottomBar(
         }
     }
 }
+
+/** 局部类型别名，避免引入 androidx.navigation.NavHostController 顶层 import */
+private typealias NavHostController = androidx.navigation.NavHostController

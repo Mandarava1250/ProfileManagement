@@ -9,6 +9,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.personalassistant.core.utils.NotificationHelper
+import com.example.personalassistant.navigation.DeepLinks
 
 /**
  * Phase 5 任务提醒接收器（精确闹钟分支触发）。
@@ -45,14 +46,16 @@ class TaskReminderReceiver : BroadcastReceiver() {
         }
 
         val notificationId = NotificationIdGenerator.forTask(taskId)
+        val deepLinkIntent = DeepLinks.taskDetailIntent(context, taskId)
+        Log.i(TAG, "🟦 [Receiver] fired notification id=$notificationId task=$taskId title='$title' deeplink=${DeepLinks.parseRoute(deepLinkIntent)}")
         NotificationHelper.showNotification(
             context = context,
             channelId = NotificationHelper.CHANNEL_TASK,
             notificationId = notificationId,
             title = title,
             content = body.ifBlank { "该任务到时间啦" },
+            intent = deepLinkIntent,
         )
-        Log.i(TAG, "🟦 [Receiver] fired notification id=$notificationId task=$taskId title='$title'")
     }
 
     companion object {
