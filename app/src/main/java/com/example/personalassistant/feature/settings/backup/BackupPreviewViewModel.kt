@@ -12,7 +12,7 @@ import com.example.personalassistant.core.backup.model.BackupPreview
 import com.example.personalassistant.core.backup.model.BackupResult
 import com.example.personalassistant.core.backup.model.ImportStrategy
 import com.example.personalassistant.core.backup.model.TableDiff
-import com.example.personalassistant.core.backup.snapshot.BackupCurrentSnapshotProvider
+import com.example.personalassistant.core.backup.snapshot.BackupSnapshotProvider
 import com.example.personalassistant.core.backup.validator.BackupValidator
 import com.example.personalassistant.core.backup.validator.ValidationBundle
 import com.example.personalassistant.core.holiday.model.HolidayEntity
@@ -66,7 +66,7 @@ import javax.inject.Inject
 @HiltViewModel
 class BackupPreviewViewModel @Inject constructor(
     private val validator: BackupValidator,
-    private val snapshotProvider: BackupCurrentSnapshotProvider,
+    private val snapshotProvider: BackupSnapshotProvider,
     private val diffCalculator: BackupDiffCalculator,
     private val importer: BackupImporter,
     @com.example.personalassistant.core.backup.di.BackupJson

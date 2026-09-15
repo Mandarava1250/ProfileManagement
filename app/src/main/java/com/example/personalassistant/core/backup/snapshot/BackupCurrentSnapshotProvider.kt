@@ -46,14 +46,19 @@ open class BackupCurrentSnapshotProvider @Inject constructor(
     private val eventDao: EventDao,
     private val financeDao: FinanceDao,
     private val holidayDao: HolidayDao,
-) {
+) : BackupSnapshotProvider {
 
     /**
      * 拉取当前数据库全部 13 张表的全量快照。
      *
      * 必须在 IO 线程调用（包含 13 次 DB 读）；调用方负责选择协程上下文。
+     *
+     * Phase 9 A2：[BackupSnapshotProvider] 接口契约：`suspend fun snapshot(): CurrentDbSnapshot`。
+     *
+     * 实现标记 `override` —— 此处原本是 `open suspend fun snapshot()`（Phase 8 T3 改的），
+     * 现在变接口方法；语义不变（仍是 suspend + IO）。
      */
-    suspend fun snapshot(): CurrentDbSnapshot = withContext(Dispatchers.IO) {
+    override suspend fun snapshot(): CurrentDbSnapshot = withContext(Dispatchers.IO) {
         // 兜底：如果某些 DAO 注入失败或方法名变更，至少给出空 list 让计算器可工作
         // （保证 VM 不会因为单个 DAO 异常就整体崩）
         CurrentDbSnapshot(
