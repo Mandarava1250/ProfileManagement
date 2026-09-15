@@ -5,6 +5,7 @@
 > **作用**：记录已完成的步骤、对应的计划章节、关键变更文件、验证结果、踩坑笔记 —— 方便后续记忆与查漏补缺
 > **生成时间**：2026-09-09 01:10（基于 `git log --all` 全量重建，commit `1563bbe`）
 > **本轮追加**：2026-09-15 11:30（一口气 Phase 8 收口：T1 8c.1 Migration_9_10 真跑 + T4 8c.2 AttachmentCleanupLogic/Worker/Hilt + T6 8a deeplink 验证 + T7 8b'' 矩阵 UI dump；详见文末「📅 2026-09-15 11:30 一口气 Phase 8 收口」段）
+> **本轮追加（Phase 8 关闭）**：2026-09-15 13:55（用户批准「可以合成」→ `feature/phase-8-verification` `--no-ff` 合入 `Develop` @`449e347` + 合并后全量 JVM 重跑 693/0 ✅；详见文末「🏁 Phase 8 正式关闭」段）
 
 ---
 
@@ -14,14 +15,14 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
-| 当前 HEAD | `feature/phase-8-verification @ 5458159`（一口气 Phase 8 收口 + 5 doc/test commits，6 个新 commit 详见下方 T1/T4/T6/T7 段）<br>`Develop @ 8107fbf`（本轮未动，待 PR 合并）|
-| 当前分支 | `feature/phase-8-verification`（已 push origin）|
+| 当前 HEAD | **`Develop @ 449e347`**（Phase 8 验证轮次已 `--no-ff` 合入，parents = `8107fbf` + `d5ab36e`）|
+| 当前分支 | `Develop`（`feature/phase-8-verification @ d5ab36e` 已全部并入，`git rev-list --count Develop..feature/phase-8-verification` = **0**）|
 | 主分支 | `Develop` |
-| 累计 commit 数 | `feature/phase-8-verification` 比 `Develop` 多 6 个新 commit（`git rev-list --count feature/phase-8-verification ^Develop` = 6）|
-| 测试用例 | **653 JVM 单测**（含本轮新增 5 个 `AttachmentCleanupLogicTest`，余 648 不变）= 基线 648 + 本轮 +5<br>+ **8 instrumented**（4 个本轮 `Migration_9_10` + 4 个历史；AVD 真跑 0 失败 / `pm_api36` 跑本轮 4 个；**未做整轮全量回归跑**）|
+| 累计 commit 数 | `Develop` 共 **105** 个 commit（`git rev-list --count Develop`）|
+| 测试用例 | **693 JVM 单测 / 75 套件 / 0 失败 / 0 错误 / 0 跳过** —— 合并后 `--rerun` 强制重跑（BUILD SUCCESSFUL 2m20s，结果时间戳 2026-09-15 13:55:54，非缓存）<br>+ **4 instrumented**（`Migration_9_10` 4 cases，AVD `pm_api36` 真跑 4/4 ✅ @`18e2d9c`）|
 | 测试环境 | AVD `pm_api34`（API 34 / aosp_atd / x86_64 / WHPX 硬件加速）—— 属本机环境，**不在版本库** |
 | Room 数据库 | **v10**（Phase 5：`transactions.transferAccountId`/`transferPairId` + `user_profiles.initialBalance` + `index_transactions_accountId_type`）<br>版本号常量已提为 `APP_DATABASE_VERSION`，`@Database` 注解与 `BackupFormatVersion.DB_VERSION` 同源 —— 见下方 Phase 5「踩坑笔记」第 1 条|
-| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项 + 8g finalize 收口）|
+| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ **8 ✅ 正式关闭**（sub-step 1~9 + 配置杂项 + 8g finalize 收口 + 8h 分支归档 + 验证轮次 merge @`449e347`）|
 | 已完成（本轮新转 ✅） | **阶段 Phase 3（多账户 + 数据隔离）✅** —— Room 迁移已在 AVD `pm_api34` 真跑通过 @`a3d7dca`，原 ⛔ 环境阻塞已解除 |
 | 已完成（本轮新转 ✅） | **阶段 Phase 4（账户头像）✅** —— `c4224c3` 功能 + `75fca56` 真实读写 AVD 真跑；无 DB 变更 / 无新依赖 |
 | 已完成（本轮新转 ✅） | **Phase 8a 通知 deeplink ✅** —— `4d2e6c5`，3 类提醒点击跳详情页（task/event/course）；`DeepLinksTest` 21/21。⚠️ 真机冷/热启动点击通知仍需人工目测 |
@@ -419,7 +420,7 @@
 | 8f | 备份恢复 | ✅ 已做 |
 | 8g | Sub-step 9（分类 / 重复 / 冲突 / 农历） | ✅ 已做（5 个 step） |
 | 8h | phase-8 分支**标签**处理（**不是**「合并到 Develop」，见 plan §4.8 背景） | ✅ **方案 B 组合 @`f885cf5`**：4 个本地 `feature/phase-8*` 按「先子后父」全部 `git branch -D`（`finalize` `2afbecf` → `notification-matrix` `90daf6c` → `reminder` `b5bf109` → `phase-8` `49fa408`）；4 个远端已 rename 为 `archive/feature-phase-8{,-finalize,-reminder,-notification-matrix}`；索引文档 `docs/branch-archive.md`（100 行）。原 4 个分支的 commit 全部已在 `Develop` 历史里，归档只动标签、commit 永存，保留 `archive/` 远端标签 + 索引文档做可追溯锚点。**实测复核 @2026-09-15 11:40**：`git branch -a --list "*phase-8*"` 只剩 4 个 `archive/` + 本轮新分支，原裸标签已消失。**彻底删除（方案 A 后半段）** 留待确认无影响后另做。详见 `.cyrene/docs/phase-8-master-plan.md` §4.8 + `docs/branch-archive.md` |
-| 8h-补 | `feature/phase-8-verification` → `Develop` 的 merge（**8h 之外的独立动作**，plan §4.8 未涵盖） | 🟨 **用户已批准 @2026-09-15 11:52，`git merge --no-ff` 执行中**：本轮 8 个 commit（`bc92a55`…`d5ab36e`）合入 `Develop`（原 @`8107fbf`），保留拓扑。前置已满足（**693 JVM 单测 0 失败** + 4 instrumented 真跑全绿）。merge commit hash 由紧随其后的台账 commit 回填 |
+| 8h-补 | `feature/phase-8-verification` → `Develop` 的 merge（**8h 之外的独立动作**，plan §4.8 未涵盖） | ✅ **用户批准 @2026-09-15 11:52 → 执行完毕 @merge `449e347`**：`git merge --no-ff` 把 8 个 commit（`bc92a55`…`d5ab36e`）合入 `Develop`（原 @`8107fbf`），parents = `[8107fbf, d5ab36e]` 拓扑保留，**无冲突**（merge commit 无额外 diff，DEV_LOG 一侧取 feature 版本）。**合并后验证**：`gradlew :app:testDebugUnitTest --rerun` → BUILD SUCCESSFUL / **693 用例 0 失败**（结果新鲜度已核对：13:55:54，非 UP-TO-DATE 缓存）。⚠️ 本行为台账提交，merge hash `449e347` 由此回填 |
 | 8f' | 备份导入预览差异 | ✅ 已合并 @`685a551`；**JVM 单测 63 / 0 失败**（`BackupDiffCalculatorTest` 25 + `BackupExporterTest` 3 + `BackupFormatVersionTest` 6 + `BackupLegacyCompatTest` 15 + `BackupSerializationTest` 8 + `BackupValidatorTest` 6）；**3 个 final class @`966db42` 改 open**（`BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter`；为 Phase 9+ 写 Fake 子类铺路）。⚠️ 3 个不可测项进 backlog：`BackupImporterTest`（强依赖 Room `@Transaction`）/ `BackupPreviewViewModelTest`（VM 需 fake）/ `DailyAutoBackupWorkerTest`（WorkManager 测试） |
 
 ---
@@ -1685,3 +1686,70 @@ Phase 8 剩余工作**不是一整块「没做完」**，三种性质必须分�
 2. `feature/phase-8-verification` → `Develop` 走 `--no-ff` merge（8 个 commit 一次性回去，保留拓扑）
 3. 8f'.1 **正式采纳方案 c** 并在 plan §4.9 落字
 4. 起 **Phase 9 plan**，头号 = P5 账户切换快捷入口 + Scheduler 接 `onCreate()`
+
+---
+
+## 🏁 2026-09-15 13:55 —— Phase 8 正式关闭（merge `449e347` + 合并后全量重跑）
+
+**触发**：用户「可以合成」→ 批准 `feature/phase-8-verification` → `Develop` 的 `--no-ff` merge（上一条 11:52 已口头批准，本轮执行落地）。
+
+### 一、恢复现场时发现的真相（重要）
+
+上一次会话在「完整汇报前中断」，笔记里 T9 仍标 `in_progress`。人家没有照着笔记假定「merge 还没做」，而是先查 git 真相，结果是：
+
+| 事实 | 证据命令 | 结论 |
+|---|---|---|
+| merge **已经执行** | `git log --graph Develop` | `449e347 merge: Phase 8 验证轮次收口（feature/phase-8-verification -> Develop）` |
+| 用了 `--no-ff`（拓扑保留） | `git show --no-patch --format="%h parents=[%p]" 449e347` | parents = `[8107fbf, d5ab36e]` 两个双亲 ✅ |
+| feature 已全部并入 | `git rev-list --count Develop..feature/phase-8-verification` | **0** |
+| merge 无冲突残留 | `git diff-tree --name-only -r 449e347` | 空（merge commit 未引入额外 diff，说明 DEV_LOG 冲突按 feature 侧干净解决） |
+| merge 体量 | `git diff --stat 8107fbf Develop` | **23 文件 / +963 / -21** |
+| **唯一没做的是 push** | `git rev-list --count origin/Develop..Develop` | **ahead 12**（`origin/Develop` 还停在 `8107fbf`） |
+
+**所以本轮真正的剩余工作是「合并后验证 + push」，不是「执行 merge」。** 台账 `8h-补` 行原本写「🟨 执行中」也是 stale 的，已订正为 ✅ @`449e347`。
+
+### 二、合并后回归证据（新跑，非缓存）
+
+| 项 | 值 |
+|---|---|
+| 命令 | `gradlew :app:testDebugUnitTest --rerun` |
+| 结果 | **BUILD SUCCESSFUL in 2m20s**（`4 executed / 27 up-to-date`，`testDebugUnitTest` 真实执行） |
+| 套件 / 用例 | **75 / 693** |
+| 失败 / 错误 / 跳过 | **0 / 0 / 0** |
+| 结果文件时间戳 | **2026-09-15 13:55:54**（早先一次跑出的 11:43 结果是 merge 前的缓存，被识别并弃用） |
+
+> **踩坑（本轮新增）**：第一次用 `> logs\x.log 2>&1 && ...` 的重定向写法，cmd 把 `&&` / `&` 整段吞进 `if not exist` 的判断块里，结果 Gradle 根本没跑，却回显 `exitCode=0` —— **假绿灯**。同时 `app/build/test-results` 里留着 11:43 的旧 XML，看起来「693 全绿」其实是从缓存数的。**识别方法**：比对结果 XML 的 mtime 是否晚于 merge 时刻。第二次去掉重定向、改后台任务 + `--rerun`，才拿到 13:55 的真证据。
+
+### 三、Phase 8 关闭口径（最终）
+
+| 维度 | 状态 |
+|---|---|
+| 功能代码 | 8a~8h 全部 ✅ 已并入 `Develop`（含 8c.2 附件清理全套 @`22fc826`） |
+| JVM 回归 | **693 / 0 失败**（合并后重跑） |
+| instrumented | `Migration_9_10` **4/4** AVD 真跑 ✅ @`18e2d9c` |
+| 自动化验证 | deeplink 4 场景 ✅ @`f746ca6`；矩阵双布局 UI dump ✅ @`5458159` |
+| 分支治理 | 8h 标签归档 ✅ @`f885cf5`；验证分支 merge ✅ @`449e347` |
+| **仍保持 🟨（不虚标）** | **8a**（真机点通知 + 真实触发链未验）/ **8b**（矩阵 toggle 自动化 + 人眼目测未做） |
+
+**⛔ 归零，Phase 8 以此口径正式关闭。**
+
+### 四、遗留到 Phase 9（三簇，已定性质）
+
+| 簇 | 项 | 归属理由 |
+|---|---|---|
+| 人工目测 | 真机点通知（P7）、矩阵布局肉眼看（P8） | 需真人在场 + 本轮模型不支持读图 |
+| 测试基建 | `DailyAutoBackupWorkerTest` / `BackupPreviewViewModelTest` / `BackupImporterTest` | 缺 work-testing + Robolectric + in-memory Room，是**基建**不是功能 |
+| 功能缺口 | `AccountSwitcher` 快捷入口（P5）、`AttachmentCleanupScheduler` 未接 `PersonalAssistantApp.onCreate()` | 真实新功能 / 新接线 → **Phase 9 头号** |
+
+### 五、本轮 commit
+
+| # | SHA | 类型 | 内容 |
+|---|---|---|---|
+| — | `449e347` | merge | `--no-ff` 合入（上一轮执行，本轮核对） |
+| — | 本 commit | docs(dev_log) | 关闭段 + `8h-补` 行订正 + 顶部速览 HEAD/测试数刷新 |
+
+### 六、下一个入口
+
+1. `git push origin Develop`（把 ahead 12 推上去）
+2. 起 **Phase 9 plan**：头号 = `AccountSwitcher` 快捷入口 + Scheduler 接 `onCreate()`；次号 = 3 个测试基建项
+3. 老 4 个 `archive/feature-phase-8*` 远端分支保留 6 个月以上再议清理
