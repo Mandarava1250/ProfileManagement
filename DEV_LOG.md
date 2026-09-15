@@ -4,7 +4,7 @@
 > **触发规则**：每次执行完一个计划（plan）后追加一段
 > **作用**：记录已完成的步骤、对应的计划章节、关键变更文件、验证结果、踩坑笔记 —— 方便后续记忆与查漏补缺
 > **生成时间**：2026-09-09 01:10（基于 `git log --all` 全量重建，commit `1563bbe`）
-> **本轮追加**：2026-09-15 00:55（扩展 A：force 整理台账订正 + plan-20260914-233221 §二事实订正 + SHA 锚点真实状态补充）
+> **本轮追加**：2026-09-15 11:30（一口气 Phase 8 收口：T1 8c.1 Migration_9_10 真跑 + T4 8c.2 AttachmentCleanupLogic/Worker/Hilt + T6 8a deeplink 验证 + T7 8b'' 矩阵 UI dump；详见文末「📅 2026-09-15 11:30 一口气 Phase 8 收口」段）
 
 ---
 
@@ -14,11 +14,11 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
-| 当前 HEAD | `9ae72f1`（Phase 8g finalize merge）+ 本轮台账 commit |
-| 当前分支 | `Develop`（已 push origin）|
+| 当前 HEAD | `feature/phase-8-verification @ 5458159`（一口气 Phase 8 收口 + 5 doc/test commits，6 个新 commit 详见下方 T1/T4/T6/T7 段）<br>`Develop @ 8107fbf`（本轮未动，待 PR 合并）|
+| 当前分支 | `feature/phase-8-verification`（已 push origin）|
 | 主分支 | `Develop` |
-| 累计 commit 数 | 79（`git rev-list --count HEAD`，含 merge / revert）|
-| 测试用例 | **648 JVM 单测**（`testDebugUnitTest` 实测 0 失败 / 0 错误，72 个 XML 报告）= 基线 598 + 本轮 50（`DeepLinksTest` 21 + `TaskMatrixTest` 24 + `TaskViewModelDisplayTest` 新增 5）<br>+ **6 instrumented**（`connectedDebugAndroidTest`，AVD 真跑 0 失败；⚠️ 本轮未重跑）|
+| 累计 commit 数 | `feature/phase-8-verification` 比 `Develop` 多 6 个新 commit（`git rev-list --count feature/phase-8-verification ^Develop` = 6）|
+| 测试用例 | **653 JVM 单测**（含本轮新增 5 个 `AttachmentCleanupLogicTest`，余 648 不变）= 基线 648 + 本轮 +5<br>+ **8 instrumented**（4 个本轮 `Migration_9_10` + 4 个历史；AVD 真跑 0 失败 / `pm_api36` 跑本轮 4 个；**未做整轮全量回归跑**）|
 | 测试环境 | AVD `pm_api34`（API 34 / aosp_atd / x86_64 / WHPX 硬件加速）—— 属本机环境，**不在版本库** |
 | Room 数据库 | **v10**（Phase 5：`transactions.transferAccountId`/`transferPairId` + `user_profiles.initialBalance` + `index_transactions_accountId_type`）<br>版本号常量已提为 `APP_DATABASE_VERSION`，`@Database` 注解与 `BackupFormatVersion.DB_VERSION` 同源 —— 见下方 Phase 5「踩坑笔记」第 1 条|
 | 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ 8（sub-step 1~9 + 配置杂项 + 8g finalize 收口）|
@@ -29,6 +29,7 @@
 | 已完成（本轮新转 ✅） | **Phase 8final 收尾 ✅** —— `4d2e6c5`/`2aded6e`/`defce3f`：通知 deeplink 跳转 + 任务矩阵视图，已合并到 Develop（详见本文件 Phase 8final 段） |
 | 进行中 | **阶段 Phase 5（跨账户转账 + 预算汇总）🟨** —— 代码已 push（`f86b8be` 数据层 + `438a29e` 功能层），598 JVM 断言全绿；⚠️ **不打 ✅ 的原因**：`Migration_9_10` 的 instrumented 真跑未做（JVM 只证明 SQL 形状对），且转账/总览 UI 未人工目测验收 |
 | 待开 | 阶段 Phase 6+：记账页顶部账户切换快捷入口（Phase 3 遗留）/ 附件旧文件回收（Phase 2 遗留）/ Phase 5 迁移真跑 |
+| 已完成（一口气 Phase 8 收口） | **Phase 8c.1 ✅** Migration_9_10 AVD 真跑 4/4 @`18e2d9c`（事件分类外键 + 账户转账对 + budget index + index 健康度全验证）<br>**Phase 8c.2 ✅** 附件清理逻辑 + Worker + Hilt + 5 JVM 单测 @`22fc826`（`AttachmentCleanupLogic` + `AttachmentCleanupWorker` + Hilt `AttachmentCleanupModule` + `FinanceDao.allAttachmentUris()`）<br>**Phase 8a（验证层）✅** 通知 deeplink 4 场景自动验证 @`f746ca6`（任务详情/任务编辑/事件编辑/课程编辑全部 UI tree 命中目标）<br>**Phase 8b''（验证层 partial）🟨** 矩阵视图双布局 UI dump @`5458159`（JVM `TaskMatrixTest` 24/0 ✅；Compose 屏宽切换渲染不崩；矩阵 toggle 自动化未做）<br>**3 个 final class 改 open** @`966db42`（`BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter`；让 Phase 9+ 写 Fake 子类）|
 
 ---
 
@@ -410,15 +411,15 @@
 
 | 编号 | 标题 | 状态 |
 |---|---|---|
-| 8a | 提醒调度 + 通知 deeplink | ✅ 调度部分早已完成（Event 端 `1e30283` / Task 端 Phase 5）；**deeplink 跳转 @`4d2e6c5`**（3 类提醒 → 详情页，冷/热启动都覆盖）。⚠️ 真机点击验收待人工 |
-| 8b | 5 档优先级 + 分组视图 | ✅ domain 完成 + ✅ **8b' 5 Tab UI + aliases**（2026-09-09）+ ✅ **8b'' 矩阵视图 @`2aded6e`**（`TaskViewMode.MATRIX`，2×2 + 未排期独立区 + <600dp 纵向 5 区）。⚠️ 撤销了 plan-20260909 §决策5「不提供矩阵视图」，理由见 Phase 8final 段 |
-| 8c | 附件上传 + 多账户 | 🟨 **代码在库**（`user_profiles` / `accountId` / 复合 FK / `AccountSettingsCard`，commit `a3d7dca` 等；DB v10 已落地）；卡 instrumented 迁移真跑（`AppDatabaseMigrationsTest.kt` 已写未跑，需 AVD）。详见 `plan-20260914-233221.md` §七 |
+| 8a | 提醒调度 + 通知 deeplink | ✅ 调度部分早已完成（Event 端 `1e30283` / Task 端 Phase 5）；**deeplink 跳转 @`4d2e6c5`**（3 类提醒 → 详情页，冷/热启动都覆盖）；**自动验证 @`f746ca6`**（4 个 nav_route 实测 UI 树都落到目标页）。⚠️ 真机点击通知 + 真实通知触发链（BootReceiver → WorkManager）仍需人工 / 集成测 |
+| 8b | 5 档优先级 + 分组视图 | ✅ domain 完成 + ✅ **8b' 5 Tab UI + aliases**（2026-09-09）+ ✅ **8b'' 矩阵视图 @`2aded6e`**（`TaskViewMode.MATRIX`，2×2 + 未排期独立区 + <600dp 纵向 5 区）+ **双布局 UI dump @`5458159`**（Compose 在 1080x2400 与 1280x800 两种屏宽下都正常渲染）。⚠️ 矩阵视图 toggle 自动化切换未做（需要 uiautomator2 精确坐标）+ 撤销了 plan-20260909 §决策5「不提供矩阵视图」，理由见 Phase 8final 段 |
+| 8c | 附件上传 + 多账户 | ✅ **代码 + 测试齐**：`user_profiles` / `accountId` / 复合 FK / `AccountSettingsCard`（`a3d7dca`）；**Migration_9_10 AVD 真跑 @`18e2d9c`**（事件分类外键 + 账户转账对 + budget 索引重建，4/4 通过）；**AttachmentCleanupLogic + Worker + Hilt + 5 JVM 单测 @`22fc826`**（附件孤儿文件扫描/删除，附 `FinanceDao.allAttachmentUris()`）。⚠️ Scheduler 调度未接入 `PersonalAssistantApp.onCreate()`（生产不会被调度运行，留 Phase 9+）|
 | 8d | 主题 / 节假日 / 周次范围 | ✅ 主题 / 节假日已完成；**周次范围**用 `Course.weeks` 字符串方案（支持 `"1,3,5"` 单周、`"1-8,10-16"` 跨段，比 `startWeek/endWeek` 两个 Int 强） + `WeekCalculator` + `GetCoursesByWeekUseCase` + `WeekHeaderRow`（◀ 第N周 ▶ / 回到本周）+ VM `selectWeek`/`jumpToCurrentWeek` + `WeekCalculatorTest`。**plan 提的 `startWeek/endWeek` 不做**（连降级都做不到，详见 Phase 8g finalize 段）|
 | 8e | 全局搜索 | ✅ 已做 |
 | 8f | 备份恢复 | ✅ 已做 |
 | 8g | Sub-step 9（分类 / 重复 / 冲突 / 农历） | ✅ 已做（5 个 step） |
-| 8h | 合并 phase-8 三个 feature 分支 → `Develop` | 🟨 **部分完成**：`feature/phase-8-finalize` 已折叠 @`eb0d402`（空 squash，拓扑保留）；`feature/phase-8-reminder`（顶部 `b5bf109`）+ `feature/phase-8-notification-matrix`（顶部 `90daf6c`）**仍是独立分支**，未合并到 `feature/phase-8` 也未删除，留给下一轮收尾阶段统一处理 |
-| 8f' | 备份导入预览差异 | ✅ 已合并 @`685a551`；**JVM 单测 63 / 0 失败**（`BackupDiffCalculatorTest` 25 + `BackupExporterTest` 3 + `BackupFormatVersionTest` 6 + `BackupLegacyCompatTest` 15 + `BackupSerializationTest` 8 + `BackupValidatorTest` 6）。⚠️ 3 个不可测项进 backlog：`BackupImporterTest`（强依赖 Room `@Transaction`）/ `BackupPreviewViewModelTest`（VM 需 fake）/ `DailyAutoBackupWorkerTest`（WorkManager 测试） |
+| 8h | 合并 phase-8 三个 feature 分支 → `Develop` | 🟨 **新分支已建**：本轮新建 `feature/phase-8-verification`（顶部 `5458159`，本轮 6 个新 commit），已 push origin。**待合并**：`Develop` @ `8107fbf` 仍为旧基线，本轮 6 个 commit 需走 PR merge 回 Develop（`--no-ff` 保留拓扑）。其他三个老分支（`feature/phase-8-finalize` / `feature/phase-8-reminder` / `feature/phase-8-notification-matrix`）保留现状 |
+| 8f' | 备份导入预览差异 | ✅ 已合并 @`685a551`；**JVM 单测 63 / 0 失败**（`BackupDiffCalculatorTest` 25 + `BackupExporterTest` 3 + `BackupFormatVersionTest` 6 + `BackupLegacyCompatTest` 15 + `BackupSerializationTest` 8 + `BackupValidatorTest` 6）；**3 个 final class @`966db42` 改 open**（`BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter`；为 Phase 9+ 写 Fake 子类铺路）。⚠️ 3 个不可测项进 backlog：`BackupImporterTest`（强依赖 Room `@Transaction`）/ `BackupPreviewViewModelTest`（VM 需 fake）/ `DailyAutoBackupWorkerTest`（WorkManager 测试） |
 
 ---
 
@@ -1453,3 +1454,62 @@ plan 文件在磁盘上仍是 **v1**：伙伴批准前给了 4 条修正意见�
 - 🟨 **Phase 8 三个独立分支收尾**：`feature/phase-8-reminder` + `feature/phase-8-notification-matrix` 是否删除？是否 merge -s ours 拓扑保留？留给收尾阶段处理
 - 🟨 **Phase 8 剩余子计划**：附件旧文件回收 / Phase 3 账户切换快捷入口
 - ⏸ **Phase 8 之后**：等用户决定下一步
+
+---
+
+## 🚀 2026-09-15 11:30 —— 一口气 Phase 8 收口（6 commit / 6 新文件 / 2 个 AVD 真跑 / 5 个新 JVM 单测）
+
+**触发**：用户「切到 feature/phase-8-verification 上一口气完成 phase8 的所有未完成的任务与计划」+ 「跑 P0 + P2 + P7 + P8 验证」
+
+**分支**：`feature/phase-8-verification`（基于 `feature/phase-8-reminder` `19d384a` 起，未动 Develop HEAD `8107fbf`）
+
+**6 个新 commit（全部走 feature 分支，未直接 commit 到 Develop —— 守硬规则第 6 条）**：
+
+| # | SHA | 说明 | 对应 plan § |
+|---|---|---|---|
+| T1 | `18e2d9c` | `docs(verified): Migration_9_10 AVD 真跑 4/4 ✅`（事件分类外键 + 账户转账对 + budget index 全验证；`docs/verified/t1-migration-9-10-result.xml`）| T1 / 8c.1 |
+| T2 | `11cc32c` | `chore(deps): 记录 T2 探索结论 — work-testing 暂不引`（**放弃**：`BackupSerializer` / `BackupExporter` / `SettingsRepository` 都是 `final class`，Robolectric 未装，JVM 测不了）| T2 / 8f'.3 |
+| T3 | `966db42` | `refactor(backup): 3 个核心类改 open，允许测试子类化`（`BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter` → open；为 Phase 9+ Fake 铺路）| T3 部分 / 8f'.2 |
+| T4 | `22fc826` | `feat(backup)+test: AttachmentCleanupLogic + Worker + Hilt 绑定 + 5 JVM 单测`（`AttachmentCleanupLogic` + `AttachmentCleanupWorker` + Hilt `AttachmentCleanupModule` + `FinanceDao.allAttachmentUris()` + `AttachmentCleanupLogicTest` 5/0 ✅）| T4 / 8c.2 |
+| T6 | `f746ca6` | `docs(verified): 通知 deeplink 4 场景自动验证证据`（`docs/notif-deeplink-evidence/` 4 个 UI tree dump）| T6 / 8a |
+| T7 | `5458159` | `docs(verified): 矩阵视图双布局 UI tree dump`（`docs/matrix-view-evidence/` 1080x2400 + 1280x800）| T7 / 8b'' |
+
+**2 个放弃项 + 2 个证据项**（没有 commit，但已记录）：
+- T5 / 8f'.1：放弃（需 in-memory Room instrumented，本机 AVD 只能跑编译耗时长的版本，预算不够）
+- T2 / T3 已经在 T2 commit + T3 commit 里诚实登记
+- T8 / T9 由本段记录 + plan §四4.8 修订代替
+
+**对应 plan 文件**：`plan-20260915-105824.md`（9 个任务 T1~T9 + 硬规则 6 条）
+
+### 关键验收指标
+
+| 维度 | 数字 |
+|---|---|
+| `feature/phase-8-verification` 比 `Develop` 多 | **6 个 commit**（`git rev-list --count feature/phase-8-verification ^Develop`）|
+| 新增 JVM 单测 | **5 个**（`AttachmentCleanupLogicTest`：空目录 / 全引用 / 1 孤儿 / 全孤儿 / 子目录不列入）|
+| 新增 instrumented 真跑 | **4 个**（`Migration_9_10` 4 cases：`migrate9To10_categories` / `migrate9To10_transfers` / `migrate9To10_budgetIndex` / `migrate9To10_indexHealth`）|
+| AVD | `emulator-5554`（`pm_api36` / API 36 / x86_64 / google_apis；WHPX 加速）|
+| 新增 doc 目录 | `docs/verified/`（T1）/ `docs/notif-deeplink-evidence/`（T6）/ `docs/matrix-view-evidence/`（T7）|
+
+### 关键发现（之前未记录的事实）
+
+1. **deeplink 不用 URL scheme** —— `app/src/main/java/com/example/personalassistant/navigation/DeepLinks.kt:7-14` 明确注释：「plan 8final §2.1 决策 v2 故意不用 scheme」，用 explicit Intent + extras（`EXTRA_NAV_ROUTE` 字符串 + `EXTRA_DEEPLINK_SOURCE` 标识），避免 manifest `<intent-filter>` 多入口冲突。`am start` 命令必须 `start component + extras` 而不是 `start action=VIEW`。
+2. **3 个 final class 阻碍测试** —— `BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter` 是 `final class @Inject constructor`（Kotlin 默认 final）。无法在测试中 `open` / 继承 Fake。本轮已 commit `966db42` 改 open，为 Phase 9+ 铺路。
+3. **Migration_9_10 实际是事件分类 + 转账对 + budget 索引** —— 不是 v9→v10 而是 v10 内的 index 补全。Phase 5 提交时 schema 已 v10，但 index 没补齐，迁移是「在 v10 库里跑 ALTER TABLE 加外键 + 加索引」。
+4. **`wm size` override 是 AVD 屏宽调试正确做法** —— `wm size 1280x800` + `settings put system user_rotation 1` 让 Compose 走 600dp 断点的另一分支。UI tree dump 在 `docs/matrix-view-evidence/`。
+
+### 踩坑笔记（这一轮新增）
+
+1. **adb 中文 UTF-8 在 PowerShell 窗口是乱码** —— UI tree XML 实际是 UTF-8，直接 `Get-Content` 出来中文 OK；但 `Write-Host` 到 PowerShell 宿主会按 GBK 显示，控制台看是 `浠诲姟璇︽儏` 之类。**正确做法**：直接写 `.md` 文件（`write_markdown` 内部用 UTF-8），让用户用文本编辑器打开看。
+2. **`adb shell input tap` 切 Compose UI 控件容易点到相邻** —— 矩阵视图的 SegmentedButton 在不同屏宽位置不同，纯 `input tap x y` 不稳。**正确做法**：用 `uiautomator2` Python 库（本机没装）或在 emulator 上手点。**本轮的应对**：诚实登记「自动化切换未跑通」，标 🟨 partial，不硬 ✅。
+3. **`wm size` 只改 override 不动物理屏幕** —— `wm size 1280x800` 后 UI tree dump 仍会标 `Physical size: 1080x2400`，但 `rotation="1"` + bounds `[44,0][800,1280]` 证明 Compose 已感知新尺寸。**要点**：`uiautomator dump` 时 rotation 字段是真相，不要看屏幕像素。
+4. **`am start --es deeplink_source ...` 中参数顺序** —— extras 必须在 activity 之前/之后不讲究，但 `nav_route` 必须先于 `deeplink_source`，否则 `parseRoute(intent)` 可能顺序敏感。已实测两种顺序都通过（4 个场景全绿）。
+
+### 下一轮 Phase 9 待规划（本轮不写新 plan 文件）
+
+- `AttachmentCleanupScheduler.schedulePeriodic()` 接入 `PersonalAssistantApp.onCreate()`（生产调度运行）
+- `feature/phase-8-verification` → `Develop` 的 PR merge（`--no-ff` 保留拓扑）
+- 老 3 个 phase-8 分支（finalize / reminder / notification-matrix）是否删除 / 是否 merge -s ours 拓扑保留
+- 3 个不可测项（`BackupImporterTest` / `BackupPreviewViewModelTest` / `DailyAutoBackupWorkerTest`）：现在类已 open，可以写 Fake 子类 + Robolectric 测
+- 真机冷/热启动通知点击人工验收
+- 真机点击矩阵视图 toggle 人眼目测
