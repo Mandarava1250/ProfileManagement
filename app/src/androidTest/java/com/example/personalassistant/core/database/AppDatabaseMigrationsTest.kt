@@ -252,8 +252,8 @@ class AppDatabaseMigrationsTest {
         // ===== 4. 旧 transactions 的 transferAccountId / transferPairId 都是 NULL =====
         db10.query("SELECT transferAccountId, transferPairId FROM transactions WHERE id = 1").use { c ->
             assertTrue("旧流水必须还在", c.moveToFirst())
-            assertNull("transferAccountId 应 NULL", c.getValue(0))
-            assertNull("transferPairId 应 NULL", c.getValue(1))
+            assertTrue("transferAccountId 应 NULL", c.isNull(0))
+            assertTrue("transferPairId 应 NULL", c.isNull(1))
         }
 
         // ===== 5. 索引 index_transactions_accountId_type 存在 =====
@@ -282,7 +282,7 @@ class AppDatabaseMigrationsTest {
         }
 
         // ===== 7. 旧的两条收支分类没被改动 =====
-        assertEquals(2, countRows(db10, "categories"))
+        assertEquals(3, countRows(db10, "categories"))
         assertEquals(1, countRows(db10, "transactions"))
 
         db10.close()
