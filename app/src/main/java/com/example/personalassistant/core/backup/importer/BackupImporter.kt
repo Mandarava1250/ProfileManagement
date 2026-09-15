@@ -73,7 +73,7 @@ import javax.inject.Singleton
  *   两者互不影响，调用方按需选择。
  */
 @Singleton
-class BackupImporter @Inject constructor(
+open class BackupImporter @Inject constructor(
     private val database: AppDatabase,
     private val validator: BackupValidator,
     private val currentAccountRepository: CurrentAccountRepository,

@@ -244,6 +244,18 @@ interface FinanceDao {
     @Query("SELECT * FROM daily_pools")
     suspend fun getAllDailyPools(): List<DailyPoolEntity>
 
+    /**
+     * Phase 8 Sub-step 5（plan 8c.2）：[AttachmentCleanupWorker] 用——拉出全库 transactions 的 attachmentUri 全集
+     *
+     * 返回的是 `file://...` URI 字符串，调度附件 Worker 拿它跟磁盘目录里的文件名比对，
+     * 找出差集（孤儿文件）后删除。
+     *
+     * ⚠️ 故意不带 accountId（汇总语义；一个文件被任一账户的流水引用就不删）。
+     * 同步修改 DAO 头部的「账户隔离白名单」说明。
+     */
+    @Query("SELECT attachmentUri FROM transactions WHERE attachmentUri IS NOT NULL")
+    suspend fun allAttachmentUris(): List<String>
+
     // ===== Phase 8 Sub-step 4：按 id 删除（导入时清理旧数据，跨账户整表清空）=====
 
     @Query("DELETE FROM categories WHERE id = :id")

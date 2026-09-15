@@ -31,7 +31,7 @@ import javax.inject.Singleton
  * manifest / checksums / 表 JSON 字节都通过回调暴露给上层（用于后续导入）。
  */
 @Singleton
-class BackupValidator @Inject constructor(
+open class BackupValidator @Inject constructor(
     @com.example.personalassistant.core.backup.di.BackupJson
     private val json: Json,
 ) {

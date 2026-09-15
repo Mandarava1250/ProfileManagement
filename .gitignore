@@ -45,3 +45,5 @@ x86_64-*.zip
 
 # Cyrene agent
 .cyrene/
+# Phase 8 验证轮次的原始中间产物（gradle log / logcat / uiautomator dump）；正式证据在 docs/verified*/
+/logs/
