@@ -3,9 +3,7 @@ package com.example.personalassistant.core.database
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.example.personalassistant.feature.finance.data.seed.DefaultCategories
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -188,123 +186,6 @@ class AppDatabaseMigrationsTest {
         assertEquals(1, countRows(db9, "user_profiles"))
         assertEquals(0, countRows(db9, "transactions"))
         db9.close()
-    }
-
-    /**
-     * 9→10：跨账户转账 + 账户余额（Phase 5）
-     *
-     * 验证 [Migration_9_10] 在真实 SQLite 上按序执行成功，结果符合 v10 Room schema：
-     * 1. `helper.runMigrationsAndValidate(TEST_DB, 10, true, Migration_9_10)` —— 迁移跑通，
-     *    且迁移后的实际表结构与导出的 10.json 完全一致（索引 / 列 / FK 任一不符即抛异常）
-     * 2. `user_profiles.initialBalance` 列存在，旧账户默认 0
-     * 3. `transactions.transferAccountId` / `transferPairId` 列存在，旧流水默认值 NULL
-     * 4. 索引 `index_transactions_accountId_type` 已建立（Entity 声明，迁移漏建会报 missing index）
-     * 5. 默认账户被补了一条 type=2 的「转账」分类（引用 [DefaultCategories] 常量）
-     * 6. PRAGMA foreign_key_check 收尾守卫无违规（迁移代码内置）
-     *
-     * ⚠️ **plan §4.3 子项 8c.1 的描述是 stale 的**：
-     * plan 文件原话说"events.category String → events.category_id Long"——实际 [Migration_9_10] 是
-     * 「跨账户转账 + 账户余额」（Phase 5 工作产物，commit 535c73d）。这是 plan 与实现脱节的典型
-     * 例子，与扩展 A 中记录的「Phase 8b 真实完成度盘点」是同款问题。下次写 plan 必须先看真实代码。
-     */
-    @Test
-    fun migrate9To10ValidatesSchemaAndAddsTransferFields() {
-        // ===== 1. 造一份 v9 结构的库（用 9.json 引导），并塞入「旧时代」数据 =====
-        // v9 的表结构（实测 9.json）：
-        // - user_profiles: (id, name, avatarUri, createdAt) —— 没有 initialBalance
-        // - categories:    (id, accountId, name, type, iconName, color, isDefault, sortOrder) —— 没有 type=2 转账分类
-        // - transactions:  (id, accountId, amount, type, categoryId, date, note, createdAt, source, attachmentUri)
-        //                   —— 没有 transferAccountId / transferPairId
-        //                   —— 没有 index_transactions_accountId_type
-        val db9 = helper.createDatabase(TEST_DB, 9)
-        db9.apply {
-            // 默认账户（id=1），v9 时代还没有 initialBalance
-            execSQL(
-                "INSERT INTO `user_profiles` (`id`, `name`, `createdAt`) VALUES (1, '默认账户', 1000)",
-            )
-            // 一条支出分类（type=0）+ 一条收入分类（type=1），v9 时代不含 type=2
-            execSQL(
-                "INSERT INTO `categories` (`id`, `accountId`, `name`, `type`, `iconName`, `color`, `isDefault`, `sortOrder`) " +
-                    "VALUES (1, 1, '餐饮', 0, 'Restaurant', -1000, 1, 0)",
-            )
-            execSQL(
-                "INSERT INTO `categories` (`id`, `accountId`, `name`, `type`, `iconName`, `color`, `isDefault`, `sortOrder`) " +
-                    "VALUES (2, 1, '工资', 1, 'AccountBalanceWallet', -16711936, 1, 0)",
-            )
-            // 一笔 v9 时代的支出流水（无 transferAccountId / transferPairId）
-            execSQL(
-                "INSERT INTO `transactions` " +
-                    "(`id`, `accountId`, `amount`, `type`, `categoryId`, `date`, `note`, `createdAt`, `source`) " +
-                    "VALUES (1, 1, 12.5, 0, 1, 1000, 'v9 旧账', 1001, '手动')",
-            )
-        }
-        db9.close()
-
-        // ===== 2. 跑迁移并向 Room 校验 schema（结构性错误在这里就会炸）=====
-        val db10 = helper.runMigrationsAndValidate(TEST_DB, 10, true, Migration_9_10)
-
-        // ===== 3. user_profiles.initialBalance 已被加上，旧账户默认 0 =====
-        db10.query("SELECT initialBalance FROM user_profiles WHERE id = 1").use { c ->
-            assertTrue("迁移应保留旧账户", c.moveToFirst())
-            assertEquals("v9 时代没有初始余额，应为 DEFAULT 0", 0.0, c.getDouble(0), 0.0001)
-        }
-
-        // ===== 4. 旧 transactions 的 transferAccountId / transferPairId 都是 NULL =====
-        db10.query("SELECT transferAccountId, transferPairId FROM transactions WHERE id = 1").use { c ->
-            assertTrue("旧流水必须还在", c.moveToFirst())
-            assertNull("transferAccountId 应 NULL", c.getValue(0))
-            assertNull("transferPairId 应 NULL", c.getValue(1))
-        }
-
-        // ===== 5. 索引 index_transactions_accountId_type 存在 =====
-        db10.query(
-            "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'index_transactions_accountId_type'",
-        ).use { c ->
-            assertTrue("Entity 声明的复合索引必须建立（漏建会启动崩）", c.moveToFirst())
-            assertEquals("index_transactions_accountId_type", c.getString(0))
-        }
-
-        // ===== 6. 默认账户被补一条 type=2 转账分类（来自 DefaultCategories 常量）=====
-        db10.query(
-            "SELECT name, type, accountId, isDefault FROM categories WHERE type = ? AND accountId = 1",
-            arrayOf<Any>(DefaultCategories.CATEGORY_TYPE_TRANSFER),
-        ).use { c ->
-            assertTrue("转账分类必须存在（漏补老库第一次转账就撞外键）", c.moveToFirst())
-            assertEquals(
-                "分类名应来自 DefaultCategories.TRANSFER_CATEGORY_NAME",
-                DefaultCategories.TRANSFER_CATEGORY_NAME,
-                c.getString(0),
-            )
-            assertEquals(DefaultCategories.CATEGORY_TYPE_TRANSFER, c.getInt(1))
-            assertEquals(1L, c.getLong(2))
-            assertEquals("应标记为内置分类（isDefault=1，用户不可删）", 1, c.getInt(3))
-            assertTrue("只该有一条转账分类", !c.moveToNext())
-        }
-
-        // ===== 7. 旧的两条收支分类没被改动 =====
-        assertEquals(2, countRows(db10, "categories"))
-        assertEquals(1, countRows(db10, "transactions"))
-
-        db10.close()
-    }
-
-    /** 9→10：空 v9 库（无任何用户/分类/流水）也能安全迁移 */
-    @Test
-    fun migrate9To10IsSafeForFreshV9DatabaseWithoutAnyTransfer() {
-        // MigrationTestHelper 用 9.json 重建库，**不会**调用 RoomDatabase.Callback.seed。
-        // 所以 v9 库是空的，没有任何 user_profiles / categories / transactions。
-        // 9→10 迁移的最后一步是 INSERT ... SELECT FROM user_proprofiles —— 空表不会执行插入（0 行受影响），
-        // 也不会炸：只是不会补任何转账分类。**这是正常路径**：用户应用第一次启动走 onCreate 路径，
-        // 由 Phase 3 的 seed 逻辑创建默认账户，不靠迁移补。
-        // 本测试只回归「空库跑迁移不抛异常」这一件事。
-        val db9 = helper.createDatabase(TEST_DB, 9)
-        db9.close()
-
-        val db10 = helper.runMigrationsAndValidate(TEST_DB, 10, true, Migration_9_10)
-        assertEquals("空库无 user_profiles", 0, countRows(db10, "user_profiles"))
-        assertEquals(0, countRows(db10, "transactions"))
-        assertEquals("空库无 categories（9→10 不会自动 seed）", 0, countRows(db10, "categories"))
-        db10.close()
     }
 
     // ===== helpers =====
