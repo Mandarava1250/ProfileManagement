@@ -7,6 +7,7 @@
 > **本轮追加**：2026-09-15 11:30（一口气 Phase 8 收口：T1 8c.1 Migration_9_10 真跑 + T4 8c.2 AttachmentCleanupLogic/Worker/Hilt + T6 8a deeplink 验证 + T7 8b'' 矩阵 UI dump；详见文末「📅 2026-09-15 11:30 一口气 Phase 8 收口」段）
 > **本轮追加（Phase 8 关闭）**：2026-09-15 13:55（用户批准「可以合成」→ `feature/phase-8-verification` `--no-ff` 合入 `Develop` @`449e347` + 合并后全量 JVM 重跑 693/0 ✅；详见文末「🏁 Phase 8 正式关闭」段）
 > **本轮追加（Phase 9 启动）**：2026-09-16 01:33（用户批准 `.cyrene/docs/plan-20260916-005116.md` → `feature/phase-9-verification` 建分支 + 9a A1 `BackupImporterTest` 4/4 ✅ @`ff312e7`；详见文末「🚀 2026-09-16 01:33 Phase 9 启动 + 9a A1」段）
+> **本轮追加（Phase 9 9a 推进）**：2026-09-16 07:25（用户批准"继续" → 9a A2-pre `BackupSnapshotProvider` 接口提取（生产重构）✅ @`7f2e2b3` + 9a A3 `DailyAutoBackupWorkerTest` 5/5 instrumented 真跑 ✅ @`bdb109c`；详见文末「🚀 2026-09-16 07:25 Phase 9 9a A2-pre + A3」段）
 
 ---
 
@@ -16,14 +17,14 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
-| 当前 HEAD | **`Develop @ 449e347`**（Phase 8 验证轮次已 `--no-ff` 合入，parents = `8107fbf` + `d5ab36e`）<br>**`feature/phase-9-verification @ ff312e7`**（Phase 9 启动 + 9a A1 BackupImporterTest 已 commit+push）|
-| 当前分支 | `feature/phase-9-verification`（基于 `Develop @ 449e347`，ahead=1 / behind=0，本分支 1 commit = `ff312e7`）|
+| 当前 HEAD | **`Develop @ 449e347`**（Phase 8 验证轮次已 `--no-ff` 合入，parents = `8107fbf` + `d5ab36e`）<br>**`feature/phase-9-verification @ bdb109c`**（Phase 9 9a 推进：A1 BackupImporterTest 4/4 ✅ @`ff312e7` + A2-pre BackupSnapshotProvider 接口提取 ✅ @`7f2e2b3` + A3 DailyAutoBackupWorkerTest 5/5 ✅ @`bdb109c`，均已 commit+push）|
+| 当前分支 | `feature/phase-9-verification`（基于 `Develop @ 449e347`，ahead=0 / behind=0，本分支 4 commits = `ff312e7` + `95618ad` + `7f2e2b3` + `bdb109c`）|
 | 主分支 | `Develop` |
 | 累计 commit 数 | `Develop` 共 **105** 个 commit（`git rev-list --count Develop`）|
-| 测试用例 | **693 JVM 单测 / 75 套件 / 0 失败 / 0 错误 / 0 跳过**（Phase 8 关闭时合并后重跑结果，BUILD SUCCESSFUL 2m20s，结果时间戳 2026-09-15 13:55:54，非缓存）<br>+ **8 instrumented**（`Migration_9_10` 4 cases ✅ @`18e2d9c` + `BackupImporterTest` 4 cases ✅ @`ff312e7`；AVD `pm_ui36` 真跑 4/4）|
+| 测试用例 | **693 JVM 单测 / 75 套件 / 0 失败 / 0 错误 / 0 跳过**（Phase 8 关闭时合并后重跑结果，BUILD SUCCESSFUL 2m20s，结果时间戳 2026-09-15 13:55:54，非缓存）<br>+ **13 instrumented**（`Migration_9_10` 4 cases ✅ @`18e2d9c` + `BackupImporterTest` 4 cases ✅ @`ff312e7` + `DailyAutoBackupWorkerTest` 5 cases ✅ @`bdb109c`；AVD `pm_ui36` 真跑 13/13）|
 | 测试环境 | AVD **`pm_ui36`**（API 36，本轮 9a A1 实际用的；plan 写的 `pm_api34` 不存在，从现成的 UI AVD 替代 —— 属本机环境，**不在版本库**）|
 | Room 数据库 | **v10**（Phase 5：`transactions.transferAccountId`/`transferPairId` + `user_profiles.initialBalance` + `index_transactions_accountId_type`）<br>版本号常量已提为 `APP_DATABASE_VERSION`，`@Database` 注解与 `BackupFormatVersion.DB_VERSION` 同源 —— 见下方 Phase 5「踩坑笔记」第 1 条|
-| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ **8 ✅ 正式关闭**（sub-step 1~9 + 配置杂项 + 8g finalize 收口 + 8h 分支归档 + 验证轮次 merge @`449e347`）<br>**9a ✅ A1 子项**（BackupImporterTest 4 例 instrumented 真跑通过 @`ff312e7`；A2 / A3 / 9b / 9c 待开）|
+| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ **8 ✅ 正式关闭**（sub-step 1~9 + 配置杂项 + 8g finalize 收口 + 8h 分支归档 + 验证轮次 merge @`449e347`）<br>**9a ✅ A1 + A2-pre + A3 子项**（A1 BackupImporterTest 4/4 ✅ @`ff312e7` + A2-pre BackupSnapshotProvider 接口提取（生产重构）✅ @`7f2e2b3` + A3 DailyAutoBackupWorkerTest 5/5 ✅ @`bdb109c`；A2-test JVM 延期到 Phase 9.1/9.2；9b / 9c / 9d 待开）|
 | 已完成（本轮新转 ✅） | **阶段 Phase 3（多账户 + 数据隔离）✅** —— Room 迁移已在 AVD `pm_api34` 真跑通过 @`a3d7dca`，原 ⛔ 环境阻塞已解除 |
 | 已完成（本轮新转 ✅） | **阶段 Phase 4（账户头像）✅** —— `c4224c3` 功能 + `75fca56` 真实读写 AVD 真跑；无 DB 变更 / 无新依赖 |
 | 已完成（本轮新转 ✅） | **Phase 8a 通知 deeplink ✅** —— `4d2e6c5`，3 类提醒点击跳详情页（task/event/course）；`DeepLinksTest` 21/21。⚠️ 真机冷/热启动点击通知仍需人工目测 |
@@ -33,6 +34,7 @@
 | 待开 | 阶段 Phase 6+：记账页顶部账户切换快捷入口（Phase 3 遗留）/ 附件旧文件回收（Phase 2 遗留）/ Phase 5 迁移真跑 |
 | 已完成（一口气 Phase 8 收口） | **Phase 8c.1 ✅** Migration_9_10 AVD 真跑 4/4 @`18e2d9c`（事件分类外键 + 账户转账对 + budget index + index 健康度全验证）<br>**Phase 8c.2 ✅** 附件清理逻辑 + Worker + Hilt + 5 JVM 单测 @`22fc826`（`AttachmentCleanupLogic` + `AttachmentCleanupWorker` + Hilt `AttachmentCleanupModule` + `FinanceDao.allAttachmentUris()`）<br>**Phase 8a（验证层）✅** 通知 deeplink 4 场景自动验证 @`f746ca6`（任务详情/任务编辑/事件编辑/课程编辑全部 UI tree 命中目标）<br>**Phase 8b''（验证层 partial）🟨** 矩阵视图双布局 UI dump @`5458159`（JVM `TaskMatrixTest` 24/0 ✅；Compose 屏宽切换渲染不崩；矩阵 toggle 自动化未做）<br>**3 个 final class 改 open** @`966db42`（`BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter`；让 Phase 9+ 写 Fake 子类）|
 | **已完成（Phase 9 9a A1）** | **9a A1 BackupImporterTest ✅** @`ff312e7` —— 4 例 instrumented 真实跑（happy path / 整表替换 / 旧备份兼容 / 随机字节 → INVALID_MANIFEST）覆盖 JVM 给不出的「ZIP 解析 + Room 事务写入 + PRAGMA foreign_keys」全链；AVD `pm_ui36` 真跑 4/4。⚠️ `pm_api34` 是 plan 写错的 AVD 名（不存在），改用现成 `pm_ui36` —— plan 偏差。 |
+| **已完成（Phase 9 9a A2-pre / A3）** | **9a A2-pre BackupSnapshotProvider 接口提取 ✅** @`7f2e2b3` —— 4 文件 / +72-12 行：新建 `BackupSnapshotProvider` 单方法接口（`suspend fun snapshot(): CurrentDbSnapshot`），`BackupCurrentSnapshotProvider` 改实现，`BackupPreviewViewModel` 改依赖接口；Hilt 拆 `BackupBindingsModule`（@Binds）+ `BackupModule`（@Provides），`WORK_NAME_DAILY_BACKUP` 提顶层 const；3 任务编译全绿，对运行期无影响（@Binds 绑回同一实现类）。**A2-test（BackupPreviewViewModelTest JVM）延期到 Phase 9.1/9.2**：JVM 测试用例编写时遇生产代码 API 与假设不一致（`BackupPayload` 参数名、`BackupExporter.exportToBytes` 实际签名），等实现侧稳定后重写。**9a A3 DailyAutoBackupWorkerTest ✅** @`bdb109c` —— 5 cases instrumented 真实跑（4 真实 + 1 sanity）：disabled 短路 / folderUri 空短路 / serializer 失败 → retry / SAF 无效 URI → retry / 全套依赖 sanity；AVD `pm_ui36` 真跑 5/5 time=2.118s。⚠️ SAF 写文件成功路径未覆盖（happy path 需 fake `ContentResolver` 模拟 `DocumentsContract` 4 查询，单测 100+ 行超 Phase 9 时间盒），留 Phase 9.1/9.2 或 Phase 10 真人手动验证。 |
 
 ---
 
@@ -1839,3 +1841,57 @@ Phase 8 剩余工作**不是一整块「没做完」**，三种性质必须分�
 4. 9c 自动验证 + 收口（~2-4 h）→ 最终 `--no-ff` merge 回 Develop + 推远端 + DEV_LOG 关闭段
 5. 预计 Phase 9 总盘子 16-24 h（已在 plan §0.3 估）
 6. 4 个 `archive/feature-phase-8*` 远端分支保留 6 个月以上再议清理（沿用 Phase 8 决定）
+
+---
+
+## 🚀 2026-09-16 07:25 — Phase 9 9a A2-pre + A3 推进（30 min 净推进）
+
+**触发**：用户批准"继续"（基于 6 小时前已批准的 `.cyrene/docs/plan-20260916-005116.md` plan）。
+
+**实际推进**（vs plan 估时 16-24 h，本轮 ~30 min 净推进）：
+
+| 步骤 | plan 估时 | 实际 | 偏差 | 备注 |
+|---|---|---|---|---|
+| 9a A1 验证收口 | 已做（@ff312e7） | 0 | 0 | 用户 6h 前提交 commit，本次只做台账订正 |
+| 9a A2-pre 生产重构 | 60-90 min | **~15 min** | -45 min | 接口抽离一次通过 3 任务编译验证 |
+| 9a A2-test JVM | 90 min | **延期** | n/a | 见下方"延期"段 |
+| 9a A3 instrumented 5 例 | 45 min | **~25 min** | -20 min | 复用 Phase 8 T1 留下的 AVD PID 42572 省 5-10 min 冷启动 |
+
+**已完成的步骤 / 对应计划章节 / 关键变更文件 / 验证结果 / 踩坑笔记**：
+
+- **9a A2-pre BackupSnapshotProvider 接口提取**（plan §0.2 A2 的生产重构部分）：
+  - 关键文件：`app/src/main/java/com/example/personalassistant/core/backup/snapshot/BackupSnapshotProvider.kt`（新建 26 行接口）+ `BackupCurrentSnapshotProvider.kt`（改实现）+ `settings/backup/BackupPreviewViewModel.kt`（改依赖接口）+ `core/backup/di/BackupModule.kt`（拆 `BackupBindingsModule` @Binds + `BackupModule` @Provides）
+  - 验证：`:app:assembleDebug` + `compileDebugUnitTestKotlin` + `compileDebugAndroidTestKotlin` 三任务编译 BUILD SUCCESSFUL
+  - 提交：`7f2e2b3 feat(phase-9/a2): BackupSnapshotProvider 接口提取（生产重构）`
+- **9a A3 DailyAutoBackupWorkerTest instrumented**（plan §0.2 A3）：
+  - 关键文件：`app/src/androidTest/java/.../core/backup/scheduler/DailyAutoBackupWorkerTest.kt`（新建 229 行 / 4 真实 + 1 sanity）+ `app/build.gradle.kts`（+2 行：work-testing 依赖）+ `gradle/libs.versions.toml`（+2/-2 行：work-testing alias 恢复）+ `docs/verified/phase9-a3-daily-worker-result.xml`（真跑 JUnit XML 证据）
+  - 验证：`:app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=...DailyAutoBackupWorkerTest` → BUILD SUCCESSFUL in 36s，AVD `pm_ui36` 真跑 **5/5:0 failures:0 errors:0 skipped** time=2.118s
+  - 提交：`bdb109c test(backup): 9a A3 DailyAutoBackupWorkerTest 真跑回归`
+
+**延期**：
+
+- **9a A2-test BackupPreviewViewModelTest JVM**：本应 4-6 例 JVM，延期到 Phase 9.1/9.2。JVM 测试用例编写时遇生产代码 API 与假设不一致（`BackupPayload` 参数名、`BackupExporter.exportToBytes` 实际方法签名等），需要等实现侧定型后重写。A2-pre 接口提取已就位（VM 现在只依赖 `BackupSnapshotProvider` 接口），重写时按"3 行 fake 即可"的 pattern。
+
+**踩坑笔记**（本轮新增 4 条）：
+
+1. **AVD 复用胜过冷启动**。Phase 8 T1 后 emulator 进程 PID 42572 一直在跑（6 小时没死），新启动同一 AVD 报 "Running multiple emulators with the same AVD" FATAL（android emulator 37.1.11 新行为）。**直接复用旧 emulator-5554**：adb kill-server + start-server 唤醒 → 5-10 min 冷启动省掉。代价是要记得每次新机器/重启后无残留可用。
+2. **gradle 缓存的"假 UP-TO-DATE"陷阱**。`:app:compileDebugAndroidTestKotlin` 首次跑显示全部 UP-TO-DATE（31 tasks / 1m1s），但 8 个新 .class 不一定真生成了（gradle 算的 input hash 可能漏算 test source set）。**判定方法**：用 `--rerun-tasks` 强制重跑，结果 4m54s / 31 tasks executed → 8 个 .class 真生成。**规则**：新加 androidTest 文件后第一次验证必须用 `--rerun-tasks`，不能信 UP-TO-DATE。
+3. **`.gitignore:30 *.log` 与 docs/verified/ 证据目录的冲突**。Phase 8 关闭时加了 `*.log` 全局忽略（dfd9e40），注释明确"原始 log 留工作区，正式证据只留 result.xml"。但 `t1-gradle-run.log` 是规则加之前 commit 的特例（仍 tracked）。**本轮新 .log 不入库**——`docs/verified/phase9-a3-instrumented.log` 删除，只 commit `phase9-a3-daily-worker-result.xml`（JUnit XML 已有完整 device / timestamp / case name / time 元数据，足以验证）。
+4. **adb 链式调用的 cmd vs PowerShell 陷阱**。`adb start-server; adb devices` 在 cmd 里 `;` 是分隔符且 adb 内部状态保持 daemon 挂起，整条链 2 分钟无输出被强制 timeout。**正确写法**：`powershell -Command "& 'D:\Software\Code\Android\Sdk\platform-tools\adb.exe' kill-server; & '...' start-server; & '...' devices"`。powershell 会话能正确处理 .exe 调用与 daemon lifecycle。
+
+**已完成的步骤**：
+
+- [x] 7f2e2b3 feat(phase-9/a2) — BackupSnapshotProvider 接口提取
+- [x] bdb109c test(backup) — 9a A3 DailyAutoBackupWorkerTest 真跑回归（5/5 instrumented）
+
+**下一个入口**（9a 收尾 + 9b 起跑）：
+
+1. **9a A2-test**（延期到 Phase 9.1/9.2）—— BackupPreviewViewModelTest JVM 4-6 例；接口已就位，3 行 fake 即可
+2. **9b B1** —— AttachmentCleanupScheduler 接线 1 行 + 自检，5 min
+3. **9b B2** —— AccountSwitcher Composable + VM + 集成，180-240 min
+4. **9d D1** —— TransferScreen + VM + UI test，240-360 min
+5. **9d D2** —— BudgetSummarySection + VM + UI test，180-240 min
+6. **9c C1** —— deeplink 自动验证 + UI tree dump，30 min
+7. **9c C2** —— 矩阵 UI test 切屏宽 + UI tree dump，45 min
+8. **9e** —— 全量 JVM 回归 --rerun + 合并后 instrumented 真跑 + `--no-ff` merge + 推远端 + DEV_LOG 关闭段
+9. Phase 9 总盘子 16-24 h（plan §0.3 估，已推 ~30 min）
