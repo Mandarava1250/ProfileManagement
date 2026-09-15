@@ -35,7 +35,7 @@ import kotlinx.coroutines.withContext
  * 计算差异是纯内存操作；写入器才是 [BackupManifest.DEFAULT_TABLES] 顺序敏感）。
  */
 @Singleton
-class BackupCurrentSnapshotProvider @Inject constructor(
+open class BackupCurrentSnapshotProvider @Inject constructor(
     private val database: AppDatabase,
     private val userProfileDao: UserProfileDao,
     private val semesterDao: SemesterDao,
