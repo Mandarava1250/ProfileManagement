@@ -6,6 +6,7 @@
 > **生成时间**：2026-09-09 01:10（基于 `git log --all` 全量重建，commit `1563bbe`）
 > **本轮追加**：2026-09-15 11:30（一口气 Phase 8 收口：T1 8c.1 Migration_9_10 真跑 + T4 8c.2 AttachmentCleanupLogic/Worker/Hilt + T6 8a deeplink 验证 + T7 8b'' 矩阵 UI dump；详见文末「📅 2026-09-15 11:30 一口气 Phase 8 收口」段）
 > **本轮追加（Phase 8 关闭）**：2026-09-15 13:55（用户批准「可以合成」→ `feature/phase-8-verification` `--no-ff` 合入 `Develop` @`449e347` + 合并后全量 JVM 重跑 693/0 ✅；详见文末「🏁 Phase 8 正式关闭」段）
+> **本轮追加（Phase 9 启动）**：2026-09-16 01:33（用户批准 `.cyrene/docs/plan-20260916-005116.md` → `feature/phase-9-verification` 建分支 + 9a A1 `BackupImporterTest` 4/4 ✅ @`ff312e7`；详见文末「🚀 2026-09-16 01:33 Phase 9 启动 + 9a A1」段）
 
 ---
 
@@ -15,14 +16,14 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
-| 当前 HEAD | **`Develop @ 449e347`**（Phase 8 验证轮次已 `--no-ff` 合入，parents = `8107fbf` + `d5ab36e`）|
-| 当前分支 | `Develop`（`feature/phase-8-verification @ d5ab36e` 已全部并入，`git rev-list --count Develop..feature/phase-8-verification` = **0**）|
+| 当前 HEAD | **`Develop @ 449e347`**（Phase 8 验证轮次已 `--no-ff` 合入，parents = `8107fbf` + `d5ab36e`）<br>**`feature/phase-9-verification @ ff312e7`**（Phase 9 启动 + 9a A1 BackupImporterTest 已 commit+push）|
+| 当前分支 | `feature/phase-9-verification`（基于 `Develop @ 449e347`，ahead=1 / behind=0，本分支 1 commit = `ff312e7`）|
 | 主分支 | `Develop` |
 | 累计 commit 数 | `Develop` 共 **105** 个 commit（`git rev-list --count Develop`）|
-| 测试用例 | **693 JVM 单测 / 75 套件 / 0 失败 / 0 错误 / 0 跳过** —— 合并后 `--rerun` 强制重跑（BUILD SUCCESSFUL 2m20s，结果时间戳 2026-09-15 13:55:54，非缓存）<br>+ **4 instrumented**（`Migration_9_10` 4 cases，AVD `pm_api36` 真跑 4/4 ✅ @`18e2d9c`）|
-| 测试环境 | AVD `pm_api34`（API 34 / aosp_atd / x86_64 / WHPX 硬件加速）—— 属本机环境，**不在版本库** |
+| 测试用例 | **693 JVM 单测 / 75 套件 / 0 失败 / 0 错误 / 0 跳过**（Phase 8 关闭时合并后重跑结果，BUILD SUCCESSFUL 2m20s，结果时间戳 2026-09-15 13:55:54，非缓存）<br>+ **8 instrumented**（`Migration_9_10` 4 cases ✅ @`18e2d9c` + `BackupImporterTest` 4 cases ✅ @`ff312e7`；AVD `pm_ui36` 真跑 4/4）|
+| 测试环境 | AVD **`pm_ui36`**（API 36，本轮 9a A1 实际用的；plan 写的 `pm_api34` 不存在，从现成的 UI AVD 替代 —— 属本机环境，**不在版本库**）|
 | Room 数据库 | **v10**（Phase 5：`transactions.transferAccountId`/`transferPairId` + `user_profiles.initialBalance` + `index_transactions_accountId_type`）<br>版本号常量已提为 `APP_DATABASE_VERSION`，`@Database` 注解与 `BackupFormatVersion.DB_VERSION` 同源 —— 见下方 Phase 5「踩坑笔记」第 1 条|
-| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ **8 ✅ 正式关闭**（sub-step 1~9 + 配置杂项 + 8g finalize 收口 + 8h 分支归档 + 验证轮次 merge @`449e347`）|
+| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ **8 ✅ 正式关闭**（sub-step 1~9 + 配置杂项 + 8g finalize 收口 + 8h 分支归档 + 验证轮次 merge @`449e347`）<br>**9a ✅ A1 子项**（BackupImporterTest 4 例 instrumented 真跑通过 @`ff312e7`；A2 / A3 / 9b / 9c 待开）|
 | 已完成（本轮新转 ✅） | **阶段 Phase 3（多账户 + 数据隔离）✅** —— Room 迁移已在 AVD `pm_api34` 真跑通过 @`a3d7dca`，原 ⛔ 环境阻塞已解除 |
 | 已完成（本轮新转 ✅） | **阶段 Phase 4（账户头像）✅** —— `c4224c3` 功能 + `75fca56` 真实读写 AVD 真跑；无 DB 变更 / 无新依赖 |
 | 已完成（本轮新转 ✅） | **Phase 8a 通知 deeplink ✅** —— `4d2e6c5`，3 类提醒点击跳详情页（task/event/course）；`DeepLinksTest` 21/21。⚠️ 真机冷/热启动点击通知仍需人工目测 |
@@ -31,6 +32,7 @@
 | 进行中 | **阶段 Phase 5（跨账户转账 + 预算汇总）🟨** —— 代码已 push（`f86b8be` 数据层 + `438a29e` 功能层），598 JVM 断言全绿；⚠️ **不打 ✅ 的原因**：`Migration_9_10` 的 instrumented 真跑未做（JVM 只证明 SQL 形状对），且转账/总览 UI 未人工目测验收 |
 | 待开 | 阶段 Phase 6+：记账页顶部账户切换快捷入口（Phase 3 遗留）/ 附件旧文件回收（Phase 2 遗留）/ Phase 5 迁移真跑 |
 | 已完成（一口气 Phase 8 收口） | **Phase 8c.1 ✅** Migration_9_10 AVD 真跑 4/4 @`18e2d9c`（事件分类外键 + 账户转账对 + budget index + index 健康度全验证）<br>**Phase 8c.2 ✅** 附件清理逻辑 + Worker + Hilt + 5 JVM 单测 @`22fc826`（`AttachmentCleanupLogic` + `AttachmentCleanupWorker` + Hilt `AttachmentCleanupModule` + `FinanceDao.allAttachmentUris()`）<br>**Phase 8a（验证层）✅** 通知 deeplink 4 场景自动验证 @`f746ca6`（任务详情/任务编辑/事件编辑/课程编辑全部 UI tree 命中目标）<br>**Phase 8b''（验证层 partial）🟨** 矩阵视图双布局 UI dump @`5458159`（JVM `TaskMatrixTest` 24/0 ✅；Compose 屏宽切换渲染不崩；矩阵 toggle 自动化未做）<br>**3 个 final class 改 open** @`966db42`（`BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter`；让 Phase 9+ 写 Fake 子类）|
+| **已完成（Phase 9 9a A1）** | **9a A1 BackupImporterTest ✅** @`ff312e7` —— 4 例 instrumented 真实跑（happy path / 整表替换 / 旧备份兼容 / 随机字节 → INVALID_MANIFEST）覆盖 JVM 给不出的「ZIP 解析 + Room 事务写入 + PRAGMA foreign_keys」全链；AVD `pm_ui36` 真跑 4/4。⚠️ `pm_api34` 是 plan 写错的 AVD 名（不存在），改用现成 `pm_ui36` —— plan 偏差。 |
 
 ---
 
@@ -1706,6 +1708,8 @@ Phase 8 剩余工作**不是一整块「没做完」**，三种性质必须分�
 | merge 体量 | `git diff --stat 8107fbf Develop` | **23 文件 / +963 / -21** |
 | **唯一没做的是 push** | `git rev-list --count origin/Develop..Develop` | **ahead 12**（`origin/Develop` 还停在 `8107fbf`） |
 
+> **订正（2026-09-16 01:33 追加）**：本行写于 Phase 8 关闭当时（13:55 时刻的事实）。在那之后，origin/Develop 已被推过并同步到 `449e347`（见文末「🏁 Phase 8 正式关闭」段 1748 行）。**截至 2026-09-16 01:33**：ahead=0，origin/Develop=`449e347`，Develop=`449e347`。Phase 9 在 `feature/phase-9-verification`（独立分支）上工作，未触碰主线；本 Phase 9 完成后会在 E3-E5 重新 push。
+
 **所以本轮真正的剩余工作是「合并后验证 + push」，不是「执行 merge」。** 台账 `8h-补` 行原本写「🟨 执行中」也是 stale 的，已订正为 ✅ @`449e347`。
 
 ### 二、合并后回归证据（新跑，非缓存）
@@ -1753,3 +1757,85 @@ Phase 8 剩余工作**不是一整块「没做完」**，三种性质必须分�
 1. `git push origin Develop`（把 ahead 12 推上去）
 2. 起 **Phase 9 plan**：头号 = `AccountSwitcher` 快捷入口 + Scheduler 接 `onCreate()`；次号 = 3 个测试基建项
 3. 老 4 个 `archive/feature-phase-8*` 远端分支保留 6 个月以上再议清理
+
+---
+
+## 🚀 2026-09-16 01:33 —— Phase 9 启动 + 9a A1 BackupImporterTest ✅
+
+**触发**：用户「已批准计划，请开始执行」→ `.cyrene/docs/plan-20260916-005116.md` 获批 → 启动 Phase 9（头号三簇 + Phase 5 收口 + 自动验证收口）。
+
+### 一、分支与计划
+
+| 项 | 值 |
+|---|---|
+| 分支 | `feature/phase-9-verification`（基于 `Develop @ 449e347`） |
+| 计划文档 | `.cyrene/docs/plan-20260916-005116.md` |
+| 本轮范围 | 9a 测试基建（A1 ✅ / A2 ⬜ / A3 ⬜）+ 9b 功能缺口（B1 ⬜ / B2 ⬜ / D1 ⬜ / D2 ⬜）+ 9c 自动验证（C1 ⬜ / C2 ⬜ / E1~E5 ⬜） |
+| 节奏 | 一个 feature 分支 → 9a → 9b → 9c → `--no-ff` merge 回 `Develop` |
+| 验证 | 仅自动验证（8a / 8b 真人目测继续留给 Phase 10，不虚标 ✅） |
+
+### 二、已完成的步骤（9a A1）
+
+1. 读 `BackupImporter.kt`（500+ 行）→ 确认两个公开入口 `import(InputStream)` + `importWithPreview(payload, preview)`，都是 suspend + 直接依赖 Room。
+2. 读 `BackupLegacyCompatTest.kt`（JVM 单测）头部注释 → 钉住为什么走 instrumented：`importWithPreview` / `mergeXxx` 是 `private suspend` + 依赖 `AppDatabase`，JVM 没 Robolectric 实例化不了。
+3. 读现有 androidTest 范本（`AppDatabaseMigrationsTest` + `AvatarStorageImplTest`）→ 继承 4 条本仓库约定：camelCase 方法名（DEX 035）、`: Unit` 显式 return、`MigrationTestHelper` 用法、`ApplicationProvider.getApplicationContext()` 拿 context。
+4. 读 `BackupExporter.kt` / `BackupValidator.kt` / `BackupFormatVersion.kt` / `BackupManifest.kt` / `BackupPayload.kt` / `BackupModule.kt` / `UserProfileEntity` / `TransactionEntity` / `CategoryEntity` / `CurrentAccountRepository` / `AppDatabase.kt` / `AccountIds.kt` → 摸清依赖边界（构造 BackupImporter 需 4 个依赖：database + validator + currentAccountRepo + json；CurrentAccountRepository 是接口可直接 Fake）。
+5. 写 `app/src/androidTest/java/com/example/personalassistant/core/backup/importer/BackupImporterTest.kt`（269 行）：4 例 instrumented + 内嵌 `FakeCurrentAccountRepository`（MutableStateFlow 实现）。
+6. `gradlew :app:compileDebugAndroidTestKotlin` → BUILD SUCCESSFUL in 15s（编译通过无 error）。
+7. 起 AVD `pm_ui36`（plan 写的 `pm_api34` 不存在）→ 90s cold boot → `adb shell getprop sys.boot_completed` = 1 ✅
+8. `gradlew :app:connectedDebugAndroidTest` → BUILD SUCCESSFUL in 1m 27s（首次跑：3/4 通过，1 例 `importWithCorruptZipReturnsFailure` 红）
+9. 诊断首跑红：实际错误是 `expected:<INVALID_ZIP> but was:<INVALID_MANIFEST>` —— 测的不是 bug，是我对 `ZipInputStream` 行为的预期错了（ZipInputStream 对纯文本宽容 → 静默空 entries → validator 走 manifest 不存在分支）。
+10. 改测试断言 `INVALID_ZIP` → `INVALID_MANIFEST` + 重命名 `importWithCorruptZipReturnsFailure` → `importWithGarbageBytesReturnsInvalidManifest` + 补 KDoc 钉住「这是已知行为」。
+11. 重跑 → **BUILD SUCCESSFUL in 50s，4/4 passed (100%)**。
+12. 提交 `@ff312e7` + `git push --set-upstream origin feature/phase-9-verification` 推远端。
+
+### 三、对应计划章节
+
+- `plan-20260916-005116.md` §二、范围与边界 → 9a A1「`BackupImporterTest`（instrumented 方案 b，AVD 真跑） 90 min」
+- §0.3 估时 60-90 min → 实际 90 min（含 AVD 启动 90s + 编译 15s + 真跑 1m27s + 1 例 fix + 重跑 50s + 1 步 2 步 commit + 1 个 plan 偏差识别）
+- §0.4 风险 1「Phase 5 转账/预算 UI 风险」 → 提前做 A1 测试基建就位，为后续 D1/D2 提供 Validator 真跑过的回归基线
+- §0.4 风险 3「AVD 集群可用性」 → **plan 偏差 #1**：`pm_api34` AVD 不存在，用现成的 `pm_ui36`（API 36 UI AVD）；向后兼容不影响功能，但 plan 文档需订正
+
+### 四、关键变更文件
+
+| 文件 | 改动 |
+|---|---|
+| `app/src/androidTest/java/com/example/personalassistant/core/backup/importer/BackupImporterTest.kt` | **新建**（269 行）—— `@RunWith(AndroidJUnit4)` + `Room.inMemoryDatabaseBuilder` + 内嵌 `FakeCurrentAccountRepository` |
+| `DEV_LOG.md` | 顶部「📌 项目速览」刷新 HEAD/测试数/AVD 名 + 文末新增本段（Phase 9 启动 + 9a A1） |
+
+### 五、验证结果
+
+| 项 | 值 |
+|---|---|
+| 命令 | `gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.personalassistant.core.backup.importer.BackupImporterTest` |
+| AVD | `pm_ui36` (API 36) |
+| 结果 | **BUILD SUCCESSFUL in 50s**（重跑，recompile 因改了测试名） |
+| 套件 / 用例 | **1 / 4** |
+| 失败 / 错误 / 跳过 | **0 / 0 / 0** |
+| 报告 | `app/build/reports/androidTests/connected/debug/com.example.personalassistant.core.backup.importer.BackupImporterTest.html` |
+| 4 例明细 | `importHappyPathInsertsAllRowsIntoRoom` 0.285s ✅ / `importReplacesExistingDataOnSecondRun` 0.260s ✅ / `importWithEmptyUserProfilesKeepsExistingAccounts` 0.182s ✅ / `importWithGarbageBytesReturnsInvalidManifest` 0.088s ✅ |
+| JVM 回归 | 未做（仅改 androidTest，不动 main/test 源码 → JVM 套件 693/0 应不受影响，E1 合并前会重跑） |
+
+### 六、踩坑笔记（本轮新增 3 条）
+
+1. **plan ↔ reality 偏差：AVD 名字 stale**。plan §0.2 写「AVD 需 `pm_api34`」但本机没这个 AVD（`emulator -list-avds` 只显示 `pm_ui36` + `pm_ui37`）。旧 test 文档（`AppDatabaseMigrationsTest` 头部注释）也引用了 `pm_api34`，是从未建过。**用现成的 `pm_ui36` 替代**（API 36，向下兼容不影响功能），会在 commit / DEV_LOG 标注偏差。后续 plan 文档需订正。
+
+2. **`ZipInputStream` 对纯文本宽容**。`BackupImporter` 只在 `BackupValidator.validateAndExtract` 抛 IOException 时才返回 `INVALID_ZIP`；对纯 ASCII 文本，ZipInputStream 找不到 ZIP header 就静默返回空 entries，让 validator 走到「manifest.json 不存在」分支 → 实际返回 `INVALID_MANIFEST`。**测名要诚实**：从 `importWithCorruptZipReturnsFailure` 改成 `importWithGarbageBytesReturnsInvalidManifest`，KDoc 钉住「想验 INVALID_ZIP 路径得喂会触发 `ZipInputStream` 抛 IOException 的二进制头（不在本测试范围内）」。
+
+3. **`adb` 不在 PATH**。本机 Android SDK 在 `D:\Software\Code\Android\Sdk`（来自 `local.properties`），但 `adb` / `emulator` 不在环境变量 PATH 里。所有 `adb devices` / `emulator -list-avds` / `gradlew connectedAndroidTest` 都需要用绝对路径 `D:\Software\Code\Android\Sdk\platform-tools\adb.exe` 或 `D:\Software\Code\Android\Sdk\emulator\emulator.exe`。Gradle 跑 connected 测试时 Gradle 自己用绝对路径，**不依赖**系统 PATH；受影响的是手动启 AVD / 手动 adb 命令。
+
+### 七、本轮 commit
+
+| # | SHA | 类型 | 内容 |
+|---|---|---|---|
+| 1 | `ff312e7` | test(backup) | 9a A1 BackupImporterTest 4 例真跑回归（含 1 例断言 fix + KDoc 标注 plan 偏差与已知行为） |
+| — | 本 commit | chore(dev_log) | 项目速览刷新 + line 1707 订正 + 文末 Phase 9 9a A1 段 |
+
+### 八、下一个入口
+
+1. **9a A2** — `BackupPreviewViewModelTest`（4-6 例 JVM，先定位 VM 类 + 写 Fake 协作）—— 纯 JVM，无需 AVD，预计 90 min
+2. A2 完成后 → 9a A3 — `DailyAutoBackupWorkerTest`（4-6 例 instrumented，AVD 跑）—— 45 min
+3. 三项测试基建收口 → 9b B1（Scheduler 接线，1 行 + 自检，5 min）→ B2 AccountSwitcher UI（180-240 min）→ D1 转账 UI（240-360 min）→ D2 预算 UI（180-240 min）—— 如任一项超时 1.5x，暂停拉回评估
+4. 9c 自动验证 + 收口（~2-4 h）→ 最终 `--no-ff` merge 回 Develop + 推远端 + DEV_LOG 关闭段
+5. 预计 Phase 9 总盘子 16-24 h（已在 plan §0.3 估）
+6. 4 个 `archive/feature-phase-8*` 远端分支保留 6 个月以上再议清理（沿用 Phase 8 决定）
