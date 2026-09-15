@@ -151,4 +151,6 @@ dependencies {
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    // Phase 9 A3：DailyAutoBackupWorkerTest 用的 TestListenableWorkerBuilder
+    androidTestImplementation(libs.androidx.work.testing)
 }
