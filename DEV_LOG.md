@@ -418,7 +418,8 @@
 | 8e | 全局搜索 | ✅ 已做 |
 | 8f | 备份恢复 | ✅ 已做 |
 | 8g | Sub-step 9（分类 / 重复 / 冲突 / 农历） | ✅ 已做（5 个 step） |
-| 8h | 合并 phase-8 三个 feature 分支 → `Develop` | 🟨 **新分支已建**：本轮新建 `feature/phase-8-verification`（顶部 `5458159`，本轮 6 个新 commit），已 push origin。**待合并**：`Develop` @ `8107fbf` 仍为旧基线，本轮 6 个 commit 需走 PR merge 回 Develop（`--no-ff` 保留拓扑）。其他三个老分支（`feature/phase-8-finalize` / `feature/phase-8-reminder` / `feature/phase-8-notification-matrix`）保留现状 |
+| 8h | phase-8 分支**标签**处理（**不是**「合并到 Develop」，见 plan §4.8 背景） | ✅ **方案 B 组合 @`f885cf5`**：4 个本地 `feature/phase-8*` 分支已 `git branch -D`；4 个远端已 rename 为 `archive/feature-phase-8{,-finalize,-reminder,-notification-matrix}`；索引文档 `docs/branch-archive.md`（100 行）。**实测复核 @2026-09-15 11:40**：`git branch -a --list "*phase-8*"` 只剩 4 个 `archive/` + 本轮新分支，原裸标签已消失。**彻底删除（方案 A 后半段）** 留待确认无影响后另做 |
+| 8h-补 | `feature/phase-8-verification` → `Develop` 的 merge（**8h 之外的独立动作**，plan §4.8 未涵盖） | ⬜ **待用户批准**：本轮 8 个 commit（`19d384a`…T9）在 feature 分支上，`Develop` @ `8107fbf` 未动。前置已满足（**693 JVM 单测 0 失败** + 4 instrumented 真跑全绿）。批准后用 `git merge --no-ff` 保留拓扑 |
 | 8f' | 备份导入预览差异 | ✅ 已合并 @`685a551`；**JVM 单测 63 / 0 失败**（`BackupDiffCalculatorTest` 25 + `BackupExporterTest` 3 + `BackupFormatVersionTest` 6 + `BackupLegacyCompatTest` 15 + `BackupSerializationTest` 8 + `BackupValidatorTest` 6）；**3 个 final class @`966db42` 改 open**（`BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter`；为 Phase 9+ 写 Fake 子类铺路）。⚠️ 3 个不可测项进 backlog：`BackupImporterTest`（强依赖 Room `@Transaction`）/ `BackupPreviewViewModelTest`（VM 需 fake）/ `DailyAutoBackupWorkerTest`（WorkManager 测试） |
 
 ---
@@ -429,14 +430,14 @@
 
 **历史背景（2026-09-09 01:13）**：Phase 8b 实际状态复检 —— **domain 层 100% 完成**（5 档优先级 + 4 象限分组 + `TaskGroups` + `ObserveTasksByQuadrantUseCase` + 4 象限 UI 渲染均已存在），**只剩 5 Tab 切换 UI + aliases 自定义档名未做**。拆分为 `Phase 8b'` 单独执行（已 ✅ @2026-09-09，见上方「已完成（本轮新转 ✅）」第 5 条）。
 
-**历史待办候选 4 条 vs 真实状态**（2026-09-15 00:55 订正）：
+**历史待办候选 4 条 vs 真实状态**（首次订正 2026-09-15 00:55；**二次订正 2026-09-15 11:45**，见「Phase 8 关闭决议」段）：
 
-| 原候选项 | 真实状态 |
+| 原候选项 | 真实状态（2026-09-15 11:45 二次订正） |
 |---|---|
 | 1. Phase 8b' 5 Tab UI + aliases | ✅ 已完成（2026-09-09） |
-| 2. Phase 8a 真实提醒调度 | ✅ 调度部分早已完成（Event 端 `1e30283` / Task 端 Phase 5）；**deeplink @`4d2e6c5`** 完成；🟨 真机点击仍需人工 |
-| 3. Phase 8c 附件上传 + 多账户 | 🟨 代码在库，卡 instrumented 迁移真跑（详见上方「进度明细」8c 行） |
-| 4. Phase 8h 合并 `feature/phase-8-reminder` → `Develop` | 🟨 部分完成（详见上方「进度明细」8h 行） |
+| 2. Phase 8a 真实提醒调度 | ✅ 调度 @`1e30283`；✅ deeplink @`4d2e6c5`；✅ **自动验证 @`f746ca6`**（4 路由 UI 树落点全对）；🟨 **人工点真实通知仍需用户** |
+| 3. Phase 8c 附件上传 + 多账户 | ✅ **不再卡迁移真跑** —— 8c.1 @`18e2d9c` 4/4 真跑通过、8c.2 @`22fc826` 5/0 单测；⬜ 仅剩 8c.3 账户切换 → Phase 9 |
+| 4. Phase 8h「合并 `feature/phase-8-reminder` → `Develop`」 | ⚠️ **此项描述本身有误** —— 8h 真实含义是「**分支标签处理**」不是「合并」（commit 早在 Develop 历史里）。✅ 标签处理已收口 @`f885cf5`（B 组合）；「`feature/phase-8-verification` → Develop 的 merge」是**另一个动作**，见上方 8h-补 行 |
 
 ---
 
@@ -1513,3 +1514,78 @@ plan 文件在磁盘上仍是 **v1**：伙伴批准前给了 4 条修正意见�
 - 3 个不可测项（`BackupImporterTest` / `BackupPreviewViewModelTest` / `DailyAutoBackupWorkerTest`）：现在类已 open，可以写 Fake 子类 + Robolectric 测
 - 真机冷/热启动通知点击人工验收
 - 真机点击矩阵视图 toggle 人眼目测
+---
+
+## 🏁 2026-09-15 11:45 —— Phase 8 关闭决议 + 全量 JVM 回归证据（T9）
+
+**触发**：用户批准 `plan-20260915-105824.md`（9 任务 T1~T9）+ 「一口气完成 phase8 所有未完成任务与计划」
+
+### 一、全量回归证据（本轮新增，之前未记录）
+
+| 命令 | 结果 |
+|---|---|
+| `gradlew testDebugUnitTest` | **exitCode 0** |
+| 套件数 | **75 个** `TEST-*.xml` |
+| 用例总数 | **693** |
+| 失败 / 错误 / 跳过 | **0 / 0 / 0** |
+
+**意义**：本轮 6 个 commit（含 `966db42` 把 3 个类改 `open`、`22fc826` 新增 Worker + Hilt Module）**没有回归破坏**任何既有测试。这是 Phase 8 可以安全 merge 回 `Develop` 的硬前提。
+
+### 二、T9 对 master plan 的 4 处 stale 订正（`.cyrene/docs/phase-8-master-plan.md`，共 9 处编辑）
+
+| # | 位置 | 原描述（stale） | 订正为（实测） |
+|---|---|---|---|
+| 1 | §三 状态表 8c 行 | 真机验收 `⛔ 迁移真跑`，状态 🟨 | ✅ 8c.1 真跑 4/4 @`18e2d9c` + ✅ 8c.2 5/0 @`22fc826` → 整行 ✅ |
+| 2 | §三 状态表 8h 行 | 「三个 phase-8 分支折叠」🟨 | 「三个 phase-8 分支**标签**处理」✅ B 组合 @`f885cf5` |
+| 3 | §三 结论 | 「4 ✅ / 5 🟨 / 0 ⛔」 | 「6 ✅ / 2 🟨（仅差人工目测）/ 1 ✅+⬜ / **⛔ 归零**」 |
+| 4 | §4.3 背景 8c.1 | 「9→10 = `events.category` String→`category_id` Long，真跑未做，测试已写好未跑过」 | ⚠️ **描述 stale**：`Migration_9_10.kt` 实测做的是**事件分类外键 + 账户转账对 + budget 索引重建**（Phase 5 域）；真跑已 ✅ @`18e2d9c` |
+| 5 | §4.1 8a 目标 | 「6 种冷/热启动点击通知场景」 | 加 ✅ 注记：自动验证 @`f746ca6`（4 路由 UI 树）+ ⚠️ 两偏差（① 走显式 Intent 非真实通知点击，因 `DeepLinks.kt:7-14` 决策 v2 故意不用 scheme；② 真实触发链 BootReceiver→WorkManager→notify 未验证） |
+| 6 | §4.2 8b'' 目标 | 「两种屏宽截图」 | 加 🟨 注记：UI dump @`5458159` + ⚠️ toggle 自动化未做（`input tap` 坐标漂移，需 `uiautomator2`）+ 人工目测未做 |
+| 7 | §4.8 8h 目标 | 三方案待选 | 加 ✅ 已完成 @`f885cf5`（B 组合）+ 实测复核：`git branch -a` 原 4 裸标签已消失 |
+| 8 | §六 P0~P9 表 | 纯「待用户拍板」估时表 | 新增「**实际结果**」列逐项标注 + 新增 **§6.1 三簇收口结论** |
+| 9 | §九 执行顺序 | 6 步祈使句 | 全部改为 ~~删除线~~ + 实际结果标注 + 新增「给下一个会话的新指引」3 条 |
+
+### 三、§6.1 三簇结论（本轮最重要的判断）
+
+Phase 8 剩余工作**不是一整块「没做完」**，三种性质必须分开看：
+
+| 簇 | 项目 | 为什么不能算「Phase 8 未完成」 | 归属 |
+|---|---|---|---|
+| **人工目测** | 真机点通知、肉眼看矩阵布局 | 本轮模型**不支持读图**（工具链硬限制），且必须真人在场 | 留给用户，**不阻塞关闭** |
+| **测试基建** | P2 `DailyAutoBackupWorkerTest` / P3 `BackupPreviewViewModelTest` / P6 `BackupImporterTest` | 缺的是 `work-testing` + Robolectric + in-memory Room **测试基建**，不是功能代码；补基建是独立工程投入 | **Phase 9** |
+| **功能缺口** | P5 `AccountSwitcher` 快捷入口（组件不存在）、8c.2 Scheduler 未接 `onCreate()` | 真实新功能 / 新接线 | **Phase 9 头号** |
+
+**决议（待人批准）**：Phase 8 以「**P0 / P1 / P4 全 ✅ + P7 / P8 自动验证 ✅ + 693 JVM 全绿 + 4 instrumented 真跑全绿**」口径关闭。8a / 8b **保持 🟨 不虚标 ✅**（人工目测未做就是未做）。
+
+### 四、诚实登记：本轮未做与原因
+
+| 项 | 是否做了 | 原因 |
+|---|---|---|
+| P2 `DailyAutoBackupWorkerTest` | ❌ | 需引 `androidx.work:work-testing`（`11cc32c` 已注释留坑）；且 `BackupSerializer` / `BackupExporter` / `SettingsRepository` 三个协作者**仍是 final**（`966db42` 只 open 了另 3 个）→ Fake 注不进 |
+| P3 `BackupPreviewViewModelTest` | ❌ | `BackupPreviewViewModel.kt` 存在，但项目**无 Robolectric**、无 Turbine fake 基建 |
+| P5 账户切换快捷入口 | ❌ | `AccountSwitcher` 组件不存在，180 min 新功能，本轮预算外 |
+| P6 `BackupImporterTest` | ❌ | 需 in-memory Room instrumented，AVD 编译耗时长 → **建议正式采纳方案 c**（保持现状 + 文档明记） |
+| P7 真实通知触发链 | ❌ | 只做了 `am start` + extras 直推，`NotificationManager.notify` → 用户点击这段未验证 |
+| P8 人工目测 | ❌ | 本轮模型不支持读图，无法自查 dump 内容是否「长得对」 |
+
+**没有任何一项被虚标 ✅。**
+
+### 五、本轮 commit 清单
+
+| # | SHA | 类型 | 内容 |
+|---|---|---|---|
+| T1 | `18e2d9c` | docs(verified) | Migration_9_10 AVD 真跑 4/4 |
+| T2 | `11cc32c` | chore(deps) | work-testing 暂不引（探索结论） |
+| T3 | `966db42` | refactor(backup) | 3 类改 open |
+| T4 | `22fc826` | feat+test | AttachmentCleanup 全套 + 5 单测 |
+| T6 | `f746ca6` | docs(verified) | deeplink 4 场景自动验证 |
+| T7 | `5458159` | docs(verified) | 矩阵双布局 UI dump |
+| T8 | `67b674e` | chore(dev_log) | 台账订正 |
+| **T9** | 本 commit | docs(dev_log) | 关闭决议 + 693 回归证据 + plan 9 处订正记录 |
+
+### 六、下一步（等用户批准）
+
+1. **批准 Phase 8 以「自动验证口径」关闭**（8a / 8b 保持 🟨）
+2. `feature/phase-8-verification` → `Develop` 走 `--no-ff` merge（8 个 commit 一次性回去，保留拓扑）
+3. 8f'.1 **正式采纳方案 c** 并在 plan §4.9 落字
+4. 起 **Phase 9 plan**，头号 = P5 账户切换快捷入口 + Scheduler 接 `onCreate()`
