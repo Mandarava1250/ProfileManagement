@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.example.personalassistant.core.database.AppDatabaseMigrationsTest" tests="4" failures="0" errors="0" skipped="0" time="3.985" timestamp="2026-09-15T03:06:54" hostname="localhost">
+  <properties>
+    <property name="device" value="pm_ui36(AVD) - 16" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="migrationIsSafeForFreshV8DatabaseWithoutAnyTransactions" classname="com.example.personalassistant.core.database.AppDatabaseMigrationsTest" time="0.789" />
+  <testcase name="migrate9To10ValidatesSchemaAndAddsTransferFields" classname="com.example.personalassistant.core.database.AppDatabaseMigrationsTest" time="0.463" />
+  <testcase name="migrate8To9ValidatesSchemaAndKeepsLegacyRowsOnDefaultAccount" classname="com.example.personalassistant.core.database.AppDatabaseMigrationsTest" time="0.487" />
+  <testcase name="migrate9To10IsSafeForFreshV9DatabaseWithoutAnyTransfer" classname="com.example.personalassistant.core.database.AppDatabaseMigrationsTest" time="0.259" />
+</testsuite>
