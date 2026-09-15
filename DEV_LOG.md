@@ -412,7 +412,7 @@
 |---|---|---|
 | 8a | 提醒调度 + 通知 deeplink | ✅ 调度部分早已完成（Event 端 `1e30283` / Task 端 Phase 5）；**deeplink 跳转 @`4d2e6c5`**（3 类提醒 → 详情页，冷/热启动都覆盖）。⚠️ 真机点击验收待人工 |
 | 8b | 5 档优先级 + 分组视图 | ✅ domain 完成 + ✅ **8b' 5 Tab UI + aliases**（2026-09-09）+ ✅ **8b'' 矩阵视图 @`2aded6e`**（`TaskViewMode.MATRIX`，2×2 + 未排期独立区 + <600dp 纵向 5 区）。⚠️ 撤销了 plan-20260909 §决策5「不提供矩阵视图」，理由见 Phase 8final 段 |
-| 8c | 附件上传 + 多账户 | 🟨 **代码在库**（`user_profiles` / `accountId` / 复合 FK / `AccountSettingsCard`，commit `a3d7dca` 等；DB v10 已落地）。**8c.1 迁移真跑进度**：androidTest 9→10 已写 @`36c792f`（`migrate9To10ValidatesSchemaAndAddsTransferFields` + `migrate9To10IsSafeForFreshV9DatabaseWithoutAnyTransfer`），**AVD 真跑留明早**（凌晨不再起 AVD，详见 `.cyrene/docs/phase-8-master-plan.md` §4.3 + 本文件「✅ Phase 8h」段）
+| 8c | 附件上传 + 多账户 | ✅ **代码在库**（`user_profiles` / `accountId` / 复合 FK / `AccountSettingsCard`，commit `a3d7dca` 等；DB v10 已落地）。**8c.1 迁移真跑 ✅**：androidTest 9→10 @`36c792f` + 真跑适配 @`a050dfe`（`c.isNull()` 替代 `getValue() == null` + categories 表行数从 2 改 3 因迁移自动 seed 默认分类），AVD `emulator-5554`（pm_ui36）实跑 0 失败（`user_profiles` / `accountId` / 复合 FK / `AccountSettingsCard`，commit `a3d7dca` 等；DB v10 已落地）。**8c.1 迁移真跑进度**：androidTest 9→10 已写 @`36c792f`（`migrate9To10ValidatesSchemaAndAddsTransferFields` + `migrate9To10IsSafeForFreshV9DatabaseWithoutAnyTransfer`），**AVD 真跑留明早**（凌晨不再起 AVD，详见 `.cyrene/docs/phase-8-master-plan.md` §4.3 + 本文件「✅ Phase 8h」段）
 | 8d | 主题 / 节假日 / 周次范围 | ✅ 主题 / 节假日已完成；**周次范围**用 `Course.weeks` 字符串方案（支持 `"1,3,5"` 单周、`"1-8,10-16"` 跨段，比 `startWeek/endWeek` 两个 Int 强） + `WeekCalculator` + `GetCoursesByWeekUseCase` + `WeekHeaderRow`（◀ 第N周 ▶ / 回到本周）+ VM `selectWeek`/`jumpToCurrentWeek` + `WeekCalculatorTest`。**plan 提的 `startWeek/endWeek` 不做**（连降级都做不到，详见 Phase 8g finalize 段）|
 | 8e | 全局搜索 | ✅ 已做 |
 | 8f | 备份恢复 | ✅ 已做 |
@@ -434,7 +434,7 @@
 |---|---|
 | 1. Phase 8b' 5 Tab UI + aliases | ✅ 已完成（2026-09-09） |
 | 2. Phase 8a 真实提醒调度 | ✅ 调度部分早已完成（Event 端 `1e30283` / Task 端 Phase 5）；**deeplink @`4d2e6c5`** 完成；🟨 真机点击仍需人工 |
-| 3. Phase 8c 附件上传 + 多账户 | 🟨 代码在库，卡 instrumented 迁移真跑（详见上方「进度明细」8c 行） |
+| 3. Phase 8c 附件上传 + 多账户 | ✅ 已完成（代码在库 + 8c.1 迁移真跑 @`a050dfe`，详见上方「进度明细」8c 行）|（详见上方「进度明细」8c 行） |
 | 4. Phase 8h 合并 `feature/phase-8-reminder` → `Develop` | 🟨 部分完成（详见上方「进度明细」8h 行） |
 
 ---
