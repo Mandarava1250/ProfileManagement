@@ -493,6 +493,7 @@
 3. **重构 / 大返工 → 必须追加「复盘」段落**，记录 why / what / lesson learned。
 4. **跨阶段（Phase X → X+1）→ 必须更新「Phase 总览」表 + 「累计进度」**。
 5. **里程碑（首个 release / 100 commit / v1.0 等）→ 在文末追加「🎉 里程碑」段**。
+6. **🚨 功能性 commit 必须先建 `feature/phase-8-*` 功能分支**（包含测试、源码、迁移、构建脚本等任何修改 `.kt/.gradle/.xml/资源` 的提交）；只有 `docs/dev_log/branch-archive` 这类纯文档/台账 commit 才允许直接在 `Develop` 上提交。**违反此规则 = 流程违规事件，必须立即 revert + 重建功能分支 + 登记到文末「🚨 流程违规事件」段。**
 
 > 任何人在 6 个月后打开这份日志，都能还原「这半年项目走到了哪、下一步该做什么、哪些坑不能踩第二次」。
 ---
@@ -1511,3 +1512,40 @@ plan 文件在磁盘上仍是 **v1**：伙伴批准前给了 4 条修正意见�
 - 🟨 **P8（8b'' 矩阵视图双布局截图）** —— AVD 集群第 4 件事
 - ⬜ **P3（8f'.2 BackupPreviewViewModelTest）** —— 纯 JVM 单测，无需 AVD
 - ⬜ **P9（8f'.1 不可测项处置文档化）** —— 15 min 纯文档
+
+---
+
+## 🚨 流程违规事件 #1（2026-09-15 10:53 触发，10:55 修复）
+
+### 事件
+昔涟在执行 「伙伴说『DEV_LOG 8c 改 都通过了，继续一口气完成 5,6,7,8』」时，**未先建 `feature/phase-8-verification` 分支**，一口气在 `Develop` 上 push 了 5 个 commit（含 2 个功能性 commit + 3 个 DEV_LOG commit）。
+
+### 违规 commit（5 个，均已被 revert）
+| 原 hash | 修改文件类型 | 违规原因 |
+|---|---|---|
+| `36c792f` | `.kt`（androidTest 源码） | 功能性改动不该在 Develop |
+| `a050dfe` | `.kt`（适配修改） | 功能性改动不该在 Develop |
+| `8dc3f4b` | `DEV_LOG.md` | 台账可在 Develop，但应在功能 branch 合并后再 push |
+| `4abfaad` | `DEV_LOG.md` | 同上 |
+| `5d2dc36` | `DEV_LOG.md` + `docs/notif-deeplink-evidence/README.md` | 同上；后者是新 docs/，也不该在 Develop 上创建 |
+
+### 修复流程
+1. 切回 Develop → `git revert --no-edit 5d2dc36 4abfaad a050dfe 8dc3f4b 36c792f`（产生 5 个 revert commit 序列，全部成功，无冲突）。
+2. `git push origin Develop` → 已 push。
+3. `git switch -c feature/phase-8-verification f885cf5` → 从违规前的最后一个 commit（`f885cf5`）分叉。
+4. `git cherry-pick 36c792f a050dfe` → 两个功能性 commit 干干净净落地，无冲突。
+5. `git push -u origin feature/phase-8-verification` → 已 push。
+
+### 错误根因
+- 遇到多 commit 联动场景时，未先「认同一个任务是否应该建分支」；仓促推进了 5 个 commit，其中 2 个是功能性。
+- 「DEV_LOG 也是代码」这个边界误认为 DEV_LOG 是文档可以随意 push——但「跟着功能 commit 同步」的 DEV_LOG 不是独立的，它们的 SHA 错误锚位于功能分支上。
+
+### lesson learned（已进入「维护规则」第 6 条）
+- **任务起步：认同一个任务是否需要 feature 分支** → 需要 → 分支 → commit → push。
+- **DEV_LOG commit 仍随 feature 分支**（它们引用的 SHA 要与功能 commit 同分支）。不要在 Develop 上为 feature branch 内的 commit 写 DEV_LOG。
+- **revert 是「违规后修复」的唯一安全方式**（不重写已 push 历史）。不要采用 `git reset --hard`、`rebase -i` 或强推。
+
+### 下一个动作
+`feature/phase-8-verification` 分支已在，后续 P0/P2/P5/P6/P7/P8 都在该分支上推进；最后 PR merge 回 Develop 时再推 DEV_LOG commit。
+
+---
