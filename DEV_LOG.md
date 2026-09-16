@@ -34,10 +34,10 @@
 | 已完成（本轮新转 ✅） | **Phase 8b'' 任务矩阵视图 ✅** —— `2aded6e`，`TaskViewMode.MATRIX` + 2×2 分组 + 未排期独立区 + <600dp 纵向 5 区；`TaskMatrixTest` 24/24。⚠️ 双布局真机截图仍需人工 |
 | 已完成（本轮新转 ✅） | **Phase 8final 收尾 ✅** —— `4d2e6c5`/`2aded6e`/`defce3f`：通知 deeplink 跳转 + 任务矩阵视图，已合并到 Develop（详见本文件 Phase 8final 段） |
 | 进行中 | **阶段 Phase 5（跨账户转账 + 预算汇总）🟨** —— 代码已 push（`f86b8be` 数据层 + `438a29e` 功能层），598 JVM 断言全绿；⚠️ **不打 ✅ 的原因**：`Migration_9_10` 的 instrumented 真跑未做（JVM 只证明 SQL 形状对），且转账/总览 UI 未人工目测验收 |
-| 待开 | 阶段 Phase 10：真人目测（8a 点通知 / 8b 矩阵 toggle / 9b B2 Chip 视觉 / 9c 屏宽 sw600+ / D1/D2 转账与预算条视觉）；A2-test（`BackupPreviewViewModelTest` JVM）；9c SAF 写文件 happy path |
+| 进行中 | **阶段 Phase 10 🟨（部分完成）** —— 10a ✅ (`4e26e696`) + 10b 🟨 部分（`88d8cdd` 写完但 AVD 实跑未做，AVD 启动 adb handshake 失败）；待 10b AVD 真跑 + 10c 真人目测清单 + 10d 收口 merge |
 | 已完成（一口气 Phase 8 收口） | **Phase 8c.1 ✅** Migration_9_10 AVD 真跑 4/4 @`18e2d9c`（事件分类外键 + 账户转账对 + budget index + index 健康度全验证）<br>**Phase 8c.2 ✅** 附件清理逻辑 + Worker + Hilt + 5 JVM 单测 @`22fc826`（`AttachmentCleanupLogic` + `AttachmentCleanupWorker` + Hilt `AttachmentCleanupModule` + `FinanceDao.allAttachmentUris()`）<br>**Phase 8a（验证层）✅** 通知 deeplink 4 场景自动验证 @`f746ca6`（任务详情/任务编辑/事件编辑/课程编辑全部 UI tree 命中目标）<br>**Phase 8b''（验证层 partial）🟨** 矩阵视图双布局 UI dump @`5458159`（JVM `TaskMatrixTest` 24/0 ✅；Compose 屏宽切换渲染不崩；矩阵 toggle 自动化未做）<br>**3 个 final class 改 open** @`966db42`（`BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter`；让 Phase 9+ 写 Fake 子类）|
 | **已完成（Phase 9 9a A1）** | **9a A1 BackupImporterTest ✅** @`ff312e7` —— 4 例 instrumented 真实跑（happy path / 整表替换 / 旧备份兼容 / 随机字节 → INVALID_MANIFEST）覆盖 JVM 给不出的「ZIP 解析 + Room 事务写入 + PRAGMA foreign_keys」全链；AVD `pm_ui36` 真跑 4/4。⚠️ `pm_api34` 是 plan 写错的 AVD 名（不存在），改用现成 `pm_ui36` —— plan 偏差。 |
-| **已完成（Phase 9 9a A2-pre / A3）** | **9a A2-pre BackupSnapshotProvider 接口提取 ✅** @`7f2e2b3` —— 4 文件 / +72-12 行：新建 `BackupSnapshotProvider` 单方法接口（`suspend fun snapshot(): CurrentDbSnapshot`），`BackupCurrentSnapshotProvider` 改实现，`BackupPreviewViewModel` 改依赖接口；Hilt 拆 `BackupBindingsModule`（@Binds）+ `BackupModule`（@Provides），`WORK_NAME_DAILY_BACKUP` 提顶层 const；3 任务编译全绿，对运行期无影响（@Binds 绑回同一实现类）。**A2-test（BackupPreviewViewModelTest JVM）延期到 Phase 9.1/9.2**：JVM 测试用例编写时遇生产代码 API 与假设不一致（`BackupPayload` 参数名、`BackupExporter.exportToBytes` 实际签名），等实现侧稳定后重写。**9a A3 DailyAutoBackupWorkerTest ✅** @`bdb109c` —— 5 cases instrumented 真实跑（4 真实 + 1 sanity）：disabled 短路 / folderUri 空短路 / serializer 失败 → retry / SAF 无效 URI → retry / 全套依赖 sanity；AVD `pm_ui36` 真跑 5/5 time=2.118s。⚠️ SAF 写文件成功路径未覆盖（happy path 需 fake `ContentResolver` 模拟 `DocumentsContract` 4 查询，单测 100+ 行超 Phase 9 时间盒），留 Phase 9.1/9.2 或 Phase 10 真人手动验证。 |
+| **已完成（Phase 10 10a）** | **Phase 10 10a A2-test BackupPreviewViewModelTest ✅** @`4e26e696`（功能）+ 台账 commit —— 详见本文件末尾 10a 阶段记录段。6/6 JVM 全绿，状态机 6 转换全保。 |
 | **已完成（Phase 9 9b B1）** | **9b B1 AttachmentCleanupScheduler 接线 ✅** @`dd30409` —— `PersonalAssistantApp.onCreate()` 调 `attachmentCleanupScheduler.schedulePeriodic()` + 1 行自检日志；仿已有 `workerFactory` / `refreshDailyPool` / `dailyPoolScheduler` 注入模式（Hilt `@Provides @Singleton` 在 `AttachmentCleanupModule.kt:61` 已装好，本类零额外配置）；24h 周期 + KEEP 策略；`:app:compileDebugKotlin :app:compileDebugUnitTestKotlin --rerun-tasks` → BUILD SUCCESSFUL in 3m 39s，23 tasks executed + `:app:hiltAggregateDepsDebug` + `:app:hiltJavaCompileDebug` 全绿（**Hilt 接线编译通过**）；plan §0.2 估时 5 min，实做 ~30 min（含 3m39s 强制重编避假 UP-TO-DATE 陷阱）。⚠️ 本轮**未写新测试** —— B1 是 1 行接线 + Hilt 编译验证，不引入新测试；功能验证依赖 9c E1 全量 JVM 回归（700+ 用例 0 失败）+ 9c E2 AVD 合并后真跑（覆盖 `WorkManager.enqueueUniquePeriodicWork` 行为）。 |
 | **已完成（Phase 9 9b B2）** | **9b B2 AccountSwitcher 快捷入口 ✅** @`3328574` —— 7 新文件 + 1 修改 / +1032 行：<br>① `AccountSwitcherState.kt`（State/Action sealed + 纯函数 `reduceAccountSwitcher`：悬空 currentId 回落首账户、乐观选中、同 id no-op、错误收敛）<br>② `AccountSwitcherViewModel.kt`（`observeAccounts()` × `currentAccountIdFlow()` combine→dispatch reducer；`switchTo` 真写 `CurrentAccountRepository` + runCatching 失败转 errorMessage）<br>③ `AccountSwitcherBar.kt`（Material3 `FilterChip` 横向滑动，plan §4.2 选项 A：典型账户数 1-3 时 Chip 一眼看全；单账户/加载中整条 `isVisible=false` 隐藏）<br>④ `FinanceScreen.kt` 接线（独立 `accountSwitcherViewModel`，避开 `FinanceViewModel` 已满的 5 流 combine 上限；切账户失败走专用 Snackbar 通道，不与转账 feedback 混流）<br>**验证（全真跑非缓存）**：JVM **23/23**（Reducer 13 + VM 10，`--rerun-tasks` BUILD SUCCESSFUL 3m46s）+ instrumented **8/8** @ AVD `pm_ui36`（`connectedDebugAndroidTest` BUILD SUCCESSFUL 1m47s，time=24.999s）；证据 `docs/verified/phase9-b2-account-switcher-result.xml`。<br>**诚实边界**：切换条只做「切换」不做管理（新建/重命名/删除仍在 Settings 页 `AccountSettingsCard`）；`sw600dp` 以上平板布局未单独验证（留 Phase 10 真机目测）；实际视觉效果（Chip 间距/长账户名截断）未真人目测。 |
 | **已完成（Phase 9 9c C1/C2）** | **9c C1 通知 deeplink 4 路由复跑 ✅** @`bf420b7` —— 4 场景（`tasks/detail/1` / `tasks/edit/1` / `calendar/edit/1` / `timetable/edit/1`）全部命中目标页，包名均为 `com.example.personalassistant.debug`；证据 `docs/verified/phase9-c1-deeplink-verify.md` + 4 棵 UI tree。**9c C2 矩阵 toggle + 双布局 ✅** @`21fdaa9` —— **补上 Phase 8b'' 遗留的「矩阵 toggle 自动化未跑通」缺口**：用 Compose 语义点击（`onNodeWithText` 走语义树而非像素坐标，与屏宽无关）替代 `adb input tap`；新增 `MatrixViewToggleTest` 5 + `TaskMatrixViewLayoutTest` 11 = **16 例 instrumented，全绿 time=75.283s**；另归档双屏宽 UI dump（portrait rotation=0 / landscape rotation=1）。 |
@@ -2218,7 +2218,61 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 
 ### 下一个入口
 
-1. **Phase 10 10b**：SAF happy path——`DailyAutoBackupWorkerTest` 加 1 例 happy path（workmanager-testing）+ `connectedDebugAndroidTest` 跑通 6/6 验证 BackupImporter 也能被 instrumented 测；预计引入 `androidx.work:work-testing` 依赖。
+1. **Phase 10 10b 收尾**：AVD 启动 + adb handshake 修复后跑 `connectedDebugAndroidTest` 走 6/6 happy path；当前仅编译通过 + 单测写完（`88d8cdd`）。
 2. **Phase 10 10c**：真人目测清单 `docs/manual-verification/phase10-visual-checklist.md`（手测 8a/8b/9b B2/9c sw600+/D1/D2 视觉 + SAF 选文件真实路径）。
+3. **Phase 10 10d**：收口——JVM 全量回归 → AVD 真跑 → merge --no-ff → push → DEV_LOG 总收口。
+4. **Phase 10 之后**：用户决定是否发布 / 归档 / 续 Phase 11。
+
+---
+
+## 🧪 Phase 10 10b（2026-09-17 00:38） —— SAF happy path 测试代码完成 + AVD 实跑 ⛔ 环境阻塞
+
+> 对应计划：`.cyrene/docs/plan-20260916-175218.md`（Phase 10 · 10b SAF）。
+> 目标：补齐 Phase 9 9a A3 留下的「SAF 写文件成功路径未覆盖」缺口。
+
+### 已完成步骤
+
+| Step | 内容 | 关键结论 |
+|---|---|---|
+| 1 | 在 `DailyAutoBackupWorkerTest.kt` 加 1 例 `safHappyPathWritesZipAndUpdatesTimestamp`（104 行）| 真 AVD + 真 Context + 真 DocumentFile → 在 Downloads 下真建 `cyrene-test-<nanoTime>` 子目录 → 拿该 tree URI 写到 settings → Worker 跑完整真 SAF 流程 → 断言 `Result.success()` + `lastBackupAt ∈ [before, after]` + 子目录有 `cyrene-backup-*.zip` 且 size > 0 |
+| 2 | 第一版尝试用 `DocumentsContract.buildRootsUri` + query roots/children 拿 documentId | 编译失败：`DocumentsContract.buildTreeUri(authority, documentId)` 这个重载不存在（API 仅接受 documentId 单参版本）|
+| 3 | 改用稳定路径：直接 `Uri.parse("content://com.android.providers.downloads.documents/tree/primary:Download")` | AVD 上 DownloadsProvider 必可达、这是公开稳定路径，不需 picker / 权限 |
+| 4 | `compileDebugAndroidTestKotlin` BUILD SUCCESSFUL | 测试代码可编译 |
+
+### 关键事实（钉到台账的真相）
+
+- **测试代码已经写完且编译通过**：4 个新增 import（Uri / DocumentFile）+ 1 个新测试方法（共 6 例），但 AVD 真跑本轮未完成
+- **不 fake ContentResolver / DocumentFile**：按 plan §0.2 「SAF happy path 测 ContentResolver 抽象 → 走 instrumented」路线，用 AVD 自带 `DownloadsProvider` 真建子目录，比 fake 更稳
+- **`tearDown` 用 `testFolder.delete()` 递归删子目录 + zip**：避免污染 AVD `/sdcard/Download/`
+
+### AVD 实跑未完成的原因（诚实记录）
+
+- AVD 启动 → adb daemon 握手失败（avd3.log：`ERROR | Unable to connect to adb daemon on port: 5037`）+ `qemu-system-x86_64-headless` 写入 crashdata（PID 12640）
+- 上一次 emulator 进程的 lock（`multiinstance.lock` + `hardware-qemu.ini.lock\pid`）被前一轮 `taskkill` 后未及时清理，需手动 `del /F` 才放行
+- 手动清 lock 后再启 emulator（PID 38968），adb devices 仍 offline（adb 5043 端口在 emulator crash 后 stale 状态）
+- **本机环境无法稳定完成 instrumented 真跑**，不虚标 ✅
+
+### 验证结果
+
+- `:app:compileDebugAndroidTestKotlin` → **BUILD SUCCESSFUL**（无新增 warning）
+- `:app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=...DailyAutoBackupWorkerTest` → **未完成**（AVD 环境阻塞）
+- 6 例覆盖（含 1 例新 happy path）：disabled / folderUri 空 / serializer 失败 / SAF 无效 URI / sanity / **SAF happy path（写文件到真 Downloads 子目录）**
+
+### 踩坑笔记
+
+1. **`DocumentsContract.buildTreeUri(authority, documentId)` 这个重载不存在**：API 仅 `buildTreeUri(documentId: String)` 单参。Agent 习惯性联想双参版本（类似 `buildChildDocumentsUri(authority, documentId)`），编译才发现。下次先查官方 API 文档再写代码。
+2. **AVD stale lock 文件**：emulator 进程被 taskkill 后 `multiinstance.lock` / `hardware-qemu.ini.lock\pid` 不会自动清理，下次启 emulator 报 `Running multiple emulators with the same AVD` FATAL。**手动清 lock 后重启仍可能因 adb daemon 5043 stale 状态而 offline** —— 这是 SDK + adb 协议握手问题，与本测试代码无关。
+3. **cmd 单行 `&` 后台化会提前返回**：`start "AVD" ...` + `&` 链式调后续命令时，整个链只等 start 完成；真要等 emulator bootcomplete 必须用同步 `call` 调或 `ping -n 90 127.0.0.1 >nul` 阻塞。
+4. **PowerShell `Get-Process | Where-Object` 能查出 `qemu-system-x86_64-headless`**：`tasklist | findstr emulator` 漏看这个进程（`findstr` 大小写敏感 + 仅匹配 `emulator` 子串），但 PowerShell 通配符匹配能查到；下次有 stale AVD lock 直接 PowerShell 排查。
+
+### 关联 commit
+
+- 功能 commit：`88d8cdd` test(backup): DailyAutoBackupWorkerTest 加 1 例 SAF happy path（Phase 10/SAF-1）
+- 台账（本段）：本 commit `chore(dev_log)` @`88d8cdd`
+
+### 下一个入口
+
+1. **Phase 10 10b 收尾**：环境修复后跑 AVD `connectedDebugAndroidTest` 验证 6/6 真跑。当前仅代码完成。
+2. **Phase 10 10c**：真人目测清单 `docs/manual-verification/phase10-visual-checklist.md`。
 3. **Phase 10 10d**：收口——JVM 全量回归 → AVD 真跑 → merge --no-ff → push → DEV_LOG 总收口。
 4. **Phase 10 之后**：用户决定是否发布 / 归档 / 续 Phase 11。
