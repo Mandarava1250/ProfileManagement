@@ -92,7 +92,7 @@ fun BackupPreviewScreen(
             // 打开 InputStream 需要 Context；在 Composable 顶层取一次，
             // 这里的 lambda 是 Activity callback，不在 @Composable scope
             viewModel.load(uri) { contentUri ->
-                context.contentResolver.openInputStream(contentUri)
+                context.contentResolver.openInputStream(contentUri!!)
             }
         }
     }

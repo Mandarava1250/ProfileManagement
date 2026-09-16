@@ -5,9 +5,13 @@ import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.example.personalassistant.core.backup.importer.BackupImporter
+import com.example.personalassistant.core.backup.importer.IBackupImporter
 import com.example.personalassistant.core.backup.scheduler.DailyAutoBackupWorker
 import com.example.personalassistant.core.backup.snapshot.BackupCurrentSnapshotProvider
 import com.example.personalassistant.core.backup.snapshot.BackupSnapshotProvider
+import com.example.personalassistant.core.backup.validator.BackupValidator
+import com.example.personalassistant.core.backup.validator.IBackupValidator
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -48,6 +52,31 @@ abstract class BackupBindingsModule {
     abstract fun bindBackupSnapshotProvider(
         impl: BackupCurrentSnapshotProvider,
     ): BackupSnapshotProvider
+
+    /**
+     * Phase 10 10a-1：把 [BackupValidator]（具体类）绑到 [IBackupValidator]（接口），
+     * 与 [BackupCurrentSnapshotProvider]→[BackupSnapshotProvider] 同模式（Phase 9 A2 已建立）。
+     *
+     * - 让 VM 通过接口拿校验器；测试可以传 `FakeBackupValidator : IBackupValidator`
+     * - 生产代码不需改业务逻辑，Hilt 注入路径仍指向同一单例
+     */
+    @Binds
+    @Singleton
+    abstract fun bindBackupValidator(
+        impl: BackupValidator,
+    ): IBackupValidator
+
+    /**
+     * Phase 10 10a-1：把 [BackupImporter]（具体类）绑到 [IBackupImporter]（接口）。
+     *
+     * 接口故意只含 VM 用到的 `importWithPreview`（不暴露 `import(InputStream)`），
+     * 让 VM 通过接口拿导入器；测试可以传 `FakeBackupImporter : IBackupImporter`。
+     */
+    @Binds
+    @Singleton
+    abstract fun bindBackupImporter(
+        impl: BackupImporter,
+    ): IBackupImporter
 }
 
 /**

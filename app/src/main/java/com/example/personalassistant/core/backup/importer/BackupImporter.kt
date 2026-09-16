@@ -73,13 +73,13 @@ import javax.inject.Singleton
  *   两者互不影响，调用方按需选择。
  */
 @Singleton
-open class BackupImporter @Inject constructor(
+class BackupImporter @Inject constructor(
     private val database: AppDatabase,
     private val validator: BackupValidator,
     private val currentAccountRepository: CurrentAccountRepository,
     @com.example.personalassistant.core.backup.di.BackupJson
     private val json: Json,
-) {
+) : IBackupImporter {
 
     /**
      * 主入口：从输入流读取 ZIP，校验后写入 Room
@@ -311,7 +311,7 @@ open class BackupImporter @Inject constructor(
      * 仅当 user_profiles 的策略非 SKIP 且实际写了至少一行才校准「当前账户」
      * （其它情况：现有账户清单没变，没必要动 DataStore）。
      */
-    suspend fun importWithPreview(
+    override suspend fun importWithPreview(
         payload: BackupPayload,
         preview: BackupPreview,
     ): BackupResult<BackupPayload> {
