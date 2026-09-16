@@ -79,6 +79,15 @@ fun MonthlyReportCard(
                 return@Column
             }
 
+            // Phase 9b D2：预算执行条（报表顶部，百分比 + 进度 + 点击展开明细）。
+            // report.budget 为 null（用户未设预算）时整块省略 —— 不显示空壳。
+            BudgetProgressBar(
+                progress = BudgetProgress.fromOrNull(
+                    budgetAmount = report.budget?.totalAmount,
+                    spentAmount = report.totalExpense,
+                ),
+            )
+
             // 顶部三段：支 / 收 / 结余
             Row(
                 modifier = Modifier.fillMaxWidth(),
