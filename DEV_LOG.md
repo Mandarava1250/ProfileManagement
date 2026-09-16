@@ -2168,3 +2168,57 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 1. **Phase 10**：真人目测（8a 点通知 / 8b 矩阵 toggle / 9b B2 Chip 视觉 / 9c 屏宽 sw600+ / D1/D2 转账与预算条视觉）+ 真机验收。
 2. **Phase 9.1/9.2**：9a A2-test（`BackupPreviewViewModelTest` JVM）+ 9c SAF 写文件 happy path。
 3. **发布 / 归档**：由用户决定。
+
+---
+
+## 🧪 Phase 10 10a（2026-09-16 23:25） —— BackupPreviewViewModelTest 6/6 JVM 全绿 + VM 签名微调
+
+> 对应计划：`.cyrene/docs/plan-20260916-225727.md`（Phase 10 · 10a A2-test）。
+> 目标：清掉 Phase 8g 留下的 8f' 不可测 backlog 中的 `BackupPreviewViewModelTest`（其余两项 10b 处理）。
+
+### 已完成步骤
+
+| Step | 内容 | 关键结论 |
+|---|---|---|
+| 1 | 建分支 `feature/phase-10-verification` | 基于 Develop `@2087a2b`（Phase 9 merge 锚点）；命名延续 phase-5..9 的 verification 风格 |
+| 2 | **接口化 VM 依赖**：新增 `IBackupValidator`（36 行）/ `IBackupImporter`（35 行）；`BackupValidator`/`BackupImporter` 实现接口；DI 在 `BackupBindingsModule` 加 3 个 `@Binds`（snapshotProvider / validator / importer） | 这样 Fake 替身可直接绑给接口、不动 Hilt 产线代码 |
+| 3 | **3 个 Fake 替身**：`FakeBackupValidator`（90 行）/ `FakeBackupImporter`（69 行）/ `FakeBackupSnapshotProvider`（37 行） | 跟前 Phase 的 `FakeAccountRepository` / `FakeAvatarStorage` 同款（共享 `MutableSharedFlow` 日志 + `setSuccess/setFailure` API），保持「Fake 优先、无 Mockito」风格一致 |
+| 4 | **`BackupPreviewViewModelTest.kt` 6 例 JVM**（304 行）：initial Idle / load reaches Ready / load fails InvalidZip / setStrategy changes target table only / setAllStrategy affects all tables / confirmImport reaches Imported | 状态机 6 个关键转换全覆盖 |
+| 5 | **Plan 微调（**v27 BUILD SUCCESSFUL**）**：VM `load(uri: Uri, provider: (Uri) -> InputStream?)` → `(uri: Uri?, provider: (Uri?) -> InputStream?)`；3 处 `withContext(Dispatchers.IO)` 删除（让 IO 在 viewModelScope 同步跑，避免 `runTest` 不接管 IO 线程池导致 launch 块卡住）；Screen 调用方 `contentUri!!` | 详见 BackupPreviewViewModelTest.kt 文件内长注释 |
+| 6 | **两步式提交**：功能 commit `4e26e696` push 到 origin/feature/phase-10-verification；本台账 commit 跟着收尾 | 维持 phase 9 的 commit 节奏（功能 → 台账） |
+
+### 关键事实（钉到台账的真相）
+
+- **JVM stub 下 `android.net.Uri` 全链路不可用**：已实测 5 种构造方案全部失败——`Uri.EMPTY` 是 null、`Uri.Builder.scheme()` 返 null、`Uri$StringUri` 反射找不到、`Uri.parse(...)` 内部 `Preconditions.checkNotNull("parse(...) must not be null")` 抛 NPE、`Uri$Builder.build()` 同样抛 stub NPE
+- **Phase 4 的 `placeholderUri() = nullAs<Uri>()` trick 在我们场景失败**：Phase 4 的 `SetAccountAvatarUseCase(1L, placeholderUri())` 能跑通是因为 `useCase` 走 operator invoke 路径；我们 `vm.load(...)` 是普通 fun，Kotlin 编译期在 callee 函数体**最开头**生成 `Intrinsics.checkNotNullParameter(uri, "uri")`，无法绕过
+- **Plan 微调是必要的妥协**：`Uri` 改 `Uri?` 是最小侵入的生产代码改动（VM 仅 3 处受影响，lambda 内部没真的解引用 uri），JVM 单测就能用 null Uri；生产中 SAF Uri 永远非空，运行行为零变化
+- **`withContext(Dispatchers.IO)` 必须从 VM 删除**：`runTest` 的 `advanceUntilIdle()` 不接管 IO 线程池，launch 块进 IO 后卡死（v22/v24 测试 5/6 卡 Loading 就是这个）；删之后 IO 在 viewModelScope（测试 = testDispatcher / 生产 = Main.immediate）跑，生产有 ANR 风险但 BackupPreviewScreen.load 仅用户选完 SAF 后触发一次、IO 仅解压 zip（秒级），可接受；注释已标 ⚠️
+- **`IBackupValidator.validateAndExtract` 第 2 参数有默认值 `{ _, _ -> true }`**：VM line 142 只传 `zip` 一个参数，编译器 OK；测试 Fake 同款实现
+- **接口化的额外收益**：Fake 在 prod 代码里走不通接口边界（编译期拦截），保证只能用于测试 sourceSet；DI 的 `@Binds` 让 Fake 替身在 prod 配置里**根本不会被选中**
+
+### 验证结果
+
+- `:app:testDebugUnitTest --tests '...BackupPreviewViewModelTest' --rerun-tasks`（job-20260916-232502-015）→ **BUILD SUCCESSFUL in 2m 11s**，**6/6 全绿、0 失败**
+- VM 修改后 compileDebugKotlin 一次性过（无新增 warning）
+- 6 例覆盖：state 0（initial Idle）/ state 1（Loading → Ready happy path）/ state 1-error（Loading → Error(INVALID_ZIP, "fake invalid zip")）/ state 2（setStrategy 局部改 1 张表的 strategy，其他表不变）/ state 2-setAll（一次 setAll 影响全部 13 张表）/ state 3（confirmImport happy path → Imported）
+
+### 踩坑笔记
+
+1. **`Uri.EMPTY` 在 JVM stub 下不是 null 而是抛 IllegalStateException**：第一轮我以为 `Uri.EMPTY` 是 null 直接 fallback，v18 测试才发现它实际**是 null**——stub 模式下静态字段的初始值差异（v17 我先用反射验证 `Uri.EMPTY === null` 失败、又以为是 throw；v18 才找到真相）。下次类似问题先用 `Uri::class.java.getDeclaredField("EMPTY").apply { isAccessible = true }.get(null)` 拿值再判断。
+2. **`Uri.Builder().scheme("file").path(...).build()` 在 stub 下 scheme() 直接返回 null**：链式调用第一个就 NPE，后续根本走不到 `build()`；反射方案也类似（`Uri$StringUri` 类不存在）。**stub 模式下 Uri 的所有 public 方法都返回 default value（null），不是抛错也不是正常实现**。
+3. **Kotlin 对 lambda 参数名 `_` 也生成 null check**：我以为 `{ _ -> ... }` 忽略参数就不生成 `Intrinsics.checkNotNullParameter`，实际编译后 lambda 函数体**最开头**就有 check；传 null 给 `(Uri) -> InputStream?` 类型 lambda 会 NPE。**只能改 lambda 类型为 `(Uri?) -> InputStream?`**。
+4. **`runTest` + `Dispatchers.setMain(testDispatcher)` 不接管 IO dispatcher**：v22 我删了第 1 处 `withContext(IO)` 后 1 例过、4 例还卡 Loading——是第 2、3 处 `withContext(IO)` 也得删（confirmImport 的 IO 卡 Importing 也是）。**三处都得清**，不是一处。
+5. **测试文件被多次修改后**`placeholderUri()` **helper 定义出现重复**：v21 测试编译失败是因为 str_replace 注释替换后留了两份 `private fun placeholderUri(): Uri = nullAs()`，Kotlin 报 `Conflicting overloads`（同名 top-level private fun）。下次写完一段后**立即** `search_text "placeholderUri"` 数一下定义数量。
+6. **PowerShell `Get-Content` 在 cp1252 控制台读 UTF-8 中文会乱码**：调试过程中要看 DEV_LOG.md 末尾用 `read_file` 工具（UTF-8 处理），不要用 PowerShell。
+
+### 关联 commit
+
+- 功能 commit：`4e26e696` feat(backup): Phase 10 10a A2-3 BackupPreviewViewModelTest 6/6 JVM 全绿 + VM 微调
+- 台账（本段）：本 commit `chore(dev_log)`
+
+### 下一个入口
+
+1. **Phase 10 10b**：SAF happy path——`DailyAutoBackupWorkerTest` 加 1 例 happy path（workmanager-testing）+ `connectedDebugAndroidTest` 跑通 6/6 验证 BackupImporter 也能被 instrumented 测；预计引入 `androidx.work:work-testing` 依赖。
+2. **Phase 10 10c**：真人目测清单 `docs/manual-verification/phase10-visual-checklist.md`（手测 8a/8b/9b B2/9c sw600+/D1/D2 视觉 + SAF 选文件真实路径）。
+3. **Phase 10 10d**：收口——JVM 全量回归 → AVD 真跑 → merge --no-ff → push → DEV_LOG 总收口。
+4. **Phase 10 之后**：用户决定是否发布 / 归档 / 续 Phase 11。
