@@ -2061,4 +2061,110 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 ### 下一个入口
 1. **9b D1** —— Phase 5 转账 UI（`TransferScreen` + `TransferViewModel` + Compose UI test），240-360 min。⚠️ 先侦查：`finance/presentation/transfer/TransferSheet.kt` **已存在**（plan §0.2 说「0 命中」是按 `TransferScreen` 精确类名搜的结果，实际已有 Sheet 形态），需先确认是否要改成独立 Screen 或复用现有 Sheet。
 2. **9b D2** —— Phase 5 预算汇总 UI，180-240 min。同上，`presentation/budget/BudgetSheet.kt` + `components/MonthlyReportCard.kt` + `AccountSummaryCard.kt` 已存在，需先确认缺口到底在哪。
-3. **9c** —— deeplink 验证 / 屏宽矩阵 / 全量回归 / merge / push / 台账收口，2-4 h。
+3. **9c** —— deeplink 验证 / 屏宽矩阵 / 全量回归 / merge / push / 台账收口，2-4 h。---
+
+## 🏁 2026-09-16 15:45 —— Phase 9 正式关闭（9c + 9b D1/D2 一口气收口）
+
+**触发**：用户「一口气完成 9b」→「9c 是否已完成？如果没有就先完成 9c」→ 建档核对发现 **9c 一行未做** → 完成 C1/C2 → 用户选「先侦查 D1/D2 再据实重估」→ 侦查发现 plan 误判 → 用户选「真做 D1/D2」→ 完成并收口。
+
+### 已完成的步骤（对应 plan 章节）
+
+| sub-step | 计划章节 | 交付 | commit |
+|---|---|---|---|
+| **9c C1** | plan §二 · 9c C1 | deeplink 4 路由复跑 + 4 棵 UI tree 归档 | `bf420b7` |
+| **9c C2** | plan §二 · 9c C2 | 矩阵 toggle 语义点击（补 Phase 8 遗留缺口）+ 双布局断点 16 例 + 双屏宽 dump | `21fdaa9` |
+| **9b D1** | plan §二 · 9b D1 + §4.3 | 转账表单状态提取 + 16 JVM + 14 instrumented | `88f15e1` |
+| **9b D2** | plan §二 · 9b D2 + §4.4 | 报表预算执行条 + 11 JVM + 9 instrumented | `88f15e1` |
+| **9c E1** | plan §二 · 9c E1 | 全量 JVM 回归 **743/743** 全绿（79 套件，0 失败 0 错误 0 跳过） | （合并前验证）|
+| **9c E2** | plan §二 · 9c E2 | AVD 全量 instrumented **69/69** 全绿（time=187.014s） | （合并前验证）|
+| **9c E3** | plan §二 · 9c E3 | `--no-ff` merge → `Develop @ 2087a2b`（parents = `2681650` + `88f15e1`） | `2087a2b` |
+| **9c E4** | plan §二 · 9c E4 | `git push origin Develop`：`2681650..2087a2b` ✅；feature 分支已同源 | — |
+| **9c E5** | plan §二 · 9c E5 + 订正 line 1707 | 本段（台账两步式） | 见下方 |
+
+### 关键变更文件
+
+**9c C1/C2（commit `bf420b7` + `21fdaa9`）**
+- 新增：`app/src/androidTest/.../task/presentation/components/MatrixViewToggleTest.kt`（5 例）
+- 新增：`app/src/androidTest/.../task/presentation/components/TaskMatrixViewLayoutTest.kt`（11 例）
+- 新增：`docs/verified/phase9-c1-deeplink-verify.md` + `c1-ui-*.xml` ×4
+- 新增：`docs/verified/phase9-c2-matrix-screenwidth.md` + `c2-portrait.xml` + `c2-landscape.xml`
+- 新增：`scripts/c1_deeplink_verify.bat` / `c1_extract_text.ps1` / `c2_screenwidth_dump.bat` / `c2_summarize_dump.ps1`
+
+**9b D1/D2（commit `88f15e1`）**
+- 新增：`TransferFormState.kt`（99 行，转账推导纯数据类）
+- 修改：`TransferSheet.kt`（拆出无状态 `TransferSheetContent`；行为逐条搬运零变更）
+- 新增：`BudgetProgressBar.kt`（176 行，`BudgetProgress` + 无状态渲染）
+- 修改：`MonthlyReportCard.kt`（+9 行接预算执行条）
+- 新增测试 ×4：`TransferFormStateTest`(16) / `TransferSheetContentTest`(14) / `BudgetProgressTest`(11) / `BudgetProgressBarTest`(9)
+- 新增：`docs/verified/phase9-d1d2-transfer-budget.md`
+
+### 验证结果（全真跑，非缓存）
+
+| 项 | 结果 |
+|---|---|
+| 全量 JVM | **743 tests / 79 suites / 0 failures / 0 errors / 0 skipped**，`--rerun-tasks` BUILD SUCCESSFUL 3m55s |
+| 全量 instrumented | **69 tests / 0 failures / 0 errors / 0 skipped**，AVD `pm_ui36` 真跑 time=187.014s，BUILD SUCCESSFUL 3m55s |
+| C2 专项 | 16/16，time=75.283s |
+| D1 专项 | JVM 16/16（0.139s）+ instrumented 14/14（58.875s）|
+| D2 专项 | JVM 11/11 + instrumented 9/9（34.149s）|
+| merge | `2087a2b` parents=`2681650` `88f15e1`；`Develop` 与 `origin/Develop` 同源 |
+
+### 踩坑笔记（本轮新增，7 条）
+
+1. **plan §0.2 的「0 命中 ⇒ 不存在」是危险推理**
+   plan 用 `TransferScreen` / `BudgetSummary*` 精确类名搜得 0 命中，据此判定 D1/D2「不存在」并给 7-10 h 估时。
+   实地核查发现 `TransferSheet`（Phase 5）/ `BudgetSheet`（Phase 7a）/ `MonthlyReportCard`（Phase 7b）**早已存在**，
+   真实缺口只有「UI test」+「报表缺预算执行条」。**据实重估 ↓ 约 60%（150-240 min）**。
+   **规则**：判断「某功能是否已实现」不能只按预设类名搜 —— 类名是推测，不是事实。应搜**行为**（如 `transfer` / `budget` 关键词）或直接列目录。
+
+2. **`MoneyFormat` 带千分位，金额断言不能硬编码**
+   `NumberFormat(Locale.CHINA)` 把 1000.0 渲染成 `1,000.00`。最初硬写 `"1000.00"` → 5 条 instrumented 全挂。
+   **正解**：断言期望值用 `MoneyFormat.formatPlain(x)` **现算**，让断言跟着实现走。
+
+3. **滚动容器里的节点 `assertIsDisplayed` 会失败**
+   `TransferSheetContent` 用 `verticalScroll`，总高超一屏 → 靠下节点在视口外。
+   `assertIsNotEnabled` 只需节点存在、不需可见，所以禁用类断言可直接写；显示/点击类需先 `performScrollTo()`。
+
+4. **`AccountBalance` 真实字段是 `transferNet` 而非 `transferIn`/`transferOut`**
+   凭字段语义猜导致编译失败。**规则**：构造测试数据前必须读真实 data class。
+
+5. **`:app:connectedDebugAndroidTest` 会清理自己装的 APK，且 `wm size` 残留会污染后续测试**
+   一次全量跑后，AVD 上的 app 被清（`Activity class does not exist`），且此前 C2 横屏 dump 留下的
+   `Override size: 1280x800` 没清掉 → `TaskDetailScreenTest` 依赖默认屏宽的断言失败（重跑两次仍稳定失败）。
+   清 `wm size reset` + 重装 APK 后恢复。**规则**：改过 `wm size` / `user_rotation` 的脚本必须在结尾恢复；
+   全量 instrumented 失败时先查设备是否被改过屏宽。
+
+6. **后台 emulator 会撞 30 分钟执行上限被强制终止**
+   `shell_job` 显示 `status=timed_out` / `reason=total_timeout_exceeded` / duration≈31 min。
+   AVD 表现为「突然掉线」（`device 'emulator-5554' not found`），**不是自己崩的**。
+   本轮 AVD 掉线 3 次中至少 1 次由此导致。**规则**：长跑 instrumented 前确认 emulator 剩余窗口；
+   必要时用 `timeout_ms` 显式拉长后台 emulator 的生命周期。
+
+7. **`onNodeWithText` 要求唯一匹配**
+   全空矩阵同屏有多个「无任务 ♪」→ 直接断言报 `Expected at most 1 node but found 3`。
+   正解：`onAllNodesWithText(...).onFirst()`。
+
+### 诚实边界（不虚标 ✅）
+
+- **9a A2-test 仍延期**：`BackupPreviewViewModelTest`（JVM 4-6 例）→ Phase 9.1/9.2，接口已就位（3 行 fake 即可）。
+- **D1/D2 视觉未经真人目测**：预算条颜色 / 进度条圆角 / 展开动画 / 长账户名截断 → Phase 10。
+- **转账真实落库链路不在本轮范围**：本轮验「UI 状态推导 + 渲染 + 回调」；真正的 `TransferUseCase → Repository → DAO` 双写由既有单测 + `Migration_9_10` AVD 真跑覆盖。
+- **`TransferSheet` 属重构既有生产代码**：判定逻辑逐条搬运无变更，但已用 16 JVM + 14 instrumented 锁住行为。
+- **屏宽矩阵仍只覆盖 phone 档**：C2 的 Compose 测试用 `LocalConfiguration` 伪造宽度（599/600 边界已锁），
+  真实 `sw600dp+` 平板仍需 Phase 10 真机目测。
+- **8a 真人点通知 / 8b 真机矩阵目测**：仍未做，留 Phase 10（需用户在场）。
+
+### 关联 commit
+
+- 9c C1：`bf420b7`
+- 9c C2：`21fdaa9`
+- 9b D1/D2：`88f15e1`
+- 台账速览更新：`6f92455`
+- merge：`2087a2b`（parents `2681650` + `88f15e1`）
+- 台账（本段）：本 commit（`chore(dev_log)`）
+
+### 下一个入口
+
+1. **Phase 10**：真人目测（8a 点通知 / 8b 矩阵 toggle / 9b B2 Chip 视觉 / 9c 屏宽 sw600+ / D1/D2 转账与预算条视觉）+ 真机验收。
+2. **Phase 9.1/9.2**：9a A2-test（`BackupPreviewViewModelTest` JVM）+ 9c SAF 写文件 happy path。
+3. **发布 / 归档**：由用户决定。
