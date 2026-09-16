@@ -44,6 +44,16 @@ import com.example.personalassistant.feature.finance.presentation.util.MoneyForm
  * 这是刻意的：与 [com.example.personalassistant.feature.finance.domain.repository.FinanceRepository.transfer]
  * 的签名一致（它内部用当前账户快照）。如果这里允许选转出方，用户就能在 A 的账本页面上
  * 把钱从 B 转走 —— 多一个参数就多一条越权路径，而它没有任何正向用途。
+ *
+ * ## Phase 9b D1 重构：状态派出去了（可测性）
+ *
+ * 原来 `targets / from / selected / amount / overBalance / canSubmit` 全写在本 Composable
+ * 体内，只能靠 instrumented 测试碰（8m 一轮）。现在：
+ * - 推导规则搬到 [TransferFormState]（纯数据类，JVM 毫秒级验证）
+ * - 渲染搬到 [TransferSheetContent]（无状态，传 state + 回调即可渲染）
+ * - 本函数只剩「收 VM 流 → 组装 state → 委托渲染」三件事
+ *
+ * 行为零变化：同一套判定条件，只是换了存放位置。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,113 +69,139 @@ fun TransferSheet(
     var note by remember { mutableStateOf("") }
     var targetId by remember { mutableStateOf<Long?>(null) }
 
-    // 排掉当前账户：自己转给自己在 Repository 层会被拒（SELF_TRANSFER），
-    // 但把不可能选项摆在眼前仍然更差 —— 用户点了才知道不行，等于让人试错。
-    val targets = balances.filter { it.accountId != currentAccountId }
-    val from = balances.firstOrNull { it.accountId == currentAccountId }
-    val selected = targets.firstOrNull { it.accountId == targetId }
-    val amount = amountText.trim().toDoubleOrNull()
-    // 余额不足在 UI 层就提示（Repository 仍会再校验一次，那是真正的防线）：
-    // 这里只是提前把「转不出去」说清楚，避免用户填完才发现。
-    val overBalance = amount != null && amount > 0.0 && from != null && from.balance < amount
-    val canSubmit = amount != null && amount > 0.0 && targetId != null && !overBalance
+    val state = TransferFormState.from(
+        balances = balances,
+        currentAccountId = currentAccountId,
+        amountText = amountText,
+        note = note,
+        targetId = targetId,
+    )
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = "账户间转账",
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Text(
-                text = if (from != null) {
-                    "从「${from.accountName}」转出，当前余额 ${MoneyFormat.formatPlain(from.balance)}"
-                } else {
-                    "从当前账户转出"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            if (targets.isEmpty()) {
-                // 只剩一个账户：转账无处可去。说清楚原因，而不是给个空列表让人困惑
-                Text(
-                    text = "至少需要两个账户才能转账，请到「设置 - 账户」新建一个。",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
+        TransferSheetContent(
+            state = state,
+            onAmountChange = { amountText = it },
+            onNoteChange = { note = it },
+            onTargetChange = { targetId = it },
+            onSubmit = { to ->
+                viewModel.transferTo(
+                    toAccountId = to,
+                    amountText = amountText,
+                    note = note,
+                    onDone = onDismiss,
                 )
+            },
+        )
+    }
+}
+
+/**
+ * Phase 9b D1：转账面板的**无状态**内容（state in / callback out）。
+ *
+ * 与 [TransferFormState] 配对：状态由调用方给，本函数只负责画 + 抛事件。
+ * instrumented 测试直接渲染它，不需要构造 [FinanceViewModel]（10+ 依赖）。
+ *
+ * 放在同一个文件里，是因为两者共享同一套文案与结构约定 —— 拆文件会让
+ * 「改了一处忘了另一处」的概率变大，而它们的改动几乎总是同步的。
+ */
+@Composable
+fun TransferSheetContent(
+    state: TransferFormState,
+    onAmountChange: (String) -> Unit,
+    onNoteChange: (String) -> Unit,
+    onTargetChange: (Long) -> Unit,
+    onSubmit: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = "账户间转账",
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Text(
+            text = if (state.fromName != null && state.fromBalance != null) {
+                "从「${state.fromName}」转出，当前余额 ${MoneyFormat.formatPlain(state.fromBalance)}"
             } else {
-                Text(text = "转入账户", style = MaterialTheme.typography.titleMedium)
-                targets.forEach { account ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                "从当前账户转出"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        if (state.hasNoTarget) {
+            // 只剩一个账户：转账无处可去。说清楚原因，而不是给个空列表让人困惑
+            Text(
+                text = "至少需要两个账户才能转账，请到「设置 - 账户」新建一个。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        } else {
+            Text(text = "转入账户", style = MaterialTheme.typography.titleMedium)
+            state.targets.forEach { account ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = { onTargetChange(account.accountId) },
+                        modifier = Modifier.weight(1f),
                     ) {
-                        OutlinedButton(
-                            onClick = { targetId = account.accountId },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text(text = account.accountName)
-                        }
-                        Text(
-                            text = MoneyFormat.formatPlain(account.balance),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(top = 10.dp),
-                        )
+                        Text(text = account.accountName)
                     }
+                    Text(
+                        text = MoneyFormat.formatPlain(account.balance),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
                 }
             }
+        }
 
-            OutlinedTextField(
-                value = amountText,
-                onValueChange = { amountText = it },
-                label = { Text("金额") },
-                singleLine = true,
-                isError = overBalance,
-                supportingText = if (overBalance && from != null) {
-                    { Text("超出余额：当前 ${MoneyFormat.formatPlain(from.balance)}") }
-                } else {
-                    null
-                },
-                modifier = Modifier.fillMaxWidth(),
+        OutlinedTextField(
+            value = state.amountText,
+            onValueChange = onAmountChange,
+            label = { Text("金额") },
+            singleLine = true,
+            isError = state.overBalance,
+            supportingText = if (state.overBalance && state.fromBalance != null) {
+                { Text("超出余额：当前 ${MoneyFormat.formatPlain(state.fromBalance)}") }
+            } else {
+                null
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        OutlinedTextField(
+            value = state.note,
+            onValueChange = onNoteChange,
+            label = { Text("备注（可选）") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        state.confirmSummary()?.let { summary ->
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
             )
+        }
 
-            OutlinedTextField(
-                value = note,
-                onValueChange = { note = it },
-                label = { Text("备注（可选）") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            selected?.let {
-                Text(
-                    text = "确认后：${from?.accountName ?: "当前账户"} −${amountText.trim()} → ${it.accountName}",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-
-            Button(
-                onClick = {
-                    val to = targetId ?: return@Button
-                    viewModel.transferTo(
-                        toAccountId = to,
-                        amountText = amountText,
-                        note = note,
-                        onDone = onDismiss,
-                    )
-                },
-                enabled = targets.isNotEmpty() && canSubmit,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("确认转账")
-            }
+        Button(
+            onClick = {
+                val to = state.targetId ?: return@Button
+                onSubmit(to)
+            },
+            enabled = state.canSubmit,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("确认转账")
         }
     }
 }

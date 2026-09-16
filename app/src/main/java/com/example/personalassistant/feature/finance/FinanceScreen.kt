@@ -64,6 +64,9 @@ import com.example.personalassistant.feature.finance.presentation.transfer.Trans
 import com.example.personalassistant.feature.finance.presentation.util.FinanceDateUtils
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
 import com.example.personalassistant.feature.finance.domain.model.Transaction
+import com.example.personalassistant.feature.profile.presentation.accountswitcher.AccountSwitcherBar
+import com.example.personalassistant.feature.profile.presentation.accountswitcher.AccountSwitcherState
+import com.example.personalassistant.feature.profile.presentation.accountswitcher.AccountSwitcherViewModel
 import kotlinx.coroutines.launch
 
 /**
@@ -78,8 +81,13 @@ import kotlinx.coroutines.launch
 fun FinanceScreen(
     navController: NavHostController,
     viewModel: FinanceViewModel = hiltViewModel(),
+    // Phase 9b B2：账户切换条独立 VM。账户清单/当前账户与记账数据不是同一批流，
+    // 塞进 FinanceViewModel 会撞上 combine 的 5 流上限，也会让「切账户失败」
+    // 和「转账余额不足」共用同一条 feedback 通道。
+    accountSwitcherViewModel: AccountSwitcherViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val accountSwitcherState by accountSwitcherViewModel.state.collectAsStateWithLifecycle()
     val searchKeyword by viewModel.searchKeyword.collectAsStateWithLifecycle()
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
     // Phase 5：跨账户汇总（独立于 uiState 的两条流，避开 combine 的 5 流上限）
@@ -107,6 +115,16 @@ fun FinanceScreen(
             scope.launch {
                 snackbarHostState.showSnackbar(it)
                 viewModel.clearFeedback()
+            }
+        }
+    }
+
+    // Phase 9b B2：切账户失败走独立提示通道（消费后清空，避免重建时重放）
+    LaunchedEffect(accountSwitcherState.errorMessage) {
+        accountSwitcherState.errorMessage?.let {
+            scope.launch {
+                snackbarHostState.showSnackbar(it)
+                accountSwitcherViewModel.consumeError()
             }
         }
     }
@@ -165,6 +183,9 @@ fun FinanceScreen(
             budgetTotals = budgetTotals,
             budgetRows = budgetRows,
             accountNameById = accountNameById,
+            // Phase 9b B2：顶部账户切换条
+            accountSwitcherState = accountSwitcherState,
+            onSwitchAccount = accountSwitcherViewModel::switchTo,
         )
     }
 
@@ -243,6 +264,9 @@ private fun FinanceContent(
     budgetTotals: BudgetSummaryTotals,
     budgetRows: List<AccountBudgetSummary>,
     accountNameById: Map<Long, String>,
+    // ===== Phase 9b B2 =====
+    accountSwitcherState: AccountSwitcherState,
+    onSwitchAccount: (Long) -> Unit,
 ) {
     if (uiState.isLoading) {
         Box(
@@ -263,6 +287,16 @@ private fun FinanceContent(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // Phase 9b B2：账户切换条（单账户 / 加载中时组件内部自动不渲染）
+        item {
+            AccountSwitcherBar(
+                state = accountSwitcherState,
+                onSwitch = onSwitchAccount,
+                // LazyColumn 的 item 已有 horizontal padding，这里去掉避免双重缩进
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+
         // 7b：搜索条（注入关键字 + 监听变更）
         item {
             SearchBar(
