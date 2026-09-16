@@ -34,10 +34,10 @@
 | 已完成（本轮新转 ✅） | **Phase 8b'' 任务矩阵视图 ✅** —— `2aded6e`，`TaskViewMode.MATRIX` + 2×2 分组 + 未排期独立区 + <600dp 纵向 5 区；`TaskMatrixTest` 24/24。⚠️ 双布局真机截图仍需人工 |
 | 已完成（本轮新转 ✅） | **Phase 8final 收尾 ✅** —— `4d2e6c5`/`2aded6e`/`defce3f`：通知 deeplink 跳转 + 任务矩阵视图，已合并到 Develop（详见本文件 Phase 8final 段） |
 | 进行中 | **阶段 Phase 5（跨账户转账 + 预算汇总）🟨** —— 代码已 push（`f86b8be` 数据层 + `438a29e` 功能层），598 JVM 断言全绿；⚠️ **不打 ✅ 的原因**：`Migration_9_10` 的 instrumented 真跑未做（JVM 只证明 SQL 形状对），且转账/总览 UI 未人工目测验收 |
-| 进行中 | **阶段 Phase 10 🟨（部分完成）** —— 10a ✅ (`4e26e696`) + 10b 🟨 部分（`88d8cdd` 写完但 AVD 实跑未做，AVD 启动 adb handshake 失败）；待 10b AVD 真跑 + 10c 真人目测清单 + 10d 收口 merge |
+| 进行中 | **阶段 Phase 10 🟨（部分完成）** —— 10a ✅ (`4e26e696`) + 10b 🟨 部分（`88d8cdd` 写完但 AVD 实跑未做，AVD 启动 adb handshake 失败） + 10c 🟨（清单 `79fd5a6` 生成完成，**待用户真人执行后填结果**）；待 10b AVD 真跑 + 10c 真人目测执行 + 10d 收口 merge |
 | 已完成（一口气 Phase 8 收口） | **Phase 8c.1 ✅** Migration_9_10 AVD 真跑 4/4 @`18e2d9c`（事件分类外键 + 账户转账对 + budget index + index 健康度全验证）<br>**Phase 8c.2 ✅** 附件清理逻辑 + Worker + Hilt + 5 JVM 单测 @`22fc826`（`AttachmentCleanupLogic` + `AttachmentCleanupWorker` + Hilt `AttachmentCleanupModule` + `FinanceDao.allAttachmentUris()`）<br>**Phase 8a（验证层）✅** 通知 deeplink 4 场景自动验证 @`f746ca6`（任务详情/任务编辑/事件编辑/课程编辑全部 UI tree 命中目标）<br>**Phase 8b''（验证层 partial）🟨** 矩阵视图双布局 UI dump @`5458159`（JVM `TaskMatrixTest` 24/0 ✅；Compose 屏宽切换渲染不崩；矩阵 toggle 自动化未做）<br>**3 个 final class 改 open** @`966db42`（`BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter`；让 Phase 9+ 写 Fake 子类）|
 | **已完成（Phase 9 9a A1）** | **9a A1 BackupImporterTest ✅** @`ff312e7` —— 4 例 instrumented 真实跑（happy path / 整表替换 / 旧备份兼容 / 随机字节 → INVALID_MANIFEST）覆盖 JVM 给不出的「ZIP 解析 + Room 事务写入 + PRAGMA foreign_keys」全链；AVD `pm_ui36` 真跑 4/4。⚠️ `pm_api34` 是 plan 写错的 AVD 名（不存在），改用现成 `pm_ui36` —— plan 偏差。 |
-| **已完成（Phase 10 10a）** | **Phase 10 10a A2-test BackupPreviewViewModelTest ✅** @`4e26e696`（功能）+ 台账 commit —— 详见本文件末尾 10a 阶段记录段。6/6 JVM 全绿，状态机 6 转换全保。 |
+| **已完成（Phase 10 10c）** | **Phase 10 10c 真人目测清单 ✅** @`79fd5a6` —— `docs/manual-verification/phase10-visual-checklist.md` 5 节齐：VL-8a 通知 deeplink / VL-8b 矩阵双布局 / VL-9b-B2 AccountSwitcher Chip / VL-9c-sw600 平板屏宽 / VL-9b-D1D2 转账+预算。每节含场景/前置/步骤/预期/截图位置/结果记录六段。状态 🟨：清单生成完成，**待用户（伙伴）真机执行后填结果**。 |
 | **已完成（Phase 9 9b B1）** | **9b B1 AttachmentCleanupScheduler 接线 ✅** @`dd30409` —— `PersonalAssistantApp.onCreate()` 调 `attachmentCleanupScheduler.schedulePeriodic()` + 1 行自检日志；仿已有 `workerFactory` / `refreshDailyPool` / `dailyPoolScheduler` 注入模式（Hilt `@Provides @Singleton` 在 `AttachmentCleanupModule.kt:61` 已装好，本类零额外配置）；24h 周期 + KEEP 策略；`:app:compileDebugKotlin :app:compileDebugUnitTestKotlin --rerun-tasks` → BUILD SUCCESSFUL in 3m 39s，23 tasks executed + `:app:hiltAggregateDepsDebug` + `:app:hiltJavaCompileDebug` 全绿（**Hilt 接线编译通过**）；plan §0.2 估时 5 min，实做 ~30 min（含 3m39s 强制重编避假 UP-TO-DATE 陷阱）。⚠️ 本轮**未写新测试** —— B1 是 1 行接线 + Hilt 编译验证，不引入新测试；功能验证依赖 9c E1 全量 JVM 回归（700+ 用例 0 失败）+ 9c E2 AVD 合并后真跑（覆盖 `WorkManager.enqueueUniquePeriodicWork` 行为）。 |
 | **已完成（Phase 9 9b B2）** | **9b B2 AccountSwitcher 快捷入口 ✅** @`3328574` —— 7 新文件 + 1 修改 / +1032 行：<br>① `AccountSwitcherState.kt`（State/Action sealed + 纯函数 `reduceAccountSwitcher`：悬空 currentId 回落首账户、乐观选中、同 id no-op、错误收敛）<br>② `AccountSwitcherViewModel.kt`（`observeAccounts()` × `currentAccountIdFlow()` combine→dispatch reducer；`switchTo` 真写 `CurrentAccountRepository` + runCatching 失败转 errorMessage）<br>③ `AccountSwitcherBar.kt`（Material3 `FilterChip` 横向滑动，plan §4.2 选项 A：典型账户数 1-3 时 Chip 一眼看全；单账户/加载中整条 `isVisible=false` 隐藏）<br>④ `FinanceScreen.kt` 接线（独立 `accountSwitcherViewModel`，避开 `FinanceViewModel` 已满的 5 流 combine 上限；切账户失败走专用 Snackbar 通道，不与转账 feedback 混流）<br>**验证（全真跑非缓存）**：JVM **23/23**（Reducer 13 + VM 10，`--rerun-tasks` BUILD SUCCESSFUL 3m46s）+ instrumented **8/8** @ AVD `pm_ui36`（`connectedDebugAndroidTest` BUILD SUCCESSFUL 1m47s，time=24.999s）；证据 `docs/verified/phase9-b2-account-switcher-result.xml`。<br>**诚实边界**：切换条只做「切换」不做管理（新建/重命名/删除仍在 Settings 页 `AccountSettingsCard`）；`sw600dp` 以上平板布局未单独验证（留 Phase 10 真机目测）；实际视觉效果（Chip 间距/长账户名截断）未真人目测。 |
 | **已完成（Phase 9 9c C1/C2）** | **9c C1 通知 deeplink 4 路由复跑 ✅** @`bf420b7` —— 4 场景（`tasks/detail/1` / `tasks/edit/1` / `calendar/edit/1` / `timetable/edit/1`）全部命中目标页，包名均为 `com.example.personalassistant.debug`；证据 `docs/verified/phase9-c1-deeplink-verify.md` + 4 棵 UI tree。**9c C2 矩阵 toggle + 双布局 ✅** @`21fdaa9` —— **补上 Phase 8b'' 遗留的「矩阵 toggle 自动化未跑通」缺口**：用 Compose 语义点击（`onNodeWithText` 走语义树而非像素坐标，与屏宽无关）替代 `adb input tap`；新增 `MatrixViewToggleTest` 5 + `TaskMatrixViewLayoutTest` 11 = **16 例 instrumented，全绿 time=75.283s**；另归档双屏宽 UI dump（portrait rotation=0 / landscape rotation=1）。 |
@@ -2273,6 +2273,52 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 ### 下一个入口
 
 1. **Phase 10 10b 收尾**：环境修复后跑 AVD `connectedDebugAndroidTest` 验证 6/6 真跑。当前仅代码完成。
-2. **Phase 10 10c**：真人目测清单 `docs/manual-verification/phase10-visual-checklist.md`。
+2. **Phase 10 10c 真人执行**：用户按 `docs/manual-verification/phase10-visual-checklist.md` 5 节跑 + 填结果。
 3. **Phase 10 10d**：收口——JVM 全量回归 → AVD 真跑 → merge --no-ff → push → DEV_LOG 总收口。
+4. **Phase 10 之后**：用户决定是否发布 / 归档 / 续 Phase 11。
+
+---
+
+## 📋 Phase 10 10c（2026-09-17 00:50） —— 真人目测清单生成完成（5 节齐）
+
+> 对应计划：`.cyrene/docs/plan-20260916-175218.md`（Phase 10 · 10c VL-1）。
+> 目标：把「待真人手动验证」的 5 项系统化、可勾选、可截图为证。
+
+### 已完成步骤
+
+| Step | 内容 | 关键结论 |
+|---|---|---|
+| 1 | 新建文件 `docs/manual-verification/phase10-visual-checklist.md`（255 行）| 5 节走查 + 汇总记录 + 回退修复流程 |
+| 2 | 5 节覆盖：VL-8a 通知 deeplink / VL-8b 矩阵双布局 / VL-9b-B2 AccountSwitcher Chip / VL-9c-sw600 平板屏宽 / VL-9b-D1D2 转账+预算执行条 | 对应 DEV_LOG 顶部「Phase 10 真人目测」列出的 5 项，每节独立可跑 |
+| 3 | 每节六段格式：场景 / 前置条件 / 步骤（编号）/ 预期 / 截图位置 / 结果记录 | 严格按 plan §4.4 模板 |
+| 4 | 截图位置统一指向 `docs/manual-verification/screenshots/<phase>-<item>.png`（本目录预计 gitignore 二进制）| 截图不入库，保留在本地 |
+| 5 | 汇总记录表 + 回退修复流程 | 用户跑完填表 + DEV_LOG 更新状态图例 |
+
+### 关键事实（钉到台账的真相）
+
+- **清单生成不依赖真机 / AVD**：纯 Markdown 文件，无外部依赖；不构成「已验证」证据，只是「验证脚本生成完成」
+- **5 节优先级标的是「生成时」估值**，实际重要性随项目演化可能变化；用户跑时可调整顺序
+- **不预设「✅」结果**：清单本身不做任何断言；用户跑完填表后**项目才能升级状态图例** 🟨 → ✅
+
+### 验证结果
+
+- 文件存在：`docs/manual-verification/phase10-visual-checklist.md` ✅
+- 5 节齐：✅（section 1 ~ 5 + 汇总记录）
+- 格式合规：每节含场景/前置/步骤/预期/截图位置/结果记录 ✅
+
+### 踩坑笔记
+
+1. **plan §4.4 写「5 节对应 DEV_LOG『待开』列出的 5 项」**但实际 DEV_LOG「待开」是合并描述（"8a 点通知 / 8b 矩阵 toggle / 9b B2 Chip 视觉 / 9c 屏宽 sw600+ / D1/D2 转账与预算条视觉"），需要拆出 5 个清晰可单独验证的 sub-item。本轮按合并描述拆出 5 节，与 Phase 8/9 自动验证已覆盖部分正交（自动验证是逻辑/UI tree 命中，真人验证是视觉/交互/平板适配等不可被自动化替代的部分）。
+2. **截图目录 `docs/manual-verification/screenshots/` 当前不存在**：本轮只生成 .md 清单，未建 screenshots 目录（用户跑完截图放那即可）。下个 Phase 或 10c 收尾时补建 `.gitignore` 规则：`docs/manual-verification/screenshots/` 不入库。
+
+### 关联 commit
+
+- 功能 commit：`79fd5a6` docs(manual-verification): Phase 10 真人目测清单（10c VL-1）
+- 台账（本段）：本 commit `chore(dev_log)` @`79fd5a6`
+
+### 下一个入口
+
+1. **Phase 10 10b 收尾**：环境修复后跑 AVD `connectedDebugAndroidTest`。
+2. **Phase 10 10c 真人执行**：用户按清单跑 + 填结果。
+3. **Phase 10 10d**：JVM 全量回归 → AVD 真跑 → merge --no-ff → push → DEV_LOG 总收口。
 4. **Phase 10 之后**：用户决定是否发布 / 归档 / 续 Phase 11。
