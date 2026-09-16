@@ -9,6 +9,7 @@
 > **本轮追加（Phase 9 启动）**：2026-09-16 01:33（用户批准 `.cyrene/docs/plan-20260916-005116.md` → `feature/phase-9-verification` 建分支 + 9a A1 `BackupImporterTest` 4/4 ✅ @`ff312e7`；详见文末「🚀 2026-09-16 01:33 Phase 9 启动 + 9a A1」段）
 > **本轮追加（Phase 9 9a 推进）**：2026-09-16 07:25（用户批准"继续" → 9a A2-pre `BackupSnapshotProvider` 接口提取（生产重构）✅ @`7f2e2b3` + 9a A3 `DailyAutoBackupWorkerTest` 5/5 instrumented 真跑 ✅ @`bdb109c`；详见文末「🚀 2026-09-16 07:25 Phase 9 9a A2-pre + A3」段）
 > **本轮追加（Phase 9 9b B1）**：2026-09-16 13:30（用户批准「走真做路径」+ 4 项前置核查完成 → 9b B1 `AttachmentCleanupScheduler` 接线 ✅ @`dd30409`；详见文末「🚀 2026-09-16 13:30 Phase 9 9b B1」段）
+> **本轮追加（Phase 9 9b B2）**：2026-09-16 14:10（用户批准「继续推 9b B2」→ `AccountSwitcher` 快捷入口完整交付 ✅ @`3328574`：State/Action/reducer + VM + Composable + 记账页接线 + JVM 23/23 + instrumented 8/8 真跑；详见文末「🚀 2026-09-16 14:10 Phase 9 9b B2」段）
 
 ---
 
@@ -19,10 +20,10 @@
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用 |
 | 命名空间 | `com.example.personalassistant` |
 | 当前 HEAD | **`Develop @ 449e347`**（Phase 8 验证轮次已 `--no-ff` 合入，parents = `8107fbf` + `d5ab36e`）<br>**`feature/phase-9-verification @ bdb109c`**（Phase 9 9a 推进：A1 BackupImporterTest 4/4 ✅ @`ff312e7` + A2-pre BackupSnapshotProvider 接口提取 ✅ @`7f2e2b3` + A3 DailyAutoBackupWorkerTest 5/5 ✅ @`bdb109c`，均已 commit+push）|
-| 当前分支 | `feature/phase-9-verification`（基于 `Develop @ 449e347`，ahead=0 / behind=0，本分支 4 commits = `ff312e7` + `95618ad` + `7f2e2b3` + `bdb109c`）|
+| 当前分支 | `feature/phase-9-verification`（基于 `Develop @ 449e347`，ahead=0 / behind=0，本分支 6 commits = `ff312e7` + `95618ad` + `7f2e2b3` + `bdb109c` + `e5f12e7` + `dd30409` + `c7c4031` + `3328574`）|
 | 主分支 | `Develop` |
 | 累计 commit 数 | `Develop` 共 **105** 个 commit（`git rev-list --count Develop`）|
-| 测试用例 | **693 JVM 单测 / 75 套件 / 0 失败 / 0 错误 / 0 跳过**（Phase 8 关闭时合并后重跑结果，BUILD SUCCESSFUL 2m20s，结果时间戳 2026-09-15 13:55:54，非缓存）<br>+ **13 instrumented**（`Migration_9_10` 4 cases ✅ @`18e2d9c` + `BackupImporterTest` 4 cases ✅ @`ff312e7` + `DailyAutoBackupWorkerTest` 5 cases ✅ @`bdb109c`；AVD `pm_ui36` 真跑 13/13）|
+| 测试用例 | **693 JVM 单测 / 75 套件 / 0 失败 / 0 错误 / 0 跳过**（Phase 8 关闭时合并后重跑结果，BUILD SUCCESSFUL 2m20s，结果时间戳 2026-09-15 13:55:54，非缓存）<br>+ **23 JVM（Phase 9 9b B2 新增）**：`AccountSwitcherReducerTest` 13 + `AccountSwitcherViewModelTest` 10，`--rerun-tasks` 真跑 0 失败 0 错误<br>+ **21 instrumented**（`Migration_9_10` 4 cases ✅ @`18e2d9c` + `BackupImporterTest` 4 cases ✅ @`ff312e7` + `DailyAutoBackupWorkerTest` 5 cases ✅ @`bdb109c` + `AccountSwitcherBarTest` 8 cases ✅ @`3328574`；AVD `pm_ui36` 真跑 21/21）|
 | 测试环境 | AVD **`pm_ui36`**（API 36，本轮 9a A1 实际用的；plan 写的 `pm_api34` 不存在，从现成的 UI AVD 替代 —— 属本机环境，**不在版本库**）|
 | Room 数据库 | **v10**（Phase 5：`transactions.transferAccountId`/`transferPairId` + `user_profiles.initialBalance` + `index_transactions_accountId_type`）<br>版本号常量已提为 `APP_DATABASE_VERSION`，`@Database` 注解与 `BackupFormatVersion.DB_VERSION` 同源 —— 见下方 Phase 5「踩坑笔记」第 1 条|
 | 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ **8 ✅ 正式关闭**（sub-step 1~9 + 配置杂项 + 8g finalize 收口 + 8h 分支归档 + 验证轮次 merge @`449e347`）<br>**9a ✅ A1 + A2-pre + A3 子项**（A1 BackupImporterTest 4/4 ✅ @`ff312e7` + A2-pre BackupSnapshotProvider 接口提取（生产重构）✅ @`7f2e2b3` + A3 DailyAutoBackupWorkerTest 5/5 ✅ @`bdb109c`；A2-test JVM 延期到 Phase 9.1/9.2；9b / 9c / 9d 待开）|
@@ -37,6 +38,7 @@
 | **已完成（Phase 9 9a A1）** | **9a A1 BackupImporterTest ✅** @`ff312e7` —— 4 例 instrumented 真实跑（happy path / 整表替换 / 旧备份兼容 / 随机字节 → INVALID_MANIFEST）覆盖 JVM 给不出的「ZIP 解析 + Room 事务写入 + PRAGMA foreign_keys」全链；AVD `pm_ui36` 真跑 4/4。⚠️ `pm_api34` 是 plan 写错的 AVD 名（不存在），改用现成 `pm_ui36` —— plan 偏差。 |
 | **已完成（Phase 9 9a A2-pre / A3）** | **9a A2-pre BackupSnapshotProvider 接口提取 ✅** @`7f2e2b3` —— 4 文件 / +72-12 行：新建 `BackupSnapshotProvider` 单方法接口（`suspend fun snapshot(): CurrentDbSnapshot`），`BackupCurrentSnapshotProvider` 改实现，`BackupPreviewViewModel` 改依赖接口；Hilt 拆 `BackupBindingsModule`（@Binds）+ `BackupModule`（@Provides），`WORK_NAME_DAILY_BACKUP` 提顶层 const；3 任务编译全绿，对运行期无影响（@Binds 绑回同一实现类）。**A2-test（BackupPreviewViewModelTest JVM）延期到 Phase 9.1/9.2**：JVM 测试用例编写时遇生产代码 API 与假设不一致（`BackupPayload` 参数名、`BackupExporter.exportToBytes` 实际签名），等实现侧稳定后重写。**9a A3 DailyAutoBackupWorkerTest ✅** @`bdb109c` —— 5 cases instrumented 真实跑（4 真实 + 1 sanity）：disabled 短路 / folderUri 空短路 / serializer 失败 → retry / SAF 无效 URI → retry / 全套依赖 sanity；AVD `pm_ui36` 真跑 5/5 time=2.118s。⚠️ SAF 写文件成功路径未覆盖（happy path 需 fake `ContentResolver` 模拟 `DocumentsContract` 4 查询，单测 100+ 行超 Phase 9 时间盒），留 Phase 9.1/9.2 或 Phase 10 真人手动验证。 |
 | **已完成（Phase 9 9b B1）** | **9b B1 AttachmentCleanupScheduler 接线 ✅** @`dd30409` —— `PersonalAssistantApp.onCreate()` 调 `attachmentCleanupScheduler.schedulePeriodic()` + 1 行自检日志；仿已有 `workerFactory` / `refreshDailyPool` / `dailyPoolScheduler` 注入模式（Hilt `@Provides @Singleton` 在 `AttachmentCleanupModule.kt:61` 已装好，本类零额外配置）；24h 周期 + KEEP 策略；`:app:compileDebugKotlin :app:compileDebugUnitTestKotlin --rerun-tasks` → BUILD SUCCESSFUL in 3m 39s，23 tasks executed + `:app:hiltAggregateDepsDebug` + `:app:hiltJavaCompileDebug` 全绿（**Hilt 接线编译通过**）；plan §0.2 估时 5 min，实做 ~30 min（含 3m39s 强制重编避假 UP-TO-DATE 陷阱）。⚠️ 本轮**未写新测试** —— B1 是 1 行接线 + Hilt 编译验证，不引入新测试；功能验证依赖 9c E1 全量 JVM 回归（700+ 用例 0 失败）+ 9c E2 AVD 合并后真跑（覆盖 `WorkManager.enqueueUniquePeriodicWork` 行为）。 |
+| **已完成（Phase 9 9b B2）** | **9b B2 AccountSwitcher 快捷入口 ✅** @`3328574` —— 7 新文件 + 1 修改 / +1032 行：<br>① `AccountSwitcherState.kt`（State/Action sealed + 纯函数 `reduceAccountSwitcher`：悬空 currentId 回落首账户、乐观选中、同 id no-op、错误收敛）<br>② `AccountSwitcherViewModel.kt`（`observeAccounts()` × `currentAccountIdFlow()` combine→dispatch reducer；`switchTo` 真写 `CurrentAccountRepository` + runCatching 失败转 errorMessage）<br>③ `AccountSwitcherBar.kt`（Material3 `FilterChip` 横向滑动，plan §4.2 选项 A：典型账户数 1-3 时 Chip 一眼看全；单账户/加载中整条 `isVisible=false` 隐藏）<br>④ `FinanceScreen.kt` 接线（独立 `accountSwitcherViewModel`，避开 `FinanceViewModel` 已满的 5 流 combine 上限；切账户失败走专用 Snackbar 通道，不与转账 feedback 混流）<br>**验证（全真跑非缓存）**：JVM **23/23**（Reducer 13 + VM 10，`--rerun-tasks` BUILD SUCCESSFUL 3m46s）+ instrumented **8/8** @ AVD `pm_ui36`（`connectedDebugAndroidTest` BUILD SUCCESSFUL 1m47s，time=24.999s）；证据 `docs/verified/phase9-b2-account-switcher-result.xml`。<br>**诚实边界**：切换条只做「切换」不做管理（新建/重命名/删除仍在 Settings 页 `AccountSettingsCard`）；`sw600dp` 以上平板布局未单独验证（留 Phase 10 真机目测）；实际视觉效果（Chip 间距/长账户名截断）未真人目测。 |
 
 ---
 
@@ -1950,3 +1952,110 @@ Phase 8 剩余工作**不是一整块「没做完」**，三种性质必须分�
 9. 9c E4 —— 推远端，2 min。
 10. 9c E5 —— DEV_LOG 关闭段两步式 commit + 顺手订正 line 1707 stale「ahead 12」，15 min。
 11. Phase 9 总盘子 16-24 h（plan §0.3 估，已推 ~30 min；B1 实做 30 min 含重编，超 1.5x 估时不算硬规则触发 —— 因为 25 min 全在 gradle 重编，不算 dev 复杂度）。
+---
+
+## 🚀 2026-09-16 14:10 — Phase 9 9b B2 AccountSwitcher 快捷入口完成（7 新文件 + 1 修改 / +1032 行）
+
+### 已完成的步骤（plan §二 9b B2 + §4.2 决策点）
+
+| sub-step | plan 估时 | 实做 | 偏差 | 说明 |
+|---|---|---|---|---|
+| B2 状态机（State/Action/reducer） | 含在 180-240 min | ~25 min | — | 纯函数 reducer + 12 个 action 分支，零协程依赖，测试同步 |
+| B2 ViewModel + Flow 组装 | 同 | ~20 min | — | combine 两流 → dispatch；写路径 + 失败分支 |
+| B2 Composable（Chip 横滑） | 同 | ~20 min | — | FilterChip + horizontalScroll；单账户隐藏 |
+| B2 记账页接线 | 同 | ~10 min | — | 独立 VM 注入 + 专用错误 Snackbar 通道 |
+| B2 JVM 测试 | 同 | ~25 min | — | Reducer 13 例 + VM 10 例 |
+| B2 instrumented UI 测试 | 同 | ~35 min | +20 min | **2 轮返工**：① 中文反引号方法名炸 D8 dex；② 手写 contentDescription 覆盖文本语义 |
+| B2 验证 + 证据归档 + 台账 | 同 | ~25 min | — | --rerun-tasks 真跑 + connectedDebugAndroidTest 真跑 + XML 归档 |
+| **B2 合计** | **180-240 min** | **~160 min** | **在预算内** | 含 AVD 冷启动 ~5 min |
+
+### 对应计划章节
+- `.cyrene/docs/plan-20260916-005116.md` §二 本轮要做 · 9b B2
+- §4.2 视觉层级决策点 —— **拍板走选项 A（Chip 横向滑动）**：plan 规则「账户数 ≤3 走 Chip」，ProfileManagement 典型场景 1-3 个账户；Chip 一眼看全、点击目标大，Dropdown 每次切换多一跳
+- §5.3 必填证据 —— 9b 要求「Compose UI test 通过」→ JVM 23/23 + instrumented 8/8 双真跑
+
+### 关键变更文件
+
+| 文件 | 变更 | 作用 |
+|---|---|---|
+| `feature/profile/presentation/accountswitcher/AccountSwitcherState.kt` | **新增** 150 行 | `AccountSwitcherState` / `AccountSwitcherItem` / sealed `AccountSwitcherAction` / 纯函数 `reduceAccountSwitcher` |
+| `.../accountswitcher/AccountSwitcherViewModel.kt` | **新增** 97 行 | `@HiltViewModel`；`observeAccounts()` × `currentAccountIdFlow()` combine → dispatch；`switchTo` / `consumeError` |
+| `.../accountswitcher/AccountSwitcherBar.kt` | **新增** 131 行 | `AccountSwitcherBar`（前景）+ `AccountChip` + `AccountChipAvatar` |
+| `feature/finance/FinanceScreen.kt` | **修改** +34 行 | 注入独立 `accountSwitcherViewModel`；`FinanceContent` 首行插切换条；错误专用 Snackbar 通道 |
+| `test/.../accountswitcher/AccountSwitcherReducerTest.kt` | **新增** 188 行 | 13 例纯函数 reducer 测试（同步，无调度器） |
+| `test/.../accountswitcher/AccountSwitcherViewModelTest.kt` | **新增** 212 行 | 10 例 VM 测试（Flow 组装 + 写路径 + 失败分支；复用既有 Fake 基建） |
+| `androidTest/.../accountswitcher/AccountSwitcherBarTest.kt` | **新增** 199 行 | 8 例 Compose UI 测试（渲染分支 + 交互 + 原生语义） |
+| `docs/verified/phase9-b2-account-switcher-result.xml` | **新增** 21 行 | instrumented 8/8 + JVM 23/23 结果摘要（入库证据） |
+
+### 验证结果（全部真跑，非缓存）
+
+**JVM（`--rerun-tasks`，强制重编避假 UP-TO-DATE）**
+```
+BUILD SUCCESSFUL in 3m 46s
+
+testsuite name="...accountswitcher.AccountSwitcherViewModelTest"
+           tests="10" skipped="0" failures="0" errors="0" time="0.587"  timestamp="2026-09-16T05:54:39.526Z"
+testsuite name="...accountswitcher.AccountSwitcherReducerTest"
+           tests="13" skipped="0" failures="0" errors="0" time="0.086"  timestamp="2026-09-16T05:54:39.409Z"
+```
+
+**instrumented（AVD `pm_ui36`，API 36）**
+```
+STARTING 8 tests on pm_ui36(AVD) - 16
+BUILD SUCCESSFUL in 1m 47s
+
+testsuite name="...accountswitcher.AccountSwitcherBarTest"
+           tests="8" failures="0" errors="0" skipped="0" time="24.999" timestamp="2026-09-16T06:05:24"
+```
+
+**测试覆盖点（B2 核心行为）**
+- 状态机：加载开始清错误 / 清单装入 / **悬空 currentId 回落首账户** / 空清单不崩 / isSwitching 收敛 / 同 id no-op / 乐观选中 / 失败不改选中态 / 错误消费
+- VM 写路径：`switchTo` 真的写 `setCurrentAccountId`（而非只改本地 state）/ 点当前账户**零写入** / 回流不把选中态弹回去 / 失败转 errorMessage
+- UI：多账户渲染 / 单账户隐藏 / 加载中隐藏 / 点击回调 id / 切换中禁用 / 原生 selectable 语义
+
+### 踩坑笔记
+
+1. **【新坑 · 高价值】androidTest 方法名含空格会炸 D8 dex 打包**
+   - 现象：`./gradlew :app:connectedDebugAndroidTest` 失败在 `:app:dexBuilderDebugAndroidTest`：
+     `D8: Space characters in SimpleName '多账户时渲染每个账户的 Chip' are not allowed prior to DEX version 040`
+   - 根因：项目 JVM 单测普遍用「中文 + 空格」反引号方法名（如 `` `editing default is empty` ``），JVM 上没问题；但 **androidTest 的 class 要被 D8 打包成 dex**，旧 DEX 格式不允许方法名含空格。
+   - 迷惑点：错误发生在 **dex 打包阶段**，Kotlin 编译期完全无感（`compileDebugAndroidTestKotlin` 是 UP-TO-DATE 绿灯），容易误判成依赖/环境/AVD 问题。
+   - **判定方法**：看到 `dexBuilderDebugAndroidTest FAILED` 而不是 `compileDebugAndroidTestKotlin FAILED`，先怀疑方法名/类名里的非法字符。
+   - **规则**：**androidTest 一律用英文下划线方法名**（`renders_chip_for_each_account_when_multiple_accounts`），中文说明放 KDoc 注释里。JVM 单测可继续用中文名。
+
+2. **【新坑】手写 `contentDescription` 会覆盖 Chip 的文本语义**
+   - 现象：给选中 Chip 加 `Modifier.semantics { contentDescription = "旅行账本，当前账户" }` 想让 TalkBack 读出选中态 → 该 UI test 失败，`onNodeWithText("旅行账本")` 找不到节点。
+   - 根因：Compose 的 `contentDescription` 是**覆盖式**语义，替换掉原本由 `Text` label 提供的文本语义，所有基于文本的查询/无障碍工具全部失配。
+   - 而且它是**冗余的**：Material3 `FilterChip` 内部已经是 `selectable(selected = ...)`，TalkBack 本来就会念「已选中/未选中」。
+   - **规则**：不要为了「让无障碍更好」而手写 `contentDescription` 覆盖组件自带语义；要断言选中态用 `assertIsSelected()`，而不是断言自己加的文案。**组件自带语义优先**。
+
+3. **`--tests` 不支持 `connectedDebugAndroidTest`**
+   - `gradlew :app:connectedDebugAndroidTest --tests "..."` → `Unknown command-line option '--tests'`
+   - **正解**：`-Pandroid.testInstrumentationRunnerArguments.class=<全限定类名>`（注意 Gradle 里要用引号包住整个 `-P` 参数，否则 shell 会拆开）。
+
+4. **`adb` 不在 PATH / SDK 不在默认位置**
+   - `adb` 不是全局命令，`%LOCALAPPDATA%\Android\Sdk` 也不存在。
+   - **正解**：从项目 `local.properties` 的 `sdk.dir` 拿真实路径（本项目 `D:\Software\Code\Android\Sdk`），再到 `platform-tools` 下以 `cwd` 方式执行 `adb.exe`（cmd 对引号开头的完整路径命令解析有怪癖，用 `cwd` 更稳）。
+   - AVD 冷启动实测约 5 min，`sys.boot_completed` 返回 `1` 才算真正就绪（`adb devices` 显示 device 还不够）。
+
+5. **【重申】AVD 真实状态必须先硬检查**（9b B1 已记，本轮再次确认）
+   - 本轮开干前 `tasklist | findstr /i "qemu emulator"` 返回空 → AVD 未运行 → 冷启动 `pm_ui36`。
+   - 9b B1 期间已发现「凭印象错报 AVD 存活」问题，本轮严格执行了先查后动。
+
+### 诚实边界（不虚标 ✅）
+
+- **切换条只做切换，不做管理**：新建 / 重命名 / 删除 / 头像 / 期初余额仍在 Settings 页 `AccountSettingsCard`，切换条连「新建账户」按钮都不放（避免记账页误触管理动作）。这是刻意的职责切分，非功能缺失。
+- **视觉未经真人目测**：Chip 间距、长账户名是否截断、TalkBack 实际播报效果，均未人工验收 → 留 Phase 10。
+- **平板布局未验证**：`sw600dp` / `sw720dp` 下切换条形态未单独测（本轮的 Compose UI test 跑在 AVD 默认屏宽）→ 留 Phase 10。
+- **9b 尚未全部完成**：9b 还剩 **D1（转账 UI，240-360 min）+ D2（预算汇总 UI，180-240 min）**，两项合计盘子 7-10 h。
+- **9b 未收口**：本轮只完成 B1 + B2，**未做 9b 整体的 commit+push 收口**（B1/B2 各自已 commit+push 到 feature 分支，但 9b 未合并回 Develop）。
+
+### 关联 commit
+- 功能 + 测试 + 证据：`feature/phase-9-verification` 分支 **`3328574`**（feat(phase-9/b2)）
+- 台账（本段）：本 commit（`chore(dev_log)`）
+- 前置：9b B1 `dd30409` + 台账 `c7c4031`
+
+### 下一个入口
+1. **9b D1** —— Phase 5 转账 UI（`TransferScreen` + `TransferViewModel` + Compose UI test），240-360 min。⚠️ 先侦查：`finance/presentation/transfer/TransferSheet.kt` **已存在**（plan §0.2 说「0 命中」是按 `TransferScreen` 精确类名搜的结果，实际已有 Sheet 形态），需先确认是否要改成独立 Screen 或复用现有 Sheet。
+2. **9b D2** —— Phase 5 预算汇总 UI，180-240 min。同上，`presentation/budget/BudgetSheet.kt` + `components/MonthlyReportCard.kt` + `AccountSummaryCard.kt` 已存在，需先确认缺口到底在哪。
+3. **9c** —— deeplink 验证 / 屏宽矩阵 / 全量回归 / merge / push / 台账收口，2-4 h。
