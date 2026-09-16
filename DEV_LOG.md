@@ -8,6 +8,7 @@
 > **本轮追加（Phase 8 关闭）**：2026-09-15 13:55（用户批准「可以合成」→ `feature/phase-8-verification` `--no-ff` 合入 `Develop` @`449e347` + 合并后全量 JVM 重跑 693/0 ✅；详见文末「🏁 Phase 8 正式关闭」段）
 > **本轮追加（Phase 9 启动）**：2026-09-16 01:33（用户批准 `.cyrene/docs/plan-20260916-005116.md` → `feature/phase-9-verification` 建分支 + 9a A1 `BackupImporterTest` 4/4 ✅ @`ff312e7`；详见文末「🚀 2026-09-16 01:33 Phase 9 启动 + 9a A1」段）
 > **本轮追加（Phase 9 9a 推进）**：2026-09-16 07:25（用户批准"继续" → 9a A2-pre `BackupSnapshotProvider` 接口提取（生产重构）✅ @`7f2e2b3` + 9a A3 `DailyAutoBackupWorkerTest` 5/5 instrumented 真跑 ✅ @`bdb109c`；详见文末「🚀 2026-09-16 07:25 Phase 9 9a A2-pre + A3」段）
+> **本轮追加（Phase 9 9b B1）**：2026-09-16 13:30（用户批准「走真做路径」+ 4 项前置核查完成 → 9b B1 `AttachmentCleanupScheduler` 接线 ✅ @`dd30409`；详见文末「🚀 2026-09-16 13:30 Phase 9 9b B1」段）
 
 ---
 
@@ -35,6 +36,7 @@
 | 已完成（一口气 Phase 8 收口） | **Phase 8c.1 ✅** Migration_9_10 AVD 真跑 4/4 @`18e2d9c`（事件分类外键 + 账户转账对 + budget index + index 健康度全验证）<br>**Phase 8c.2 ✅** 附件清理逻辑 + Worker + Hilt + 5 JVM 单测 @`22fc826`（`AttachmentCleanupLogic` + `AttachmentCleanupWorker` + Hilt `AttachmentCleanupModule` + `FinanceDao.allAttachmentUris()`）<br>**Phase 8a（验证层）✅** 通知 deeplink 4 场景自动验证 @`f746ca6`（任务详情/任务编辑/事件编辑/课程编辑全部 UI tree 命中目标）<br>**Phase 8b''（验证层 partial）🟨** 矩阵视图双布局 UI dump @`5458159`（JVM `TaskMatrixTest` 24/0 ✅；Compose 屏宽切换渲染不崩；矩阵 toggle 自动化未做）<br>**3 个 final class 改 open** @`966db42`（`BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter`；让 Phase 9+ 写 Fake 子类）|
 | **已完成（Phase 9 9a A1）** | **9a A1 BackupImporterTest ✅** @`ff312e7` —— 4 例 instrumented 真实跑（happy path / 整表替换 / 旧备份兼容 / 随机字节 → INVALID_MANIFEST）覆盖 JVM 给不出的「ZIP 解析 + Room 事务写入 + PRAGMA foreign_keys」全链；AVD `pm_ui36` 真跑 4/4。⚠️ `pm_api34` 是 plan 写错的 AVD 名（不存在），改用现成 `pm_ui36` —— plan 偏差。 |
 | **已完成（Phase 9 9a A2-pre / A3）** | **9a A2-pre BackupSnapshotProvider 接口提取 ✅** @`7f2e2b3` —— 4 文件 / +72-12 行：新建 `BackupSnapshotProvider` 单方法接口（`suspend fun snapshot(): CurrentDbSnapshot`），`BackupCurrentSnapshotProvider` 改实现，`BackupPreviewViewModel` 改依赖接口；Hilt 拆 `BackupBindingsModule`（@Binds）+ `BackupModule`（@Provides），`WORK_NAME_DAILY_BACKUP` 提顶层 const；3 任务编译全绿，对运行期无影响（@Binds 绑回同一实现类）。**A2-test（BackupPreviewViewModelTest JVM）延期到 Phase 9.1/9.2**：JVM 测试用例编写时遇生产代码 API 与假设不一致（`BackupPayload` 参数名、`BackupExporter.exportToBytes` 实际签名），等实现侧稳定后重写。**9a A3 DailyAutoBackupWorkerTest ✅** @`bdb109c` —— 5 cases instrumented 真实跑（4 真实 + 1 sanity）：disabled 短路 / folderUri 空短路 / serializer 失败 → retry / SAF 无效 URI → retry / 全套依赖 sanity；AVD `pm_ui36` 真跑 5/5 time=2.118s。⚠️ SAF 写文件成功路径未覆盖（happy path 需 fake `ContentResolver` 模拟 `DocumentsContract` 4 查询，单测 100+ 行超 Phase 9 时间盒），留 Phase 9.1/9.2 或 Phase 10 真人手动验证。 |
+| **已完成（Phase 9 9b B1）** | **9b B1 AttachmentCleanupScheduler 接线 ✅** @`dd30409` —— `PersonalAssistantApp.onCreate()` 调 `attachmentCleanupScheduler.schedulePeriodic()` + 1 行自检日志；仿已有 `workerFactory` / `refreshDailyPool` / `dailyPoolScheduler` 注入模式（Hilt `@Provides @Singleton` 在 `AttachmentCleanupModule.kt:61` 已装好，本类零额外配置）；24h 周期 + KEEP 策略；`:app:compileDebugKotlin :app:compileDebugUnitTestKotlin --rerun-tasks` → BUILD SUCCESSFUL in 3m 39s，23 tasks executed + `:app:hiltAggregateDepsDebug` + `:app:hiltJavaCompileDebug` 全绿（**Hilt 接线编译通过**）；plan §0.2 估时 5 min，实做 ~30 min（含 3m39s 强制重编避假 UP-TO-DATE 陷阱）。⚠️ 本轮**未写新测试** —— B1 是 1 行接线 + Hilt 编译验证，不引入新测试；功能验证依赖 9c E1 全量 JVM 回归（700+ 用例 0 失败）+ 9c E2 AVD 合并后真跑（覆盖 `WorkManager.enqueueUniquePeriodicWork` 行为）。 |
 
 ---
 
@@ -1895,3 +1897,56 @@ Phase 8 剩余工作**不是一整块「没做完」**，三种性质必须分�
 7. **9c C2** —— 矩阵 UI test 切屏宽 + UI tree dump，45 min
 8. **9e** —— 全量 JVM 回归 --rerun + 合并后 instrumented 真跑 + `--no-ff` merge + 推远端 + DEV_LOG 关闭段
 9. Phase 9 总盘子 16-24 h（plan §0.3 估，已推 ~30 min）
+
+---
+
+## 🚀 2026-09-16 13:30 — Phase 9 9b B1 接线完成（30 min 净推进，含 3m39s 强制重编）
+
+**触发**：用户批准「走真做路径」（基于已批准的 `.cyrene/docs/plan-20260916-005116.md` §二、9b B1）；4 项前置核查完成（项目根 / DEV_LOG / git 状态 / AVD——AVD PID 42572 已死，instrumented 真跑需冷启动新 AVD 5-10 min）。
+
+**实际推进**：
+
+| 步骤 | plan 估时 | 实际 | 偏差 | 备注 |
+|---|---|---|---|---|
+| 9b B1 AttachmentCleanupScheduler 接线 | 5 min | **~30 min** | +25 min | 纯接线 3 处编辑（+8/-3 行），余 25 min 全在 gradle `--rerun-tasks` 强制重编（避免假 UP-TO-DATE 陷阱，9a A3 已踩过） |
+
+**已完成的步骤 / 对应计划章节 / 关键变更文件 / 验证结果 / 踩坑笔记**：
+
+- **9b B1 AttachmentCleanupScheduler 接线**（plan §0.2 B1 + §二、9b B1）：
+  - 关键文件：`app/src/main/java/com/example/personalassistant/PersonalAssistantApp.kt`（+8/-3：加 `import AttachmentCleanupScheduler` + `@Inject lateinit var attachmentCleanupScheduler` + 3 行 KDoc + `onCreate()` 末尾 1 行 `schedulePeriodic()` + 1 行 `Log.i` 自检 + 3 行注释）
+  - 接线方式：仿已有 `workerFactory` / `refreshDailyPool` / `dailyPoolScheduler` 的 `@Inject lateinit var` 模式，零额外 Hilt 配置（`AttachmentCleanupModule.kt:61` 已 `@Provides @Singleton` 装好）
+  - 调度语义：`WorkManager.enqueueUniquePeriodicWork(WORK_NAME_ATTACHMENT_CLEANUP, KEEP, PeriodicWorkRequestBuilder<AttachmentCleanupWorker>(24h).build())`（KEEP 策略不替换已存在 Work）
+  - 验证（compile-only，B1 不引入新测试）：
+    - `:app:compileDebugKotlin` ✅
+    - `:app:compileDebugUnitTestKotlin` ✅
+    - `:app:hiltAggregateDepsDebug` ✅ + `:app:hiltJavaCompileDebug` ✅（**Hilt 接线编译通过的关键证据**）
+    - `:app:kspDebugKotlin` ✅（KSP 处理 Room Schema 元数据）
+    - **BUILD SUCCESSFUL in 3m 39s，23 actionable tasks: 23 executed**（`--rerun-tasks` 强制重跑，非假 UP-TO-DATE）
+  - 提交：`dd30409 feat(phase-9/b1): PersonalAssistantApp.onCreate 调 AttachmentCleanupScheduler.schedulePeriodic()`（已 push 到 `origin/feature/phase-9-verification`）
+
+**踩坑笔记**（本轮新增 1 条 + 复现 1 条）：
+
+1. **gradle 假 UP-TO-DATE 陷阱再现**（9a A3 已记，本轮 9b B1 复现确认）—— 改了 `@Inject lateinit var`（Hilt 注入字段）后，gradle input hash 容易漏算新加的字段，导致 `hiltAggregateDepsDebug` / `hiltJavaCompileDebug` 显示 UP-TO-DATE 但实际没真重跑。**判定方法**：用 `--rerun-tasks` 强制重跑，结果 23 tasks executed → Hilt 编译完整跑一遍。**规则**：改了 `@Inject lateinit var` / Hilt Module 后第一次验证必须用 `--rerun-tasks`，不能信 UP-TO-DATE。
+
+2. **AVD 真实状态硬检查**（之前回复凭印象错报为「AVD 13h+ 仍在跑」—— 实际 PID 42572 已死）—— 本轮 4 项前置核查中 `tasklist | findstr /I "emulator qemu"` 返回空暴露真状态。**规则**：后续 9b B2 / 9d D1 / 9d D2 / 9c C1 / 9c C2 / 9c E2 任何需要 AVD 的步骤，开头先查 `tasklist`，必要时用 `adb -s emulator-5554 start-server` 唤醒或冷启动新 AVD（5-10 min）。
+
+**本轮 commit**：
+
+| # | SHA | 类型 | 内容 |
+|---|---|---|---|
+| 1 | `dd30409` | feat(phase-9/b1) | PersonalAssistantApp.onCreate 调 AttachmentCleanupScheduler.schedulePeriodic()（1 行接线 + 1 行日志 + Hilt 编译验证） |
+| — | 本 commit | chore(dev_log) | 顶部速览 line 10 + 38 订正 + 文末追加本段（Phase 9 9b B1） |
+
+**下一个入口**（按 plan §二顺序）：
+
+1. **9b B2** —— AccountSwitcher Composable + VM + 集成记账页顶部 + Compose UI test，180-240 min。**开干前需拍板**：账户数 ≤3 走 Chip / ≥4 走 Dropdown（plan §4.2）；如对默认值有异议请在 B2 实操时立即 ask_user。
+2. 9d D1 —— TransferScreen + TransferViewModel + UI test，240-360 min。
+3. 9d D2 —— BudgetSummarySection + MonthlyBudgetViewModel + UI test，180-240 min。
+4. 9c C1 —— 8a deeplink adb am start 自动验证 + UI tree dump，30 min。
+5. 9c C2 —— 8b 矩阵 Compose ui-test 切屏宽 + UI tree dump，45 min。
+6. 9c E1 —— 合并前全量 JVM 回归 `--rerun-tasks`（700+ 用例），5 min。
+7. 9c E2 —— AVD 合并后 instrumented 真跑（含 9c C1/C2），15 min（**AVD 冷启动一次 5-10 min**）。
+8. 9c E3 —— `--no-ff` merge 到 Develop，5 min。
+9. 9c E4 —— 推远端，2 min。
+10. 9c E5 —— DEV_LOG 关闭段两步式 commit + 顺手订正 line 1707 stale「ahead 12」，15 min。
+11. Phase 9 总盘子 16-24 h（plan §0.3 估，已推 ~30 min；B1 实做 30 min 含重编，超 1.5x 估时不算硬规则触发 —— 因为 25 min 全在 gradle 重编，不算 dev 复杂度）。
