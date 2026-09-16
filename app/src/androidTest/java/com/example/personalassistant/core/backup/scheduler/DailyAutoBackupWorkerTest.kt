@@ -1,9 +1,11 @@
 package com.example.personalassistant.core.backup.scheduler
 
 import android.content.Context
+import android.net.Uri
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -11,7 +13,6 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
-import com.example.personalassistant.core.backup.di.BackupJson
 import com.example.personalassistant.core.backup.exporter.BackupExporter
 import com.example.personalassistant.core.backup.serializer.BackupSerializer
 import com.example.personalassistant.core.database.AppDatabase
@@ -37,25 +38,15 @@ import java.io.File
  *   —— JVM 测试里这些 Android API 都被 stub 成默认值 null，成功路径根本走不通
  * - 本类测的是 worker 的「编排决策」——开关检查 / 提前 return / 失败重试 / 时间戳写回
  *
- * ## 覆盖（4 例，对应 plan §0.2 A3 的 4-6 例范围下限）
+ * ## 覆盖（5 + 1 = 6 例）
  * 1. `autoBackupEnabled=false` → Result.success()，不写时间戳（短路最常见 case）
  * 2. `autoBackupEnabled=true` 但 `backupFolderUri=""` → Result.success()，不写时间戳
  * 3. `BackupSerializer.snapshot()` 返回 Failure → Result.retry()，不写时间戳
  * 4. `BackupSerializer` 成功但 SAF `fromTreeUri()` 返回 null（无效 URI） → Result.retry()，不写时间戳
- *
- * **未覆盖**：
- * - SAF 写文件成功路径。Plan 9 A3 标 45 min，本类只剩这点预算。
- *   完整 happy path 需要 fake `ContentResolver` 模拟 `DocumentsContract` 的 4 个查询；
- *   单测代码量 100+，已超出 Phase 9 的时间盒。**该 case 留 Phase 9.1/9.2**
- *   或 Phase 10 真人手动验证（开关在 SettingsScreen 里跑一遍 + 看 SAF 文件夹里有新文件）。
- *
- * ## 设计要点
- * - 不用 `@HiltAndroidTest`：worker 的依赖少（4 个），全可手动构造
- *   - `BackupSerializer`：需要 8 个 DAO，用真 `AppDatabase` in-memory 拿
- *   - `BackupExporter`：`@BackupJson` Json 实例，手动 `Json {}` 配
- *   - `SettingsRepository`：需要 `DataStore<Preferences>`，用 `PreferenceDataStoreFactory.create`
- *     指向 `context.cacheDir/test-${nanoTime}.preferences_pb` 隔离
- * - 用 `TestListenableWorkerBuilder` 构造 worker，可直接 `.build().start()` 同步拿 Result
+ * 5. (sanity) 全套依赖能正常构造 + worker.startWork() 至少返回有效 Result 对象
+ * 6. **SAF happy path**（Phase 10 SAF-1）：
+ *    启用 + folderUri 指向真 AVD DownloadsProvider 下新建的子目录 → Worker 走完整真 SAF 流程 →
+ *    期待 Result.success()，时间戳被更新，文件落在子目录下。
  *
  * ## 方法名命名
  * 一律 camelCase —— `androidTest` 要过 D8，DEX 035 不允许方法名含空格（见 Phase 3 踩坑 15）
@@ -221,6 +212,98 @@ class DailyAutoBackupWorkerTest {
         val result = worker.startWork().get()
         assertNotNull(result)
         assertTrue("Result 必须是 success / retry 二选一", result == ListenableWorker.Result.success() || result == ListenableWorker.Result.retry())
+    }
+
+    // ========================================================================
+    // Phase 10 SAF-1：SAF 写文件 happy path（真 AVD + 真 DocumentsProvider）
+    // ========================================================================
+
+    /**
+     * 启用开关 + folderUri 指向真 AVD 的 DownloadsProvider 子目录 → Worker 走完整真 SAF 流程
+     * （serializer.snapshot() → DocumentFile.fromTreeUri() → createFile → openOutputStream → 写 ZIP） →
+     * 期待 Result.success()，时间戳被更新，文件落到子目录下。
+     *
+     * 设计要点（与例 1-5 不同点）：
+     * - 不 fake ContentResolver —— 用 AVD 自带的 `DocumentsContract` / `DownloadsProvider`
+     * - 在 AVD 的 Downloads 下真建隔离子目录，tearDown 递归删
+     * - 把这个 tree URI 写到 settings → Worker 拿到非空有效 URI → 走真 SAF
+     * - 用例尾部枚举子目录 children，找到 `cyrene-backup-*.zip` 并断言 size > 0
+     *
+     * 失败信号（用例会失败时）：
+     * - Worker 报 retry → 说明 DocumentFile.fromTreeUri() 解析失败或 createFile 失败
+     * - 子目录下没有 zip → 说明 exporter.export() 没真写进去
+     * - 时间戳仍是 0 → 说明 SAF 成功但 settings 没写（应该不会发生）
+     */
+    @Test
+    fun safHappyPathWritesZipAndUpdatesTimestamp(): Unit = runTest {
+        val ctx = context
+        val resolver = ctx.contentResolver
+
+        // ===== 1. 拿 AVD 上 Downloads 的 SAF tree URI =====
+        // AVD 上 DownloadsProvider 必然可达，Downloads 的标准 SAF tree URI 形如：
+        //   content://com.android.providers.downloads.documents/tree/primary:Download
+        // 这是公开的稳定路径（无需权限，无需 picker，因为 AVD 上应用 context 即 DownloadsProvider 客户端）。
+        val downloadsTreeUri: Uri = Uri.parse(
+            "content://com.android.providers.downloads.documents/tree/primary:Download"
+        )
+        val downloadsFolder = DocumentFile.fromTreeUri(ctx, downloadsTreeUri)
+            ?: error("DocumentFile.fromTreeUri(downloadsTreeUri=$downloadsTreeUri) 返回 null —— AVD 上 DownloadsProvider 不可达")
+
+        // ===== 2. 在 Downloads 下真建隔离子目录 =====
+        val testFolderName = "cyrene-test-${System.nanoTime()}"
+        val testFolder = downloadsFolder.createDirectory(testFolderName)
+            ?: error("createDirectory($testFolderName) 失败 —— AVD DownloadsProvider 不可写或权限不足")
+        val testFolderUri = testFolder.uri
+
+        try {
+            // ===== 3. 把这个 URI 写到 settings =====
+            settings.setAutoBackupEnabled(true)
+            settings.setBackupFolderUri(testFolderUri.toString())
+            assertTrue(
+                "AVD 上新建的子目录写入 settings 应成功",
+                settings.backupFolderUri.first().isNotBlank(),
+            )
+
+            // ===== 4. 跑 Worker =====
+            val before = System.currentTimeMillis()
+            val result = worker.startWork().get()
+            val after = System.currentTimeMillis()
+
+            // ===== 5. 断言 Result + 时间戳 =====
+            assertEquals(
+                "SAF 写文件 happy path 应返回 success",
+                ListenableWorker.Result.success(),
+                result,
+            )
+            val ts = settings.lastBackupAt.first()
+            assertTrue(
+                "happy path 应写时间戳到 [before, after] 区间内，实际=$ts, before=$before, after=$after",
+                ts in before..after,
+            )
+
+            // ===== 6. 验证文件真落到子目录 =====
+            val children = testFolder.listFiles()
+            assertNotNull("testFolder.listFiles() 不应为 null", children)
+            val zips = children!!.filter {
+                val name = it.name ?: return@filter false
+                name.startsWith("cyrene-backup-") && name.endsWith(".zip")
+            }
+            assertTrue(
+                "SAF 子目录下应至少存在一个 cyrene-backup-*.zip，实际 children=${children.map { it.name }}",
+                zips.isNotEmpty(),
+            )
+            assertTrue(
+                "写出的 zip 大小应 > 0，实际大小=${zips.first().length()}",
+                zips.first().length() > 0,
+            )
+        } finally {
+            // ===== tearDown：删测试子目录（连同 zip）=====
+            // DocumentFile.delete() 会递归删 children
+            testFolder.delete()
+        }
+        // 抑制 resolver 占位变量未用警告（保留它注释说明设计）
+        @Suppress("UNUSED_VARIABLE")
+        val unusedResolverRef = resolver
     }
 
     // 显式 runBlocking 引用占位（避免 unused import 警告）
