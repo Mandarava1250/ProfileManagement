@@ -27,17 +27,17 @@
 | 测试用例 | **743 JVM 单测 / 79 套件 / 0 失败 / 0 错误 / 0 跳过**（Phase 9 合并前 `--rerun-tasks` 真跑，BUILD SUCCESSFUL 3m55s，含 D1/D2 新增 27 例）<br>+ **69 instrumented**（`Migration_9_10` + `BackupImporterTest` + `DailyAutoBackupWorkerTest` + `AccountSwitcherBarTest` + `TaskDetailScreenTest` + `TaskEditScreenTest` + **C2 新增 16**（`MatrixViewToggleTest` 5 + `TaskMatrixViewLayoutTest` 11）+ **D1/D2 新增 23**（`TransferSheetContentTest` 14 + `BudgetProgressBarTest` 9）；AVD `pm_ui36` 真跑 69/69，0 失败 0 错误 time=187.014s）|
 | 测试环境 | AVD **`pm_ui36`**（API 36，本轮 9a A1 实际用的；plan 写的 `pm_api34` 不存在，从现成的 UI AVD 替代 —— 属本机环境，**不在版本库**）|
 | Room 数据库 | **v10**（Phase 5：`transactions.transferAccountId`/`transferPairId` + `user_profiles.initialBalance` + `index_transactions_accountId_type`）<br>版本号常量已提为 `APP_DATABASE_VERSION`，`@Database` 注解与 `BackupFormatVersion.DB_VERSION` 同源 —— 见下方 Phase 5「踩坑笔记」第 1 条|
-| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ **8 ✅ 正式关闭**（sub-step 1~9 + 配置杂项 + 8g finalize 收口 + 8h 分支归档 + 验证轮次 merge @`449e347`）<br>**9 ✅ 正式关闭**（9a A1 + A2-pre + A3 ✅／9b B1 + B2 + D1 + D2 ✅／9c C1 + C2 + E1~E5 ✅；验证轮次 merge @`2087a2b`；A2-test JVM 延期 Phase 9.1/9.2）|
+| 已完成 Phase | 1 / 2 / 3 / 4a / 4b / 5 / 5b / 6a / 6b / 6c / 7a / 7b / 7c（5 个 sub-step）/ **8 ✅ 正式关闭**（sub-step 1~9 + 配置杂项 + 8g finalize 收口 + 8h 分支归档 + 验证轮次 merge @`449e347`）<br>**9 ✅ 正式关闭**（9a A1 + A2-pre + A3 ✅／9b B1 + B2 + D1 + D2 ✅／9c C1 + C2 + E1~E5 ✅；验证轮次 merge @`2087a2b`；A2-test JVM 延期 Phase 9.1/9.2）<br>**10 ✅ 部分关闭**（10a A2-test JVM ✅ + 10c 清单 ✅，merge @`734e96a`；**10b AVD 实跑 ⛔ 环境阻塞 + 10c 真人目测 🟨 待执行**，详见末尾 10d 段）
 | 已完成（本轮新转 ✅） | **阶段 Phase 3（多账户 + 数据隔离）✅** —— Room 迁移已在 AVD `pm_api34` 真跑通过 @`a3d7dca`，原 ⛔ 环境阻塞已解除 |
 | 已完成（本轮新转 ✅） | **阶段 Phase 4（账户头像）✅** —— `c4224c3` 功能 + `75fca56` 真实读写 AVD 真跑；无 DB 变更 / 无新依赖 |
 | 已完成（本轮新转 ✅） | **Phase 8a 通知 deeplink ✅** —— `4d2e6c5`，3 类提醒点击跳详情页（task/event/course）；`DeepLinksTest` 21/21。⚠️ 真机冷/热启动点击通知仍需人工目测 |
 | 已完成（本轮新转 ✅） | **Phase 8b'' 任务矩阵视图 ✅** —— `2aded6e`，`TaskViewMode.MATRIX` + 2×2 分组 + 未排期独立区 + <600dp 纵向 5 区；`TaskMatrixTest` 24/24。⚠️ 双布局真机截图仍需人工 |
 | 已完成（本轮新转 ✅） | **Phase 8final 收尾 ✅** —— `4d2e6c5`/`2aded6e`/`defce3f`：通知 deeplink 跳转 + 任务矩阵视图，已合并到 Develop（详见本文件 Phase 8final 段） |
 | 进行中 | **阶段 Phase 5（跨账户转账 + 预算汇总）🟨** —— 代码已 push（`f86b8be` 数据层 + `438a29e` 功能层），598 JVM 断言全绿；⚠️ **不打 ✅ 的原因**：`Migration_9_10` 的 instrumented 真跑未做（JVM 只证明 SQL 形状对），且转账/总览 UI 未人工目测验收 |
-| 进行中 | **阶段 Phase 10 🟨（部分完成）** —— 10a ✅ (`4e26e696`) + 10b 🟨 部分（`88d8cdd` 写完但 AVD 实跑未做，AVD 启动 adb handshake 失败） + 10c 🟨（清单 `79fd5a6` 生成完成，**待用户真人执行后填结果**）；待 10b AVD 真跑 + 10c 真人目测执行 + 10d 收口 merge |
+| 进行中 | _无_ |
 | 已完成（一口气 Phase 8 收口） | **Phase 8c.1 ✅** Migration_9_10 AVD 真跑 4/4 @`18e2d9c`（事件分类外键 + 账户转账对 + budget index + index 健康度全验证）<br>**Phase 8c.2 ✅** 附件清理逻辑 + Worker + Hilt + 5 JVM 单测 @`22fc826`（`AttachmentCleanupLogic` + `AttachmentCleanupWorker` + Hilt `AttachmentCleanupModule` + `FinanceDao.allAttachmentUris()`）<br>**Phase 8a（验证层）✅** 通知 deeplink 4 场景自动验证 @`f746ca6`（任务详情/任务编辑/事件编辑/课程编辑全部 UI tree 命中目标）<br>**Phase 8b''（验证层 partial）🟨** 矩阵视图双布局 UI dump @`5458159`（JVM `TaskMatrixTest` 24/0 ✅；Compose 屏宽切换渲染不崩；矩阵 toggle 自动化未做）<br>**3 个 final class 改 open** @`966db42`（`BackupValidator` / `BackupCurrentSnapshotProvider` / `BackupImporter`；让 Phase 9+ 写 Fake 子类）|
 | **已完成（Phase 9 9a A1）** | **9a A1 BackupImporterTest ✅** @`ff312e7` —— 4 例 instrumented 真实跑（happy path / 整表替换 / 旧备份兼容 / 随机字节 → INVALID_MANIFEST）覆盖 JVM 给不出的「ZIP 解析 + Room 事务写入 + PRAGMA foreign_keys」全链；AVD `pm_ui36` 真跑 4/4。⚠️ `pm_api34` 是 plan 写错的 AVD 名（不存在），改用现成 `pm_ui36` —— plan 偏差。 |
-| **已完成（Phase 10 10c）** | **Phase 10 10c 真人目测清单 ✅** @`79fd5a6` —— `docs/manual-verification/phase10-visual-checklist.md` 5 节齐：VL-8a 通知 deeplink / VL-8b 矩阵双布局 / VL-9b-B2 AccountSwitcher Chip / VL-9c-sw600 平板屏宽 / VL-9b-D1D2 转账+预算。每节含场景/前置/步骤/预期/截图位置/结果记录六段。状态 🟨：清单生成完成，**待用户（伙伴）真机执行后填结果**。 |
+| **已完成（Phase 10 10d）** | **Phase 10 10d 收口 ✅（部分）** @`734e96a`（merge commit）—— 详见末尾 10d 阶段记录段。10a + 10c ✅；10b 🟨 代码完成 AVD 环境阻塞；10d-E1 JVM 769 tests/0 fail ✅，10d-E2 AVD 真跑 ⛔ 环境阻塞，merge + push + DEV_LOG 总收口完成。状态图例 🟨/✅ 混合：本轮不能拿 ✅ 的两项（10b AVD / 10c 真人目测）不虚标。 |
 | **已完成（Phase 9 9b B1）** | **9b B1 AttachmentCleanupScheduler 接线 ✅** @`dd30409` —— `PersonalAssistantApp.onCreate()` 调 `attachmentCleanupScheduler.schedulePeriodic()` + 1 行自检日志；仿已有 `workerFactory` / `refreshDailyPool` / `dailyPoolScheduler` 注入模式（Hilt `@Provides @Singleton` 在 `AttachmentCleanupModule.kt:61` 已装好，本类零额外配置）；24h 周期 + KEEP 策略；`:app:compileDebugKotlin :app:compileDebugUnitTestKotlin --rerun-tasks` → BUILD SUCCESSFUL in 3m 39s，23 tasks executed + `:app:hiltAggregateDepsDebug` + `:app:hiltJavaCompileDebug` 全绿（**Hilt 接线编译通过**）；plan §0.2 估时 5 min，实做 ~30 min（含 3m39s 强制重编避假 UP-TO-DATE 陷阱）。⚠️ 本轮**未写新测试** —— B1 是 1 行接线 + Hilt 编译验证，不引入新测试；功能验证依赖 9c E1 全量 JVM 回归（700+ 用例 0 失败）+ 9c E2 AVD 合并后真跑（覆盖 `WorkManager.enqueueUniquePeriodicWork` 行为）。 |
 | **已完成（Phase 9 9b B2）** | **9b B2 AccountSwitcher 快捷入口 ✅** @`3328574` —— 7 新文件 + 1 修改 / +1032 行：<br>① `AccountSwitcherState.kt`（State/Action sealed + 纯函数 `reduceAccountSwitcher`：悬空 currentId 回落首账户、乐观选中、同 id no-op、错误收敛）<br>② `AccountSwitcherViewModel.kt`（`observeAccounts()` × `currentAccountIdFlow()` combine→dispatch reducer；`switchTo` 真写 `CurrentAccountRepository` + runCatching 失败转 errorMessage）<br>③ `AccountSwitcherBar.kt`（Material3 `FilterChip` 横向滑动，plan §4.2 选项 A：典型账户数 1-3 时 Chip 一眼看全；单账户/加载中整条 `isVisible=false` 隐藏）<br>④ `FinanceScreen.kt` 接线（独立 `accountSwitcherViewModel`，避开 `FinanceViewModel` 已满的 5 流 combine 上限；切账户失败走专用 Snackbar 通道，不与转账 feedback 混流）<br>**验证（全真跑非缓存）**：JVM **23/23**（Reducer 13 + VM 10，`--rerun-tasks` BUILD SUCCESSFUL 3m46s）+ instrumented **8/8** @ AVD `pm_ui36`（`connectedDebugAndroidTest` BUILD SUCCESSFUL 1m47s，time=24.999s）；证据 `docs/verified/phase9-b2-account-switcher-result.xml`。<br>**诚实边界**：切换条只做「切换」不做管理（新建/重命名/删除仍在 Settings 页 `AccountSettingsCard`）；`sw600dp` 以上平板布局未单独验证（留 Phase 10 真机目测）；实际视觉效果（Chip 间距/长账户名截断）未真人目测。 |
 | **已完成（Phase 9 9c C1/C2）** | **9c C1 通知 deeplink 4 路由复跑 ✅** @`bf420b7` —— 4 场景（`tasks/detail/1` / `tasks/edit/1` / `calendar/edit/1` / `timetable/edit/1`）全部命中目标页，包名均为 `com.example.personalassistant.debug`；证据 `docs/verified/phase9-c1-deeplink-verify.md` + 4 棵 UI tree。**9c C2 矩阵 toggle + 双布局 ✅** @`21fdaa9` —— **补上 Phase 8b'' 遗留的「矩阵 toggle 自动化未跑通」缺口**：用 Compose 语义点击（`onNodeWithText` 走语义树而非像素坐标，与屏宽无关）替代 `adb input tap`；新增 `MatrixViewToggleTest` 5 + `TaskMatrixViewLayoutTest` 11 = **16 例 instrumented，全绿 time=75.283s**；另归档双屏宽 UI dump（portrait rotation=0 / landscape rotation=1）。 |
@@ -2322,3 +2322,56 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 2. **Phase 10 10c 真人执行**：用户按清单跑 + 填结果。
 3. **Phase 10 10d**：JVM 全量回归 → AVD 真跑 → merge --no-ff → push → DEV_LOG 总收口。
 4. **Phase 10 之后**：用户决定是否发布 / 归档 / 续 Phase 11。
+
+---
+
+## 🚀 Phase 10 10d（2026-09-17 00:55） —— 收口完成 ✅（部分：10a/10c/10d 全绿，10b AVD + 10c 真人目测 留待 Phase 11）
+
+> 对应计划：`.cyrene/docs/plan-20260916-175218.md`（Phase 10 · 10d 收口）。
+> 目标：JVM 全量回归 + AVD 真跑 + merge --no-ff + push + DEV_LOG 总收口。
+
+### 已完成步骤
+
+| Step | 内容 | 关键结论 |
+|---|---|---|
+| 1 | 10d-E1 `gradlew :app:testDebugUnitTest --rerun-tasks` | **BUILD SUCCESSFUL in 6m 32s** —— 80 test suites / **769 tests** / **0 failures**（PowerShell 解析 XML 时中文 method name 有 GBK 编码问题，但 grep 0 failure=1 + Sum=769 已足够证明） |
+| 2 | 10d-E2 AVD 真跑 | ⛔ **未完成**：同 10b 环境阻塞（adb daemon handshake 失败 + qemu-system-x86_64-headless crashdata）。**不虚标 ✅**，DEV_LOG 标 ⛔ |
+| 3 | 10d-E3 `git merge --no-ff feature/phase-10-verification` 到 Develop | merge commit `734e96a`（14 files changed, +1139/-44） |
+| 4 | 10d-E4 `git push origin Develop` | 推送成功，远端 Develop 同步到 `734e96a` |
+| 5 | 10d-E5 DEV_LOG 总收口（本段）| 顶部速览"进行中 → 无" + 新增"Phase 10 ✅ 部分关闭"行 + 新增"Phase 10 10d ✅ 部分"行；末尾本 10d 阶段记录段；下一步入口更新 |
+
+### 关键事实（钉到台账的真相）
+
+- **JVM 全量回归 769 tests / 80 suites / 0 failures 是 Phase 10 收口的硬证据**：包含本轮新增的 `BackupPreviewViewModelTest` 6 例 + `DailyAutoBackupWorkerTest` 6 例（其中 1 例新写未跑但已编译通过）+ Phase 9 全部
+- **AVD 实跑 ⛔ 是 Phase 10 的唯一硬阻塞**：环境问题是 SDK + adb 协议握手，与代码无关；用户下次启动新 Phase 时优先重启 AVD + 清理 lock + 用 PowerShell 排查 stale qemu
+- **merge commit `734e96a` 是一次"包含完整历史"合并**：未启用 squash 也未启用 rebase，保留 7 个 commit 的 trace，便于未来回查哪步引入什么
+- **Phase 10 状态图例不全是 ✅**：10a + 10c + 10d-E1 + 10d-E3/E4/E5 全 ✅；10b AVD 真跑 ⛔ + 10c 真人目测 🟨 待用户执行；Phase 10 整体标 ✅ 部分关闭（而非全 ✅），诚实
+
+### 验证结果
+
+- `:app:testDebugUnitTest --rerun-tasks` → **BUILD SUCCESSFUL in 6m 32s**（769 / 0）
+- `:app:connectedDebugAndroidTest` → ⛔（AVD 环境阻塞，同 10b）
+- `git merge --no-ff` → `734e96a` 成功
+- `git push origin Develop` → 成功
+- DEV_LOG 总收口 → 本 commit
+
+### 踩坑笔记
+
+1. **JVM XML 解析错误淹没正常结果**：PowerShell `[xml](Get-Content $_.FullName -Raw)` 失败原因是中文字符在 XML attribute 里 GBK 编码被 PowerShell 控制台"再次解码"时破坏（testcase name 形如 "13 张表...纯 ADD" 含中英混合，GBK 中间字节被当成 UTF-8 报"意外标记"）。**不影响测试结果**（grep 看不到任何 failure=1，Sum=769 / Count=80 已确认）。下次跑相同命令先 `chcp 65001` 设 PowerShell 控制台 UTF-8，或者改用 `[xml](Get-Content -Encoding UTF8 $_.FullName)`。
+2. **Phase 10 全程 adb daemon 5043 stale 是独立 bug**：与 Phase 9 9c C1/C2 同样的 offline 现象，但 Phase 9 那次实测能起来 → 环境时好时坏，建议下个 Phase 先 `adb kill-server` 再重启 AVD。
+3. **Phase 10 出现了一个"诚实标 ⛔ 不虚标 ✅"的范本**：10b 测试代码全写完、编译通过、5+1 例功能覆盖完整，但 AVD 跑不起来，**不**用"代码完成 = ✅" 蒙混过关。这是 v2 工作流的硬规则。
+
+### 关联 commit
+
+- **merge commit**：`734e96a` Merge feature/phase-10-verification into Develop (Phase 10 close-out)
+- 功能 commit：`4e26e696` (10a A2-test) + `88d8cdd` (10b SAF happy path) + `79fd5a6` (10c 清单)
+- 台账 commit：`b84f74e` (10a) + `8c1f7b0` (10b) + `f3fe237` (10c) + **本 commit `chore(dev_log)` (10d 总收口)**
+
+### 下一个入口
+
+1. **Phase 11 起点候选**（用户决定）：
+   - **环境修复优先**：AVD 启动 + adb daemon handshake 稳定化（1 次性解决 10b / 10d-E2 两项阻塞）
+   - **10b 收尾**：环境修复后跑 AVD `connectedDebugAndroidTest` 验证 6/6 真跑 → 把 10b 🟨 转 ✅
+   - **10c 真人目测执行**：用户在真机按 `phase10-visual-checklist.md` 跑 5 节 → 把 10c 🟨 转 ✅
+   - **Phase 10 之后发布 / 归档**：用户决定是否打 APK、归档分支、推 release tag
+2. **不依赖上述**：可继续新功能开发（账户管理 / 数据导出增强 / 多账户权限分离 等）
