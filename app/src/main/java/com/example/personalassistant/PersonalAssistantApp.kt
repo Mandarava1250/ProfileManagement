@@ -8,6 +8,7 @@ import android.os.Build
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.example.personalassistant.core.backup.di.AttachmentCleanupScheduler
 import com.example.personalassistant.core.utils.NotificationHelper
 import com.example.personalassistant.feature.finance.domain.usecase.RefreshDailyPoolUseCase
 import com.example.personalassistant.service.reminder.DailyPoolRefreshScheduler
@@ -35,6 +36,11 @@ class PersonalAssistantApp : Application(), Configuration.Provider {
     @Inject lateinit var refreshDailyPool: RefreshDailyPoolUseCase
     @Inject lateinit var dailyPoolScheduler: DailyPoolRefreshScheduler
 
+    // Phase 9 9b B1：启动时注册 24h 周期附件清理 Worker。
+    // 接口在 core/backup/di/AttachmentCleanupModule.kt:67；实现 AttachmentCleanupSchedulerImpl
+    // 用 Hilt @Provides @Singleton 装，本类只需声明 + 调一次 schedulePeriodic()。
+    @Inject lateinit var attachmentCleanupScheduler: AttachmentCleanupScheduler
+
     /**
      * 应用级 IO scope，用于 onCreate 的后台触发。
      * SupervisorJob 让单个协程失败不影响整个 App 启动。
@@ -45,6 +51,12 @@ class PersonalAssistantApp : Application(), Configuration.Provider {
         super.onCreate()
         createNotificationChannels()
         bootstrapFinance()
+
+        // Phase 9 9b B1：调度附件清理周期任务（24h 周期，KEEP 策略）。
+        // 同步调用：内部只构造 Constraints + PeriodicWorkRequest + enqueueUniquePeriodicWork，
+        // 不阻塞 App 启动。失败不抛异常（WorkManager 会自己处理）。
+        attachmentCleanupScheduler.schedulePeriodic()
+        Log.i(TAG, "🧹 App.onCreate: scheduled attachment cleanup worker (24h periodic, KEEP)")
     }
 
     /**
