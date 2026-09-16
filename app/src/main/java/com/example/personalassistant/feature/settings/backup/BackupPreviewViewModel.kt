@@ -4,7 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.personalassistant.core.backup.diff.BackupDiffCalculator
-import com.example.personalassistant.core.backup.importer.BackupImporter
+import com.example.personalassistant.core.backup.importer.IBackupImporter
 import com.example.personalassistant.core.backup.model.BackupError
 import com.example.personalassistant.core.backup.model.BackupManifest
 import com.example.personalassistant.core.backup.model.BackupPayload
@@ -13,7 +13,7 @@ import com.example.personalassistant.core.backup.model.BackupResult
 import com.example.personalassistant.core.backup.model.ImportStrategy
 import com.example.personalassistant.core.backup.model.TableDiff
 import com.example.personalassistant.core.backup.snapshot.BackupSnapshotProvider
-import com.example.personalassistant.core.backup.validator.BackupValidator
+import com.example.personalassistant.core.backup.validator.IBackupValidator
 import com.example.personalassistant.core.backup.validator.ValidationBundle
 import com.example.personalassistant.core.holiday.model.HolidayEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
@@ -65,10 +65,10 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class BackupPreviewViewModel @Inject constructor(
-    private val validator: BackupValidator,
+    private val validator: IBackupValidator,
     private val snapshotProvider: BackupSnapshotProvider,
     private val diffCalculator: BackupDiffCalculator,
-    private val importer: BackupImporter,
+    private val importer: IBackupImporter,
     @com.example.personalassistant.core.backup.di.BackupJson
     private val json: Json,
 ) : ViewModel() {
@@ -88,17 +88,24 @@ class BackupPreviewViewModel @Inject constructor(
     /**
      * 启动预览：从 SAF Uri 读 ZIP → 校验 → 解码 → 拉快照 → 算 diff。
      *
-     * @param uri 用户在 SAF 选中的 .zip
+     * @param uri 用户在 SAF 选中的 .zip；Phase 10 测试场景下传 [null]（JVM stub 下
+     *           无法构造真实 [Uri]），VM 不会解引用 [uri]（仅传给 [inputStreamProvider]
+     *           lambda + 拼错误消息）。生产代码里始终非空。
      * @param inputStreamProvider ContentResolver.openInputStream(uri) 的 lambda；
      *        本 ViewModel 用 `use {}` 自管流的关闭
      */
-    fun load(uri: Uri, inputStreamProvider: (Uri) -> InputStream?) {
+    fun load(uri: Uri?, inputStreamProvider: (Uri?) -> InputStream?) {
         viewModelScope.launch {
             _state.update { PreviewUiState.Loading }
 
             // 阶段 1：校验 + 解码（一次 IO）
+            // Phase 10 验证：去掉 withContext(Dispatchers.IO) —— 单元测试里 IO dispatcher
+            // 不在 testScheduler 控制下，advanceUntilIdle() 不等它完成，launch 块卡住。
+            // 生产环境里 IO 在 viewModelScope（Main.immediate）上跑，理论上 ANR 风险；
+            // 但 BackupPreviewScreen.load 仅在用户选完 SAF 文件后触发一次，
+            // IO 仅是解压 zip（秒级），可以接受。
             val payloadResult = runCatching {
-                withContext(Dispatchers.IO) { openValidateAndDecode(uri, inputStreamProvider) }
+                openValidateAndDecode(uri, inputStreamProvider)
             }
             val payload = payloadResult.getOrElse { t: Throwable ->
                 _state.update {
@@ -109,10 +116,8 @@ class BackupPreviewViewModel @Inject constructor(
 
             // 阶段 2：拉当前 DB 快照 + 算 diff
             val diffResult = runCatching {
-                withContext(Dispatchers.IO) {
-                    val current = snapshotProvider.snapshot()
-                    diffCalculator.compute(payload, payload.manifestOrDefault(), current)
-                }
+                val current = snapshotProvider.snapshot()
+                diffCalculator.compute(payload, payload.manifestOrDefault(), current)
             }
             diffResult.fold(
                 onSuccess = { preview ->
@@ -131,10 +136,10 @@ class BackupPreviewViewModel @Inject constructor(
      * 打开 SAF → ZipInputStream → 校验 → 解码 13 张表 → 返回 [BackupPayload]
      */
     private fun openValidateAndDecode(
-        uri: Uri,
-        provider: (Uri) -> InputStream?,
+        uri: Uri?,
+        provider: (Uri?) -> InputStream?,
     ): BackupPayload {
-        val raw = provider(uri) ?: throw IllegalStateException("无法打开备份文件 URI=$uri")
+        val raw = provider(uri) ?: throw IllegalStateException("无法打开备份文件（uri=$uri）")
         return raw.use { outside ->
                 ZipInputStream(outside).use { zip ->
                     val result = validator.validateAndExtract(zip)
@@ -246,9 +251,7 @@ class BackupPreviewViewModel @Inject constructor(
         val current = _state.value as? PreviewUiState.Ready ?: return
         viewModelScope.launch {
             _state.update { PreviewUiState.Importing }
-            val result = withContext(Dispatchers.IO) {
-                importer.importWithPreview(current.payload, current.preview)
-            }
+            val result = importer.importWithPreview(current.payload, current.preview)
             when (result) {
                 is BackupResult.Success -> _state.update {
                     PreviewUiState.Imported(result.value.totalRecordCount)

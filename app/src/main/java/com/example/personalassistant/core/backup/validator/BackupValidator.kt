@@ -31,10 +31,10 @@ import javax.inject.Singleton
  * manifest / checksums / 表 JSON 字节都通过回调暴露给上层（用于后续导入）。
  */
 @Singleton
-open class BackupValidator @Inject constructor(
+class BackupValidator @Inject constructor(
     @com.example.personalassistant.core.backup.di.BackupJson
     private val json: Json,
-) {
+) : IBackupValidator {
 
     /**
      * 校验 + 抽取 manifest / checksums / 表 JSON 字节
@@ -43,9 +43,9 @@ open class BackupValidator @Inject constructor(
      * @param onPayload 回调（每个条目调用一次），返回 true 表示继续读，返回 false 表示跳过该条目
      * @return [ValidationBundle] 携带 manifest、checksums、所有表 JSON 字节
      */
-    fun validateAndExtract(
+    override fun validateAndExtract(
         zipIn: ZipInputStream,
-        onPayload: (entryName: String, bytes: ByteArray) -> Boolean = { _, _ -> true },
+        onPayload: (entryName: String, bytes: ByteArray) -> Boolean,
     ): BackupResult<ValidationBundle> {
         val manifestBytes = mutableMapOf<String, ByteArray>()
         val checksumsBytes = mutableMapOf<String, ByteArray>()
