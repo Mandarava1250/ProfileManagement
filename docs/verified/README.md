@@ -1,6 +1,6 @@
-# Phase 8 真跑验证证据
+# Phase 8 / Phase 9 真跑验证证据
 
-> **用途**：归档 Phase 8 一口气收口阶段（T1~T7）的真机/AVD 验证产物。
+> **用途**：归档 Phase 8 一口气收口阶段（T1~T7）及 Phase 9 验证轮次的真机/AVD 验证产物。
 > **原则**：每份产物对应一次 `connectedDebugAndroidTest` 或 `adb` 验证，
 > 提交 hash 在 DEV_LOG 同步登记。**不虚标 ✅，标了 ✅ 就必须能在本目录找到对应证据**。
 
@@ -12,6 +12,8 @@
 |---|---|---|---|---|
 | T1 (8c.1) | `t1-migration-9-10-result.xml` | instrumented | 2026-09-15 11:06 | 9→10 迁移在 AVD 真跑通过 |
 | T1 (8c.1) | `t1-gradle-run.log` | gradle | 2026-09-15 11:06 | BUILD SUCCESSFUL in 46s |
+| 9a A3 | `phase9-a3-daily-worker-result.xml` | instrumented | 2026-09-16 07:25 | `DailyAutoBackupWorkerTest` 5/5（AVD `pm_ui36`，time=2.118s）|
+| **9b B2** | `phase9-b2-account-switcher-result.xml` | instrumented + JVM | 2026-09-16 14:10 | `AccountSwitcherBarTest` 8/8（time=24.999s）<br>+ JVM 23/23（Reducer 13 + VM 10）|
 
 ---
 
