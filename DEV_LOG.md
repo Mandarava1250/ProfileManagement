@@ -2310,11 +2310,13 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 
 1. **plan §4.4 写「5 节对应 DEV_LOG『待开』列出的 5 项」**但实际 DEV_LOG「待开」是合并描述（"8a 点通知 / 8b 矩阵 toggle / 9b B2 Chip 视觉 / 9c 屏宽 sw600+ / D1/D2 转账与预算条视觉"），需要拆出 5 个清晰可单独验证的 sub-item。本轮按合并描述拆出 5 节，与 Phase 8/9 自动验证已覆盖部分正交（自动验证是逻辑/UI tree 命中，真人验证是视觉/交互/平板适配等不可被自动化替代的部分）。
 2. **截图目录 `docs/manual-verification/screenshots/` 当前不存在**：本轮只生成 .md 清单，未建 screenshots 目录（用户跑完截图放那即可）。下个 Phase 或 10c 收尾时补建 `.gitignore` 规则：`docs/manual-verification/screenshots/` 不入库。
+3. **补充交付（2026-09-17）**：在 10c 已 ✅ 之后，应伙伴提议，**额外生成 1 页速查精简版** `docs/manual-verification/phase10-your-tasks.md`（141 行 / 5851 字节）。要点：(a) 顶部速查总览表按推荐顺序排好 5 项 + 估时 + 真机/AVD 区分 + 截图数；(b) 每节场景 / 前置 / 步骤压缩到 2-3 行可速读；(c) 截图命名直接给完整模板；(d) 底部汇总表 + 跑完流程指引 + 卡住时 troubleshooting。定位是「伙伴能照着打勾」的便携版，与详细版 `phase10-visual-checklist.md`（255 行）互补。详见 commit `919e6e7`。
 
 ### 关联 commit
 
 - 功能 commit：`79fd5a6` docs(manual-verification): Phase 10 真人目测清单（10c VL-1）
-- 台账（本段）：本 commit `chore(dev_log)` @`79fd5a6`
+- **补充交付 commit**：`919e6e7` docs(manual-verification): Phase 10 10c VL-1b — 1 页可打印精简清单
+- 台账（本段）：本 commit `chore(dev_log)` @`79fd5a6` + `@919e6e7`
 
 ### 下一个入口
 
