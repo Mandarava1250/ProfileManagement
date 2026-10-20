@@ -9,6 +9,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
+import java.time.YearMonth
+import java.time.ZoneId
 
 /**
  * Phase 7a：SetMonthlyBudgetUseCase 单元测试
@@ -93,13 +95,23 @@ class SetMonthlyBudgetUseCaseTest {
 
     @Test
     fun `observeCurrentMonthBudget reflects the current month only`() = runTest {
-        useCase(yearMonth = "2026-08", totalAmount = 100.0)
-        useCase(yearMonth = "2026-09", totalAmount = 1500.0)
+        // ⚠️ 当月必须**动态算**，不能写死。
+        //
+        // 原来这里写的是 "2026-08" / "2026-09" 两个固定月份，而
+        // observeCurrentMonthBudget() 查的是仓库自己的 currentYearMonth()（= 墙上时钟的当月）。
+        // 写这枚测试的时候机器恰好在 8/9 月，所以它是绿的 —— 一枚定时炸弹。
+        // 跨到 2026-10 时查 "2026-10" 查不到记录 → 返回 null → assertNotNull 假红。
+        // 这枚测试红了几个月，根子在这里，不在业务代码。
+        val currentYm = YearMonth.now(ZoneId.systemDefault()).toString()
+        val previousYm = YearMonth.now(ZoneId.systemDefault()).minusMonths(1).toString()
+
+        useCase(yearMonth = previousYm, totalAmount = 100.0)
+        useCase(yearMonth = currentYm, totalAmount = 1500.0)
 
         val current = repo.observeCurrentMonthBudget().first()
-        assertNotNull(current)
-        val currentYm = current!!.yearMonth
-        // currentYm 取决于机器当前日期，这里仅校验非空且字段一致
-        assertEquals(currentYm, current.yearMonth)
+        assertNotNull("当月 $currentYm 应当有预算", current)
+        // 只能返回当月那一份：上个月那笔 100.0 不该被捞出来
+        assertEquals(currentYm, current!!.yearMonth)
+        assertEquals(1500.0, current.totalAmount, 0.0)
     }
 }
