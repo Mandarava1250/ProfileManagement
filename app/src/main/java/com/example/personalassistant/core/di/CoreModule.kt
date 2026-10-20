@@ -14,6 +14,7 @@ import com.example.personalassistant.core.holiday.data.HolidayDao
 import com.example.personalassistant.feature.calendar.data.local.EventCategoryDao
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
+import com.example.personalassistant.feature.me.data.local.StudentProfileDao
 import com.example.personalassistant.feature.profile.data.local.UserProfileDao
 import com.example.personalassistant.feature.task.data.local.TagDao
 import com.example.personalassistant.feature.task.data.local.TaskDao
@@ -108,6 +109,12 @@ object CoreModule {
 
     @Provides
     fun provideFinanceDao(db: AppDatabase): FinanceDao = db.financeDao()
+
+    /**
+     * Phase 12：「我」档案 DAO 绑定（与其它 DAO 模式一致）。
+     */
+    @Provides
+    fun provideStudentProfileDao(db: AppDatabase): StudentProfileDao = db.studentProfileDao()
 
     /**
      * Phase 8 Sub-step 7：节假日 DAO 绑定（与其它 DAO 模式一致）。

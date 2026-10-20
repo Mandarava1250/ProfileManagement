@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,9 +21,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Backup
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -42,9 +55,9 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +99,7 @@ fun SettingsScreen(
     val pendingDeletion by viewModel.pendingDeletion.collectAsStateWithLifecycle()
     val syncPromptYear by viewModel.syncPromptYear.collectAsStateWithLifecycle()
     val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
+    val resetState by viewModel.resetState.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -464,6 +478,91 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            // ===== Phase 6：危险操作：清除全部数据（红色 Card） =====
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.DeleteForever,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Spacer8()
+                        Text(
+                            "危险操作",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                    Spacer8()
+                    Text(
+                        text = "清除全部数据：14 张表 + 所有偏好 + 附件 + 头像，" +
+                            "以及已调度的 Work 与提醒闹钟（闹钟需重启 App 才彻底清）。" +
+                            "操作不可恢复，请先备份。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                    Spacer8()
+                    OutlinedButton(
+                        onClick = { viewModel.requestReset() },
+                        enabled = resetState !is SettingsViewModel.ResetUiState.Running,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Filled.DeleteForever, contentDescription = null)
+                        Spacer8()
+                        Text("清除全部数据…")
+                    }
+                }
+            }
+        }
+    }
+
+    // ===== Phase 6：清除数据的三阶段弹窗 =====
+    when (val state = resetState) {
+        is SettingsViewModel.ResetUiState.Idle -> Unit
+        is SettingsViewModel.ResetUiState.SuggestBackup -> {
+            SuggestBackupBeforeResetDialog(
+                onBackupThenReset = {
+                    // 直接复用 createBackupLauncher，先备份再清
+                    createBackupLauncher.launch(
+                        "cyrene-backup-${System.currentTimeMillis()}.zip"
+                    )
+                    viewModel.cancelReset()
+                },
+                onSkipBackup = viewModel::skipBackupAndReset,
+                onCancel = viewModel::cancelReset,
+            )
+        }
+        is SettingsViewModel.ResetUiState.LongPress -> {
+            LongPressConfirmDialog(
+                onLongPressComplete = viewModel::confirmResetAfterLongPress,
+                onCancel = viewModel::cancelReset,
+            )
+        }
+        is SettingsViewModel.ResetUiState.Running -> {
+            // 用一个简易的不可关闭进度 dialog
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("正在清除…") },
+                text = { Text("正在清空 14 张表与全部偏好，请稍候。") },
+                confirmButton = {},
+            )
+        }
+        is SettingsViewModel.ResetUiState.Done -> {
+            DoneDialog(
+                allSucceeded = state.report.allSucceeded,
+                detail = "db=${state.report.databaseCleared}, " +
+                    "ds=${state.report.datastoreCleared}, " +
+                    "att=${state.report.attachmentsCleared}, " +
+                    "avt=${state.report.avatarsCleared}",
+                onAck = viewModel::acknowledgeResetDone,
+            )
         }
     }
 
@@ -524,6 +623,168 @@ private fun EveningTimePickerDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
+}
+
+// ===== Phase 6：清除数据三阶段弹窗 =====
+
+/**
+ * 第一阶段：建议先备份（决策 3A）。
+ * 给用户「先备份」「直接清」「取消」三个按钮，「先备份」跳 SAF。
+ */
+@Composable
+private fun SuggestBackupBeforeResetDialog(
+    onBackupThenReset: () -> Unit,
+    onSkipBackup: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("建议先备份") },
+        text = {
+            Text(
+                "清除全部数据后无法恢复。建议先做一次备份再继续，" +
+                    "备份完成后请再次进入此入口并选择「直接清」。",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onBackupThenReset) { Text("先备份") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onSkipBackup) { Text("直接清") }
+                TextButton(onClick = onCancel) { Text("取消") }
+            }
+        },
+    )
+}
+
+/**
+ * 第二阶段：长按 3 秒确认（决策 2B）。
+ *
+ * 用 [pointerInput] 的 `awaitPointerEventScope` 实现：
+ * - 监听 ACTION_DOWN / ACTION_UP / ACTION_MOVE；
+ * - 记录按下时刻，抬起时若按下时长 ≥ 3000 ms → 触发 [onLongPressComplete]；
+ * - 中途抬起 / 移出矩形 → 重置计时器（任何手指移动超出也视为取消）。
+ */
+@Composable
+private fun LongPressConfirmDialog(
+    onLongPressComplete: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    var progress by remember { mutableStateOf(0f) }
+    val thresholdMs = 3000L
+    val startTimeMs = remember { mutableLongStateOf(0L) }
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("长按 3 秒确认") },
+        text = {
+            Column {
+                Text(
+                    "此操作将清除全部数据且不可恢复。" +
+                        "请按住下方按钮持续 3 秒完成确认。",
+                )
+                Spacer8()
+                // 长按按钮，进度条反馈
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(MaterialTheme.colorScheme.error)
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val down = awaitPointerEvent()
+                                    val change = down.changes.firstOrNull() ?: continue
+                                    if (change.pressed) {
+                                        startTimeMs.longValue = System.currentTimeMillis()
+                                        progress = 0f
+                                    } else {
+                                        // 抬起 → 若已满 3 秒则触发；否则重置
+                                        val elapsed = System.currentTimeMillis() - startTimeMs.longValue
+                                        if (elapsed >= thresholdMs) {
+                                            onLongPressComplete()
+                                        } else {
+                                            progress = 0f
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // 进度条覆盖
+                    androidx.compose.foundation.Canvas(
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        val barWidth = size.width * progress.coerceIn(0f, 1f)
+                        drawRect(
+                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.3f),
+                            topLeft = androidx.compose.ui.geometry.Offset.Zero,
+                            size = androidx.compose.ui.geometry.Size(barWidth, size.height),
+                        )
+                    }
+                    Text(
+                        text = if (progress >= 1f) "已确认" else "按住 3 秒",
+                        color = MaterialTheme.colorScheme.onError,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text("取消") }
+        },
+    )
+    // 100ms 一次刷新进度
+    LaunchedEffect(startTimeMs.longValue) {
+        if (startTimeMs.longValue > 0L) {
+            while (true) {
+                kotlinx.coroutines.delay(100)
+                val elapsed = System.currentTimeMillis() - startTimeMs.longValue
+                progress = (elapsed.toFloat() / thresholdMs).coerceIn(0f, 1f)
+                if (progress >= 1f) {
+                    onLongPressComplete()
+                    break
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 第三阶段：完成反馈。告诉用户哪些步骤成功 / 失败，并建议重启 App。
+ */
+@Composable
+private fun DoneDialog(
+    allSucceeded: Boolean,
+    detail: String,
+    onAck: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onAck,
+        title = { Text(if (allSucceeded) "清除完成" else "部分步骤失败") },
+        text = {
+            Column {
+                if (allSucceeded) {
+                    Text(
+                        "已清除全部数据。" +
+                            "建议重启 App 一次，让残留的精确闹钟缓存彻底失效。",
+                    )
+                } else {
+                    Text(
+                        "部分步骤失败，详细：\n$detail\n\n" +
+                            "建议重启 App 一次后再尝试，或手动重新安装。",
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onAck) { Text("好的") }
         },
     )
 }

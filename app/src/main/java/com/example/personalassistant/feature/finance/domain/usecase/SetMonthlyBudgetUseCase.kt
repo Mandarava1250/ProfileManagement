@@ -18,7 +18,7 @@ class SetMonthlyBudgetUseCase @Inject constructor(
         totalAmount: Double,
         isAutoRefresh: Boolean = true,
         carryOverEnabled: Boolean = true,
-        warningThreshold: Double = 0.0,
+        warningThreshold: Double? = null,
     ): Long {
         require(totalAmount >= 0.0) { "预算不能为负" }
         require(yearMonth.matches(Regex("""\d{4}-\d{2}"""))) { "yearMonth 格式必须为 yyyy-MM" }

@@ -23,6 +23,8 @@ fun CourseEntity.toDomain(): Course = Course(
     weeks = weeks,
     reminderMinutes = reminderMinutes,
     note = note,
+    credit = credit,
+    gradePoint = gradePoint,
     createdAt = createdAt,
     updatedAt = updatedAt,
 )
@@ -40,6 +42,8 @@ fun Course.toEntity(): CourseEntity = CourseEntity(
     weeks = weeks,
     reminderMinutes = reminderMinutes,
     note = note,
+    credit = credit,
+    gradePoint = gradePoint,
     createdAt = createdAt,
     updatedAt = updatedAt,
 )

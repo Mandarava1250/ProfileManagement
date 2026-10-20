@@ -17,6 +17,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -25,7 +28,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
- * Phase 7a：月度预算设置 Sheet
+ * C 重构阶段 3：月度预算 Sheet
+ *
+ * - B 修复：原 [LaunchedEffect(persisted)] 每次 persisted 流发值都会覆盖 _editing，
+ *   用户正在改的草稿会被吞掉；现在只在**首次**拉到值时加载一次。
+ * - C：预算编辑字段下方插入 [MonthPickerBar]，点击中部文本会浮 [YearMonthPickerSheet]。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,9 +43,18 @@ fun BudgetSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val editing by viewModel.editing.collectAsStateWithLifecycle()
     val persisted by viewModel.persistedBudget.collectAsStateWithLifecycle()
+    // C：当前选中的月份（来自 VM）
+    val yearMonth by viewModel.yearMonth.collectAsStateWithLifecycle()
+    // C：是否显示年份选择 Sheet
+    var showYearMonthPicker by remember { mutableStateOf(false) }
 
+    // B 修复：只在**首次**有 persisted 时加载；后续 persisted 流更新不再覆盖 _editing
+    var loaded by remember { mutableStateOf(false) }
     LaunchedEffect(persisted) {
-        viewModel.loadFromPersisted(persisted)
+        if (!loaded && persisted != null) {
+            viewModel.loadFromPersisted(persisted)
+            loaded = true
+        }
     }
 
     ModalBottomSheet(
@@ -54,6 +70,14 @@ fun BudgetSheet(
             Text(
                 text = "月度预算",
                 style = MaterialTheme.typography.titleLarge,
+            )
+
+            // C：月份选择器
+            MonthPickerBar(
+                yearMonth = yearMonth,
+                onPrev = { viewModel.goPrevMonth() },
+                onNext = { viewModel.goNextMonth() },
+                onTapYearMonth = { showYearMonthPicker = true },
             )
 
             OutlinedTextField(
@@ -104,5 +128,18 @@ fun BudgetSheet(
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("保存预算") }
         }
+    }
+
+    // C：弹层选历史月份
+    if (showYearMonthPicker) {
+        YearMonthPickerSheet(
+            currentYearMonth = yearMonth,
+            availableMonths = viewModel.allBudgetYearMonths.collectAsStateWithLifecycle().value,
+            onPick = { picked ->
+                viewModel.setYearMonth(picked)
+                showYearMonthPicker = false
+            },
+            onDismiss = { showYearMonthPicker = false },
+        )
     }
 }

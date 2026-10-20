@@ -2,6 +2,7 @@ package com.example.personalassistant.feature.timetable.presentation
 
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.feature.timetable.domain.model.Semester
+import com.example.personalassistant.feature.timetable.domain.model.TimeSlotSchedule
 
 /**
  * 课表 UI 状态
@@ -11,6 +12,7 @@ import com.example.personalassistant.feature.timetable.domain.model.Semester
  *   - 当前选中的周次（1-based）
  *   - 课程列表（按 dayOfWeek + startTime 排序）
  *   - 学期列表（供 SemesterSelector）
+ *   - 课时表（决定 grid 行高 + 编辑对话框）
  *   - 一次性事件（冲突提示、错误消息、删除确认等）
  */
 data class TimetableUiState(
@@ -18,6 +20,7 @@ data class TimetableUiState(
     val currentSemester: Semester? = null,
     val currentWeekNumber: Int = 1,
     val courses: List<Course> = emptyList(),
+    val timeSlotSchedule: TimeSlotSchedule = TimeSlotSchedule.default(),
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
 

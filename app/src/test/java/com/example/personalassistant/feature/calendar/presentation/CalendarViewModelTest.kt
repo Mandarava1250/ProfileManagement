@@ -144,6 +144,8 @@ class CalendarViewModelTest {
         override suspend fun countBySemester(semester: String): Int = 0
         override fun searchCourses(keyword: String): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
         override suspend fun getAllCourses(): List<com.example.personalassistant.feature.timetable.data.local.CourseEntity> = emptyList()
+        override fun observeAll(): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+        override suspend fun renameSemesterReferences(oldName: String, newName: String) = Unit
     }
 
     private object NoopSemesterDao :

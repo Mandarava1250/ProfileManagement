@@ -80,6 +80,14 @@ data class CourseEntity(
     @ColumnInfo(name = "note")
     val note: String? = null,
 
+    /** 学分（Phase 12 新增；null = 未填） */
+    @ColumnInfo(name = "credit")
+    val credit: Double? = null,
+
+    /** 绩点 0.0-4.0（Phase 12 新增；null = 未填） */
+    @ColumnInfo(name = "gradePoint")
+    val gradePoint: Double? = null,
+
     @ColumnInfo(name = "createdAt")
     val createdAt: Long = System.currentTimeMillis(),
 

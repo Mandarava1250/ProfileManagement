@@ -1,6 +1,5 @@
 package com.example.personalassistant.navigation
 
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -27,12 +26,16 @@ import com.example.personalassistant.feature.finance.FinanceScreen
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHit
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHitType
 import com.example.personalassistant.feature.globalsearch.presentation.GlobalSearchScreen
+import com.example.personalassistant.feature.me.MeScreen
+import com.example.personalassistant.feature.me.presentation.GpaRuleEditScreen
 import com.example.personalassistant.feature.settings.SettingsScreen
 import com.example.personalassistant.feature.settings.backup.BackupPreviewScreen
 import com.example.personalassistant.feature.task.TaskScreen
 import com.example.personalassistant.feature.task.presentation.detail.TaskDetailScreen
 import com.example.personalassistant.feature.task.presentation.edit.TaskEditScreen
 import com.example.personalassistant.feature.timetable.TimetableScreen
+import com.example.personalassistant.feature.timetable.presentation.edit.CourseEditScreen
+import com.example.personalassistant.feature.timetable.presentation.settings.TimetableSettingsScreen
 import com.example.personalassistant.feature.timetable.presentation.edit.CourseEditScreen
 
 /**
@@ -78,17 +81,21 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
                 AppBottomBar(navController = navController, currentRoute = currentRoute)
             }
         }
-    ) { padding ->
+    ) { innerPadding ->
+        // Phase 10 修复：把外层 Scaffold 的 padding（包含 BottomBar 高度）真正下传给 NavHost。
+        // 之前写的是 `Modifier.padding(PaddingValues())`（空值），导致 NavHost 区域延伸到
+        // 屏幕底部、与 BottomBar 重叠，内层各页的 FAB（课表 / 任务）都被 BottomBar 盖住。
         NavHost(
             navController = navController,
             startDestination = BottomTab.Timetable.screen.route,
-            modifier = Modifier.padding(PaddingValues())
+            modifier = Modifier.padding(innerPadding),
         ) {
-            // === 4 个主 Tab ===
+            // === 5 个主 Tab（Phase 12 加 Me）===
             composable(BottomTab.Timetable.screen.route) { TimetableScreen(navController) }
             composable(BottomTab.Tasks.screen.route) { TaskScreen(navController) }
             composable(BottomTab.Finance.screen.route) { FinanceScreen(navController) }
             composable(BottomTab.Calendar.screen.route) { CalendarScreen(navController) }
+            composable(BottomTab.Me.screen.route) { MeScreen(navController) }
 
             // === 二级页面 ===
             composable(BottomTab.SETTINGS.first.route) { SettingsScreen(navController) }
@@ -140,8 +147,7 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
                     type = NavType.LongType
                     defaultValue = -1L
                 }),
-            ) { entry ->
-                val eventId = entry.arguments?.getLong(Screen.EditEvent.ARG_EVENT_ID) ?: -1L
+            ) { entry ->                val eventId = entry.arguments?.getLong(Screen.EditEvent.ARG_EVENT_ID) ?: -1L
                 com.example.personalassistant.feature.calendar.presentation.edit.EventEditScreen(
                     eventId = eventId,
                     onBack = { navController.popBackStack() },
@@ -188,6 +194,20 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
                     onBack = { navController.popBackStack() },
                 )
             }
+
+            // === Phase 11：课表设置（学期编辑 + 课时表编辑）===
+            composable(Screen.TimetableSettings.route) {
+                TimetableSettingsScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            // === Phase 12：GPA 规则编辑（学校定制）===
+            composable(Screen.EditGpaRule.route) {
+                GpaRuleEditScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
     }
 }
@@ -205,13 +225,15 @@ private fun isKnownDeepLinkRoute(route: String): Boolean {
         route == Screen.Tasks.route ||
         route == Screen.Finance.route ||
         route == Screen.Calendar.route ||
+        route == Screen.Me.route ||
         route == Screen.Settings.route ||
         route == Screen.GlobalSearch.route ||
         route == Screen.BackupPreview.route ||
         route.startsWith("timetable/edit/") ||
         route.startsWith("tasks/edit/") ||
         route.startsWith("tasks/detail/") ||
-        route.startsWith("calendar/edit/")
+        route.startsWith("calendar/edit/") ||
+        route == Screen.EditGpaRule.route
 }
 
 @Composable

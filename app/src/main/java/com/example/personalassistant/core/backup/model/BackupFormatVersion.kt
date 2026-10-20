@@ -48,7 +48,7 @@ object BackupFormatVersion {
      * ⚠️ Phase 5：必须与 [com.example.personalassistant.core.database.APP_DATABASE_VERSION] 同步。
      * 它由 BackupFormatVersionTest 直接引用那个常量比对，不是比对字面量。
      */
-    const val DB_VERSION: Int = 10
+    const val DB_VERSION: Int = 12
 
     /** 应用包名（写入 manifest 用于跨应用保护）*/
     const val APPLICATION: String = "com.example.personalassistant"

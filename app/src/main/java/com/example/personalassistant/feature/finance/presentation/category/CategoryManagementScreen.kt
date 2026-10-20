@@ -2,19 +2,14 @@ package com.example.personalassistant.feature.finance.presentation.category
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -23,13 +18,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -42,23 +33,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.personalassistant.feature.finance.domain.model.Category
-import com.example.personalassistant.feature.finance.domain.model.TransactionType
+import com.example.personalassistant.feature.finance.presentation.components.ColorPickerSheet
 import com.example.personalassistant.feature.finance.presentation.components.IconPickerSheet
-import com.example.personalassistant.feature.finance.presentation.util.IconRegistry
 import kotlinx.coroutines.launch
 
 /**
- * Phase 7a：分类管理页
+ * C 重构阶段 8：分类管理页
  *
  * - 列出全部分类
- * - 右上 FAB 添加；每行右侧删除按钮（仅非默认分类可删）
+ * - FAB 添加（弹 [AddCategoryDialog]，让用户选图标）
+ * - 每行右侧删除（仅非默认分类）
+ * - 每行文本可点 → [RenameCategoryDialog]
+ * - 每行色块可点 → [ColorPickerSheet]
+ * - 每行 Edit 按钮 → [IconPickerSheet]（沿用旧能力）
+ *
+ * Snackbar 反馈：根据 [Feedback] 三档选用合适的提示（当前统一 Success/Warning/Error 提示文案）。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,13 +65,14 @@ fun CategoryManagementScreen(
     val scope = rememberCoroutineScope()
     var showAddDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Category?>(null) }
-    // 7b：图标编辑态（null = 关闭；非 null = 当前编辑的分类）
     var iconEditingFor by remember { mutableStateOf<Category?>(null) }
+    var renameTarget by remember { mutableStateOf<Category?>(null) }
+    var colorEditingFor by remember { mutableStateOf<Category?>(null) }
 
     LaunchedEffect(feedback) {
-        feedback?.let {
+        feedback?.let { fb ->
             scope.launch {
-                snackbarHostState.showSnackbar(it)
+                snackbarHostState.showSnackbar(message = fb.message)
                 viewModel.clearFeedback()
             }
         }
@@ -122,6 +116,8 @@ fun CategoryManagementScreen(
                         category = cat,
                         onDelete = { pendingDelete = cat },
                         onEditIcon = { iconEditingFor = cat },
+                        onRename = { renameTarget = cat },
+                        onChangeColor = { colorEditingFor = cat },
                     )
                 }
             }
@@ -131,8 +127,8 @@ fun CategoryManagementScreen(
     if (showAddDialog) {
         AddCategoryDialog(
             onDismiss = { showAddDialog = false },
-            onConfirm = { name, type ->
-                viewModel.addCategory(name, type)
+            onConfirm = { name, type, iconName, color ->
+                viewModel.addCategory(name, type, iconName, color)
                 showAddDialog = false
             },
         )
@@ -155,7 +151,6 @@ fun CategoryManagementScreen(
         )
     }
 
-    // 7b：图标编辑 Sheet
     iconEditingFor?.let { cat ->
         IconPickerSheet(
             selectedIconName = cat.iconName,
@@ -166,97 +161,55 @@ fun CategoryManagementScreen(
             onDismiss = { iconEditingFor = null },
         )
     }
-}
 
-@Composable
-private fun CategoryRow(category: Category, onDelete: () -> Unit, onEditIcon: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Surface(
-            shape = CircleShape,
-            color = Color(category.color),
-            modifier = Modifier.padding(2.dp),
-        ) {
-            Icon(
-                imageVector = IconRegistry.resolve(category.iconName),
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.padding(8.dp),
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = category.name,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                text = if (category.type == TransactionType.EXPENSE) "支出分类" else "收入分类",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            )
-        }
-        // 7b：编辑图标按钮（所有分类都可改 icon，不再受 isDefault 限制）
-        IconButton(onClick = onEditIcon) {
-            Icon(Icons.Filled.Edit, contentDescription = "更换图标")
-        }
-        if (!category.isDefault) {
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error)
-            }
-        } else {
-            Text(
-                text = "默认",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-            )
-        }
+    renameTarget?.let { cat ->
+        RenameCategoryDialog(
+            initialName = cat.name,
+            onDismiss = { renameTarget = null },
+            onConfirm = { newName ->
+                viewModel.rename(cat, newName)
+                renameTarget = null
+            },
+        )
+    }
+
+    colorEditingFor?.let { cat ->
+        ColorPickerSheet(
+            selectedColor = cat.color,
+            onPick = { newColor ->
+                viewModel.changeColor(cat, newColor)
+                colorEditingFor = null
+            },
+            onDismiss = { colorEditingFor = null },
+        )
     }
 }
 
+/** 改名轻量对话框：纯输入框 + 确认/取消 */
 @Composable
-private fun AddCategoryDialog(
+private fun RenameCategoryDialog(
+    initialName: String,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, type: TransactionType) -> Unit,
+    onConfirm: (String) -> Unit,
 ) {
-    var name by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf(TransactionType.EXPENSE) }
-
+    var name by remember { mutableStateOf(initialName) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("新增分类") },
+        title = { Text("重命名分类") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("名称") },
-                    singleLine = true,
-                )
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    SegmentedButton(
-                        selected = type == TransactionType.EXPENSE,
-                        onClick = { type = TransactionType.EXPENSE },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                    ) { Text("支出") }
-                    SegmentedButton(
-                        selected = type == TransactionType.INCOME,
-                        onClick = { type = TransactionType.INCOME },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                    ) { Text("收入") }
-                }
-            }
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("新名称") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(name, type) },
+                onClick = { onConfirm(name) },
                 enabled = name.isNotBlank(),
-            ) { Text("添加") }
+            ) { Text("保存") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("取消") }

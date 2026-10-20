@@ -5,11 +5,16 @@ import androidx.lifecycle.viewModelScope
 import com.example.personalassistant.core.di.IoDispatcher
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.timetable.domain.model.Course
+import com.example.personalassistant.feature.timetable.domain.model.TimeSlotSchedule
 import com.example.personalassistant.feature.timetable.domain.repository.TimetableRepository
 import com.example.personalassistant.feature.timetable.domain.usecase.CourseConflictException
+import com.example.personalassistant.feature.timetable.domain.usecase.CreateSemesterUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.DeleteCourseUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.ObserveCurrentSemesterUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.ObserveCoursesBySemesterUseCase
+import com.example.personalassistant.feature.timetable.domain.usecase.ObserveTimeSlotScheduleUseCase
+import com.example.personalassistant.feature.timetable.domain.usecase.ResetTimeSlotScheduleUseCase
+import com.example.personalassistant.feature.timetable.domain.usecase.SaveTimeSlotScheduleUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.SwitchSemesterUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.UpsertCourseUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -47,6 +52,10 @@ class TimetableViewModel @Inject constructor(
     private val upsertCourseUseCase: UpsertCourseUseCase,
     private val deleteCourseUseCase: DeleteCourseUseCase,
     private val switchSemesterUseCase: SwitchSemesterUseCase,
+    private val createSemesterUseCase: CreateSemesterUseCase,
+    private val observeTimeSlotSchedule: ObserveTimeSlotScheduleUseCase,
+    private val saveTimeSlotSchedule: SaveTimeSlotScheduleUseCase,
+    private val resetTimeSlotSchedule: ResetTimeSlotScheduleUseCase,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
@@ -64,13 +73,20 @@ class TimetableViewModel @Inject constructor(
         observeCurrentSemester(),
         repository.observeAllSemesters(),
         _manualSemesterName,
-    ) { current, allSemesters, manual ->
-        val selectedName = manual ?: current?.name
-        Triple(selectedName, allSemesters, current)
+        observeTimeSlotSchedule(),
+    ) { current, allSemesters, manual, timeSlots ->
+        TimetableUiState(
+            semesters = allSemesters,
+            currentSemester = current,
+            timeSlotSchedule = timeSlots,
+            isLoading = false,
+        ) to Triple(current, allSemesters, manual)
     }
-        .flatMapLatest { (selectedName, allSemesters, current) ->
+        .flatMapLatest { (initial, triple) ->
+            val (current, allSemesters, manual) = triple
+            val selectedName = manual ?: current?.name
             if (selectedName == null) {
-                flowOf(TimetableUiState(semesters = allSemesters, isLoading = false))
+                flowOf(initial)
             } else {
                 combine(
                     observeCoursesBySemester(selectedName),
@@ -83,12 +99,10 @@ class TimetableViewModel @Inject constructor(
                     val activeCourses = allCourses
                         .filter { it.appliesToWeek(weekNumber) }
                         .sortedWith(compareBy({ it.dayOfWeek }, { it.startTime }))
-                    TimetableUiState(
-                        semesters = allSemesters,
+                    initial.copy(
                         currentSemester = effectiveSemester,
                         currentWeekNumber = weekNumber,
                         courses = activeCourses,
-                        isLoading = false,
                     )
                 }
             }
@@ -171,5 +185,51 @@ class TimetableViewModel @Inject constructor(
     /** 清空错误消息（Snackbar 显示完成后调用） */
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    /**
+     * 新建一个学期（UI 弹窗提交时调用）。
+     *
+     * - name 必填，startDate/endDate 接受 epoch millis
+     * - makeCurrent=true：新建后自动成为当前学期，并把手动选学期状态清空
+     *   （让观察流自然切到新学期）
+     * - 失败（空 name / 日期非法）→ errorMessage 走 Snackbar
+     */
+    fun addSemester(name: String, startDate: Long, endDate: Long, makeCurrent: Boolean = true) {
+        viewModelScope.launch {
+            runCatching { createSemesterUseCase(name, startDate, endDate, makeCurrent) }
+                .onSuccess {
+                    if (makeCurrent) {
+                        _manualSemesterName.value = null
+                    }
+                }
+                .onFailure { _errorMessage.value = it.message }
+        }
+    }
+
+    // ===== 课时表 =====
+
+    /**
+     * 保存课时表（编辑对话框提交时调用）。
+     *
+     * - 校验：依赖 [TimeSlotSchedule] / [Period] init，非法值会抛 IllegalArgumentException
+     * - 持久化：DataStore 写入后 uiState 走 `observeTimeSlotSchedule` 自动重发，
+     *   TimetableGrid 立刻按新课时表重新算行高
+     */
+    fun saveTimeSlots(schedule: TimeSlotSchedule) {
+        viewModelScope.launch {
+            runCatching { saveTimeSlotSchedule.invoke(schedule) }
+                .onFailure { _errorMessage.value = it.message }
+        }
+    }
+
+    /**
+     * 重置为内置默认 12 节课时表。
+     */
+    fun resetTimeSlots() {
+        viewModelScope.launch {
+            runCatching { resetTimeSlotSchedule.invoke() }
+                .onFailure { _errorMessage.value = it.message }
+        }
     }
 }

@@ -268,8 +268,10 @@ class FakeFinanceRepository : FinanceRepository {
         totalAmount: Double,
         isAutoRefresh: Boolean,
         carryOverEnabled: Boolean,
-        warningThreshold: Double,
+        warningThreshold: Double?,
     ): Long {
+        // null 落 0.0（与 Impl 一致；详见 SetMonthlyBudgetUseCase.invoke 的 nullable 重载）
+        val stored = warningThreshold ?: 0.0
         val list = budgetsState.value
         val existing = list.firstOrNull { it.yearMonth == yearMonth }
         val now = System.currentTimeMillis()
@@ -281,7 +283,7 @@ class FakeFinanceRepository : FinanceRepository {
                 totalAmount = totalAmount,
                 isAutoRefresh = isAutoRefresh,
                 carryOverEnabled = carryOverEnabled,
-                warningThreshold = warningThreshold,
+                warningThreshold = stored,
                 createdAt = now,
                 updatedAt = now,
             )
@@ -292,7 +294,7 @@ class FakeFinanceRepository : FinanceRepository {
                     totalAmount = totalAmount,
                     isAutoRefresh = isAutoRefresh,
                     carryOverEnabled = carryOverEnabled,
-                    warningThreshold = warningThreshold,
+                    warningThreshold = stored,
                     updatedAt = now,
                 ) else it
             }

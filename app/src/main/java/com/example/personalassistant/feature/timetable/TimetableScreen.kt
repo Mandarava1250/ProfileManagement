@@ -12,10 +12,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -25,30 +28,44 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.example.personalassistant.R
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.feature.timetable.presentation.TimetableViewModel
 import com.example.personalassistant.feature.timetable.presentation.components.DayHeaderRow
+import com.example.personalassistant.feature.timetable.presentation.components.SemesterCreateDialog
 import com.example.personalassistant.feature.timetable.presentation.components.SemesterSelector
 import com.example.personalassistant.feature.timetable.presentation.components.TimetableGrid
 import com.example.personalassistant.feature.timetable.presentation.components.WeekHeaderRow
 import com.example.personalassistant.navigation.Screen
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
  * 课表主页
  *
- *  - 顶部 AppBar：学期选择 + 第几周
+ *  - 顶部 AppBar：学期选择 + 第几周 + 右上角「导入课表」入口
  *  - 中部：周一-周日日期头
  *  - 主体：7 列课程网格
  *  - 底部 FAB：新建课程
- *  - Snackbar：处理 errorMessage
+ *  - Snackbar：处理 errorMessage / 导入提示
+ *
+ * Phase 10：TopAppBar 加 actions slot 放导入按钮
+ *
+ * 之前 AppBar 只有 title，没有 actions 槽，用户找不到怎么批量导入课表（从教务系统 /
+ * ICS 文件 / Excel 等导入）。补一个 `Icons.Filled.FileUpload` 图标按钮作为入口，
+ * 后续接解析逻辑；现在点这条接入。点击后通过已有 SnackbarHost 给个友好提示，
+ * 这样 UI 占位和后续实现可以分开演进。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +75,12 @@ fun TimetableScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    val importHint = stringResource(R.string.timetable_action_import_coming_soon)
+
+    // Phase 10 修复 2：学期创建对话框状态。无学期时"点 +"会进这里；
+    // 有学期时 SemesterSelector 菜单底部也能触发新学期。
+    var showCreateSemester by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.errorMessage) {
         val msg = state.errorMessage
@@ -71,7 +94,41 @@ fun TimetableScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text("课表") },
+                    title = { Text(stringResource(R.string.tab_timetable)) },
+                    actions = {
+                        // Phase 10：右上角导入入口 —— 之前 AppBar 只有左侧 title，actions 槽空着。
+                        // 用 FileUpload 图标，点击后弹个 Snackbar 提示"开发中"，等真正接 ICS / 教务
+                        // 抓取实现时直接替换 onClick 即可，不影响布局。
+                        IconButton(
+                            onClick = {
+                                // Phase 10：先弹一个"开发中"提示占位（用户能立刻看到点击有反馈）。
+                                // 未来接 ICS / 教务抓取时，这里替换成
+                                // `navController.navigate(Screen.ImportCourse.route)` 或
+                                // `viewModel.requestImport()` 即可，UI 入口形状不变。
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(importHint)
+                                }
+                            },
+                            modifier = Modifier.padding(end = 4.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.FileUpload,
+                                contentDescription = stringResource(R.string.timetable_action_import),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                        // Phase 11：右上角 ⚙️ 入口 → 跳到课表设置页（学期编辑 + 课时表编辑）
+                        IconButton(
+                            onClick = { navController.navigate(Screen.TimetableSettings.route) },
+                            modifier = Modifier.padding(end = 4.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "课表设置",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                    },
                 )
                 Row(
                     modifier = Modifier
@@ -84,6 +141,7 @@ fun TimetableScreen(
                         current = state.currentSemester,
                         semesters = state.semesters,
                         onSelect = { viewModel.switchSemester(it) },
+                        onRequestCreate = { showCreateSemester = true },
                     )
                     if (state.activeCoursesCount > 0) {
                         Text(
@@ -97,8 +155,23 @@ fun TimetableScreen(
             }
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { navController.navigate(Screen.EditCourse.build()) }) {
-                Icon(Icons.Filled.Add, contentDescription = "新增课程")
+            // Phase 10 修复 2：学期为空时按 + 不让进 EditCourse（没学期→课程建出来
+            // 观察流也查不到，等于白建），强制走学期创建流程；有学期才进课程编辑。
+            FloatingActionButton(
+                onClick = {
+                    if (state.semesters.isEmpty()) {
+                        showCreateSemester = true
+                    } else {
+                        navController.navigate(Screen.EditCourse.build())
+                    }
+                },
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = if (state.semesters.isEmpty())
+                        "新建学期"
+                    else stringResource(R.string.timetable_add_course),
+                )
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -109,11 +182,11 @@ fun TimetableScreen(
                 .padding(padding),
         ) {
             if (state.semesters.isEmpty()) {
+                // Phase 10 修复 2：原来 FAB 跳 EditCourse 是错的——没学期时 Course.semester 拿不到
+                // 任何有效值，保存到数据库后会被 observeBySemester 过滤掉、UI 上"加完不显示"。
+                // 修正路径：FAB 改为"创建学期"弹窗；学期建好之后下方的"+ 新建课程"才出现。
                 EmptySemesterHint(
-                    onAddSemester = {
-                        // 简化版，未提供学期新增 UI
-                        navController.navigate(Screen.EditCourse.build())
-                    },
+                    onCreateSemester = { showCreateSemester = true },
                 )
                 return@Column
             }
@@ -144,14 +217,28 @@ fun TimetableScreen(
             TimetableGrid(
                 coursesByDay = coursesByDay,
                 onCourseClick = { course -> navController.navigate(Screen.EditCourse.build(course.id)) },
+                timeSlotSchedule = state.timeSlotSchedule,
                 modifier = Modifier.fillMaxSize(),
             )
         }
     }
+
+    // Phase 10 修复 2：学期创建对话框（弹窗式 + FAB 入口共用）。
+    // 成功创建后 VM 会写入数据库并 switchSemester，state.semesters 状态自动刷新，
+    // empty-state 分支会因为学期非空而被跳过。
+    if (showCreateSemester) {
+        SemesterCreateDialog(
+            onDismiss = { showCreateSemester = false },
+            onConfirm = { name, start, end ->
+                viewModel.addSemester(name, start, end, makeCurrent = true)
+                showCreateSemester = false
+            },
+        )
+    }
 }
 
 @Composable
-private fun EmptySemesterHint(onAddSemester: () -> Unit) {
+private fun EmptySemesterHint(onCreateSemester: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
@@ -161,7 +248,7 @@ private fun EmptySemesterHint(onAddSemester: () -> Unit) {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "点击右下角 + 添加你的第一门课程",
+                text = "点击右下角 + 先创建一个学期，再添加课程",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )

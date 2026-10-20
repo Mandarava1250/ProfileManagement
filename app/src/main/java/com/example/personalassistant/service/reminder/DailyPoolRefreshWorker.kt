@@ -31,7 +31,7 @@ class DailyPoolRefreshWorker @AssistedInject constructor(
         Log.i(TAG, "🟢 [DailyPoolRefreshWorker] start at ${System.currentTimeMillis()}")
         refreshDailyPool(System.currentTimeMillis())
         // 自续约下一天
-        scheduler.scheduleNext()
+        scheduler.scheduleNext(System.currentTimeMillis())
         Log.i(TAG, "✅ [DailyPoolRefreshWorker] success")
         Result.success()
     } catch (e: Exception) {

@@ -52,7 +52,7 @@ class BootReceiver : BroadcastReceiver() {
                 scope.launch {
                     try {
                         reminderScheduler.cancelAll()
-                        dailyPoolScheduler.scheduleNext()
+                        dailyPoolScheduler.scheduleNext(System.currentTimeMillis())
                         // Phase 8 Sub-step 8：从 Settings 读取开关 + 时间，再重设节假日提前通知 Worker
                         val eveningEnabled = settingsRepository.holidayEveningReminderEnabled.first()
                         if (eveningEnabled) {

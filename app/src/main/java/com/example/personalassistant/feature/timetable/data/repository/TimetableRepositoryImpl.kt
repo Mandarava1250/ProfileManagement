@@ -37,6 +37,9 @@ class TimetableRepositoryImpl @Inject constructor(
     override fun observeCoursesBySemester(semester: String): Flow<List<Course>> =
         courseDao.observeBySemester(semester).map { list -> list.map { it.toDomain() } }
 
+    override fun observeAllCourses(): Flow<List<Course>> =
+        courseDao.observeAll().map { list -> list.map { it.toDomain() } }
+
     override fun observeCoursesByDay(semester: String, dayOfWeek: Int): Flow<List<Course>> =
         courseDao.observeBySemesterAndDay(semester, dayOfWeek).map { list -> list.map { it.toDomain() } }
 
@@ -93,6 +96,11 @@ class TimetableRepositoryImpl @Inject constructor(
 
     override suspend fun upsertSemester(semester: Semester): Unit = withContext(ioDispatcher) {
         semesterDao.insert(semester.toEntity())
+    }
+
+    override suspend fun renameSemesterReferences(oldName: String, newName: String): Unit = withContext(ioDispatcher) {
+        if (oldName == newName) return@withContext
+        courseDao.renameSemesterReferences(oldName = oldName, newName = newName)
     }
 
     override suspend fun deleteSemester(name: String) = withContext(ioDispatcher) {

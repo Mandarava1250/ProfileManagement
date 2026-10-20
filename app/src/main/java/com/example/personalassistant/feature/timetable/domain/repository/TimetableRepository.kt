@@ -17,6 +17,12 @@ interface TimetableRepository {
     /** 获取某学期全部课程（响应式）*/
     fun observeCoursesBySemester(semester: String): Flow<List<Course>>
 
+    /**
+     * Phase 12：观察全部学期所有课程（用于「我」页 GPA 计算）。
+     * 不带学期过滤。
+     */
+    fun observeAllCourses(): Flow<List<Course>>
+
     /** 获取某学期某天的课程（响应式）*/
     fun observeCoursesByDay(semester: String, dayOfWeek: Int): Flow<List<Course>>
 
@@ -54,6 +60,12 @@ interface TimetableRepository {
 
     /** 新增或更新学期 */
     suspend fun upsertSemester(semester: Semester)
+
+    /**
+     * 把 Course.semester 列中所有 `oldName` 引用替换为 `newName`。
+     * 配合 [UpdateSemesterUseCase] 用于"重命名学期"时保持引用一致。
+     */
+    suspend fun renameSemesterReferences(oldName: String, newName: String)
 
     /** 删除学期 */
     suspend fun deleteSemester(name: String)

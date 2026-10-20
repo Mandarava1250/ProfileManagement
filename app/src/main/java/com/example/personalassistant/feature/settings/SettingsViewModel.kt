@@ -9,6 +9,9 @@ import com.example.personalassistant.core.backup.model.BackupResult
 import com.example.personalassistant.core.backup.serializer.BackupSerializer
 import com.example.personalassistant.core.holiday.data.HolidayRepository
 import com.example.personalassistant.core.holiday.di.HolidayReminderScheduler
+import com.example.personalassistant.core.reset.ResetEvent
+import com.example.personalassistant.core.reset.ResetReport
+import com.example.personalassistant.core.reset.ResetRepository
 import com.example.personalassistant.feature.profile.data.AccountRepository
 import com.example.personalassistant.feature.profile.data.CurrentAccountRepository
 import com.example.personalassistant.feature.profile.data.SetAccountAvatarUseCase
@@ -69,6 +72,7 @@ class SettingsViewModel @Inject constructor(
     private val accountRepository: AccountRepository,
     private val currentAccountRepository: CurrentAccountRepository,
     private val setAccountAvatar: SetAccountAvatarUseCase,
+    private val resetRepository: ResetRepository,
 ) : ViewModel() {
 
     /** 主题偏好快照（mode + dynamicColor） */
@@ -321,6 +325,97 @@ class SettingsViewModel @Inject constructor(
     /** 用户关闭「节假日数据即将过期」弹窗 */
     fun dismissHolidaySyncPrompt() {
         _syncPromptYear.value = null
+    }
+
+    // ===== Phase 6：清除全部数据 =====
+
+    /**
+     * 重置流程状态机（设置页长按按钮驱动）。
+     *
+     * 状态转移：
+     * - Idle → 用户点「清除数据」 → SuggestBackup（先弹"建议先备份"）
+     * - SuggestBackup → 用户选「先备份」→ 调 onBackupBeforeReset → 返回 Idle
+     * - SuggestBackup → 用户选「直接清」→ LongPress（弹长按 3 秒对话框）
+     * - LongPress → 长按 3 秒成功 → Running → Done
+     * - LongPress → 用户取消 → Idle
+     * - Done → 用户看完 → Idle
+     */
+    sealed interface ResetUiState {
+        data object Idle : ResetUiState
+        data object SuggestBackup : ResetUiState
+        data object LongPress : ResetUiState
+        data object Running : ResetUiState
+        data class Done(val report: ResetReport) : ResetUiState
+    }
+
+    private val _resetState = kotlinx.coroutines.flow.MutableStateFlow<ResetUiState>(ResetUiState.Idle)
+    val resetState: kotlinx.coroutines.flow.StateFlow<ResetUiState> = _resetState.asStateFlow()
+
+    init {
+        // 监听 ResetRepository 完成的 report（兜底；UI 主要走 resetState 的 Done）
+        viewModelScope.launch {
+            resetRepository.resetEvents.collect { event ->
+                when (event) {
+                    is ResetEvent.Completed -> {
+                        // 如果 UI 没显示 Done（极端 race），强制同步
+                        if (_resetState.value !is ResetUiState.Done) {
+                            _resetState.value = ResetUiState.Done(event.report)
+                        }
+                        emitResetStatus(event.report)
+                    }
+                }
+            }
+        }
+    }
+
+    /** 用户点「清除数据」按钮：进入 SuggestBackup 状态 */
+    fun requestReset() {
+        if (_resetState.value is ResetUiState.Running) return  // 防止重入
+        _resetState.value = ResetUiState.SuggestBackup
+    }
+
+    /** 「先备份再清」：调 ViewModel 暴露的 exportNow，回退到 Idle */
+    fun backupThenReset(outputStream: java.io.OutputStream, onComplete: (Boolean) -> Unit) {
+        exportNow(outputStream) { ok ->
+            _resetState.value = ResetUiState.Idle
+            onComplete(ok)
+        }
+    }
+
+    /** 「直接清」：进入长按 3 秒状态 */
+    fun skipBackupAndReset() {
+        _resetState.value = ResetUiState.LongPress
+    }
+
+    /** 长按 3 秒完成（由 UI 计时器回调），进入 Running 并真正清 */
+    fun confirmResetAfterLongPress() {
+        if (_resetState.value !is ResetUiState.LongPress) return
+        _resetState.value = ResetUiState.Running
+        viewModelScope.launch {
+            val report = runCatching { resetRepository.resetAll() }
+                .getOrElse { ResetReport(false, false, false, false) }
+            _resetState.value = ResetUiState.Done(report)
+            emitResetStatus(report)
+        }
+    }
+
+    /** 用户在任何中间态点取消，回到 Idle */
+    fun cancelReset() {
+        _resetState.value = ResetUiState.Idle
+    }
+
+    /** Done 看完了，重置回 Idle（让 UI 收起 Done 弹窗/横幅） */
+    fun acknowledgeResetDone() {
+        _resetState.value = ResetUiState.Idle
+    }
+
+    private fun emitResetStatus(report: ResetReport) {
+        _statusMessage.value = if (report.allSucceeded) {
+            "已清除全部数据，建议重启 App 让闹钟缓存失效"
+        } else {
+            "部分步骤失败：db=${report.databaseCleared} ds=${report.datastoreCleared} " +
+                "att=${report.attachmentsCleared} avt=${report.avatarsCleared}"
+        }
     }
 
     fun dismissStatusMessage() {

@@ -83,6 +83,28 @@ object DateUtils {
 
     fun currentYearMonth(): String = LocalDate.now().format(FORMATTER_YEAR_MONTH)
 
+    /**
+     * 解析 "yyyy-MM-dd" 为当天 00:00 的 epoch millis。
+     *
+     * - 解析失败（包括 null、空串、格式错、日期不存在如 2025-02-30）返回 null
+     * - 用于 [com.example.personalassistant.feature.timetable.presentation.components.SemesterCreateDialog]
+     *   这类 text input 场景；后续若上 DatePicker，可以替换为 Instant.parse。
+     */
+    fun parseDate(text: String): Long? = try {
+        if (text.isBlank()) {
+            null
+        } else {
+            LocalDate.parse(text.trim(), FORMATTER_DATE)
+                .atStartOfDay(zoneId)
+                .toInstant()
+                .toEpochMilli()        }
+    } catch (e: Exception) {
+        null
+    }
+
+    /** 返回今天的 "yyyy-MM-dd" 字符串（用于表单默认起点） */
+    fun todayString(): String = LocalDate.now(zoneId).format(FORMATTER_DATE)
+
     // ============== 分钟数 ↔ 时间字符串 ==============
 
     /** 把分钟数（0-1439）格式化为 "HH:mm" */

@@ -37,6 +37,13 @@ interface CourseDao {
     @Query("SELECT * FROM courses WHERE semester = :semester ORDER BY dayOfWeek, startTime")
     fun observeBySemester(semester: String): Flow<List<CourseEntity>>
 
+    /**
+     * Phase 12：观察全部学期所有课程（用于「我」页 GPA 计算）。
+     * 不带学期过滤，等价于全局扫表；GPA 计算只在「我」Tab 用一次，可接受。
+     */
+    @Query("SELECT * FROM courses")
+    fun observeAll(): Flow<List<CourseEntity>>
+
     @Query("SELECT * FROM courses WHERE semester = :semester AND dayOfWeek = :dayOfWeek ORDER BY startTime")
     fun observeBySemesterAndDay(semester: String, dayOfWeek: Int): Flow<List<CourseEntity>>
 
@@ -94,6 +101,13 @@ interface CourseDao {
 
     @Query("SELECT * FROM courses")
     suspend fun getAllCourses(): List<CourseEntity>
+
+    /**
+     * 把 semester 列中等于 [oldName] 的引用替换为 [newName]。
+     * 用 @Query 直接做批量更新，避免一条条 update 的 N 次事务。
+     */
+    @Query("UPDATE courses SET semester = :newName WHERE semester = :oldName")
+    suspend fun renameSemesterReferences(oldName: String, newName: String)
 }
 
 /**

@@ -70,6 +70,7 @@
 - 全局搜索：4 模块 combine + 模糊匹配 + 分组展示 + 关键字高亮
 - 备份恢复：全表序列化 → SAF 导出 zip/json → 校验 → 事务化导入；WorkManager 周期备份
 - 设置页卡片式布局：主题切换、账户管理（新建 / 切换 / 重命名 / 删除 + 期初余额 + 头像）、备份与恢复入口、通知权限引导
+- **危险操作：清除全部数据**（阶段 Phase 6）— 红色 Card 入口 + 「建议先备份」弹窗 + 长按 3 秒确认 + 完成反馈弹窗，覆盖 Room 14 张表 / DataStore 偏好 / 附件 / 头像四个数据源，调度层 cancel 全部走在数据清之前
 
 ---
 
@@ -96,7 +97,7 @@
 | 🔜 | `Screen.EditEvent` / `AddTransaction` / `MonthlyBudget` 三条路由已声明但 `NavHost` 未注册。记账/日历靠各页就地弹层（`AddTransactionSheet` / `BudgetSheet` / `EditEventSheet`）完成闭环，所以**目前不崩**；但 `AppNavHost` 第 118 行会 navigate 到未注册的 `calendar/edit/{id}` —— 一旦全局搜索接入可达，点「事件」命中项将直接抛 `IllegalArgumentException`（潜伏缺陷，非现役崩溃） | 本轮导航核对 |
 | 🔜 | 记账页顶部**账户切换快捷入口**（当前只能进设置页换） | 阶段 Phase 3 |
 | 🔜 | 图片 EXIF 旋转处理（附件与头像均未做） | 阶段 Phase 2 |
-| 🔜 | **设置页「清除数据」入口**：旧 README 列为 Phase 6 计划项，但本轮 `findstr` 实测 `clearAllData` / `clearData` / `deleteAllTables` **零命中** —— 代码里尚无实现，已从「已完成」移除，待拍板是否补做 | 需求说明书 / 旧 README |
+| 🔜 | **设置页「清除数据」入口**：旧 README 列为 Phase 6 计划项，本轮已落地（设置页底部红色 Card + 备份建议 + 长按 3 秒确认 + 完成反馈） | 阶段 Phase 6 ✅ |
 | ⏳ | `feature/phase-8-reminder` → `Develop` 回合合并 | 模块 Phase 8h |
 
 ---

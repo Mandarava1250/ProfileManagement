@@ -2377,3 +2377,88 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
    - **10c 真人目测执行**：用户在真机按 `phase10-visual-checklist.md` 跑 5 节 → 把 10c 🟨 转 ✅
    - **Phase 10 之后发布 / 归档**：用户决定是否打 APK、归档分支、推 release tag
 2. **不依赖上述**：可继续新功能开发（账户管理 / 数据导出增强 / 多账户权限分离 等）
+
+---
+
+## 🚀 2026-10-11 11:30 —— 阶段 Phase 6 收尾：清除全部数据入口（设置页红色 Card + 长按 3 秒 + 调度 cancel 在前）
+
+> 阶段 Phase 6 = 通知权限 / 附件 / 多账户 / 头像 / 转账 / **清除数据**。
+> 前 5 项已在 Phase 8 末尾的 Phase 1~5 轮补完；本轮补最后一项。
+
+### 已完成的步骤
+
+1. **架构与决策**（拍板前对齐）
+   - **1A**：完全清空（不留默认账户）。
+   - **2B**：长按按钮 3 秒确认（替代"打字确认"或"两次弹窗"）。
+   - **3A**：第一步就弹"建议先备份"（决策 A：与保留路径解耦）。
+   - **currentAccountId 重置为 0**：用户拍板"DataStore 也清成 0"，FinanceTab 后续由用户在设置页建账户。
+
+2. **新文件**（5 改 / 2 新）
+   - `core/reset/AppDataReset.kt`：数据层实际执行者（Room `clearAllTables` + DataStore `edit{clear}` + 附件目录 `deleteAllInDir` + 头像目录 `deleteRecursively`）。
+   - `core/reset/ResetRepository.kt` / `ResetRepositoryImpl.kt`：门面。注入 `DataResetExecutor`（fun interface，JVM 测试用 lambda 注入）、4 个 scheduler；按"cancel 先于 data"的顺序硬约束（防 Worker 读到空表写孤儿数据）。
+   - `core/reset/ResetEvent`/`DataResetExecutor`：上送 UI 的密封事件 + 边界接口（避免 mock Android Context）。
+   - `core/reset/di/ResetModule.kt`：Hilt `@Binds` ResetRepositoryImpl + AppDataReset + DailyPoolRefreshScheduler。
+   - `service/reminder/DailyPoolRefresher.kt`：抽象接口，便于 JVM 测试 mock（沿用项目 `AttachmentStore` 的 `open` 约定）。
+
+3. **UI 接线**
+   - `SettingsViewModel.kt`：注入 `ResetRepository`；状态机 `Idle → SuggestBackup → LongPress → Running → Done`；监听 `resetEvents` 兜底。
+   - `SettingsScreen.kt`：底部新增红色 Card（`errorContainer`）+ 三个 Composable 弹窗（`SuggestBackupBeforeResetDialog` / `LongPressConfirmDialog` / `DoneDialog` + `Running` 进度）；长按 3 秒用 `pointerInput` + `LaunchedEffect` + 进度条 Canvas 实现。
+
+4. **测试**（JVM 全绿）
+   - `ResetModuleTest`（5 用例）：
+       - `allSucceeded` 契约（真值表覆盖）
+       - "cancel 先于 data"的顺序守卫
+       - 任一 cancel 抛异常不阻断其它（runCatching 已包）
+       - 单 cancel 抛异常的完整调用序列
+       - `resetEvents` 暴露 `SharedFlow<ResetEvent>` 契约
+   - **临时改类**：`CompositeReminderScheduler` 加 `open`、`DailyPoolRefreshScheduler` 抽 `DailyPoolRefresher` 接口（一致 `AttachmentStore` 的可继承约定）。
+
+5. **副作用最小化**
+   - **Hilt 模块无新依赖**：DataResetExecutor / DailyPoolRefresher 都通过 `@Binds` 接现有实现，不引入 `@Provides`。
+   - **`clearAllTables` 不触发 `DatabaseCallback.onCreate`**（Room 内部行为）：默认账户不会被自动 seed，符合 1A "完全清空"。
+   - **AlarmManager no-op 已记 README**：事件闹钟的 cancelAll 是 no-op（AlarmManager 限制），靠 `BootReceiver` 下次开机按空表重建；任务 AlarmManager 由 `CompositeReminderScheduler.cancelAll()` 走 AlarmManager 分支彻底清。
+
+### 关键变更文件
+
+| 文件 | 改动类型 | 说明 |
+|---|---|---|
+| `app/src/main/java/com/example/personalassistant/core/reset/AppDataReset.kt` | 新建 | 数据层清（Room + DataStore + 附件 + 头像） |
+| `app/src/main/java/com/example/personalassistant/core/reset/ResetRepository.kt` | 新建 | 门面接口 + ResetEvent + DataResetExecutor |
+| `app/src/main/java/com/example/personalassistant/core/reset/ResetRepositoryImpl.kt` | 新建 | "cancel 先于 data" 顺序守卫 |
+| `app/src/main/java/com/example/personalassistant/core/reset/di/ResetModule.kt` | 新建 | Hilt 绑定 |
+| `app/src/main/java/com/example/personalassistant/service/reminder/DailyPoolRefresher.kt` | 新建 | 抽象接口 |
+| `app/src/main/java/com/example/personalassistant/feature/settings/SettingsViewModel.kt` | 改 | 注入 + 状态机 + resetRepository.resetEvents.collect |
+| `app/src/main/java/com/example/personalassistant/feature/settings/SettingsScreen.kt` | 改 | 红色 Card + 三阶段弹窗 + 长按 3 秒手势 |
+| `app/src/main/java/com/example/personalassistant/service/reminder/DailyPoolRefreshScheduler.kt` | 改 | 实现 DailyPoolRefresher 接口 |
+| `app/src/main/java/com/example/personalassistant/feature/task/data/reminder/CompositeReminderScheduler.kt` | 改 | 加 `open`（允许测试继承） |
+| `app/src/main/java/com/example/personalassistant/service/reminder/BootReceiver.kt` | 改 | scheduleNext 补传时间参数（接口签名无 default） |
+| `app/src/main/java/com/example/personalassistant/service/reminder/DailyPoolRefreshWorker.kt` | 改 | 同上 |
+| `app/src/main/java/com/example/personalassistant/PersonalAssistantApp.kt` | 改 | 同上 |
+| `app/src/test/java/com/example/personalassistant/core/reset/ResetModuleTest.kt` | 新建 | 5 个用例 |
+| `README.md` | 改 | 「待办」表移除该缺口，「已完成」段补一条 |
+| 根目录 `*.log`（50 个调试日志） | 删除 | `.gitignore` 已有 `*.log`，纯调试产物 |
+
+### 验证结果
+
+- `./gradlew :app:compileDebugKotlin` ✅ 通过（2m 27s）
+- `./gradlew :app:testDebugUnitTest --tests "com.example.personalassistant.core.reset.ResetModuleTest"` ✅ **5/5 全过**（2m 51s，含 --rerun-tasks）
+- `./gradlew :app:assembleDebug` ✅ 通过
+- `./gradlew :app:testDebugUnitTest`（全量）：**598 + 5 = 603 通过**；唯一失败 `SetMonthlyBudgetUseCaseTest.observeCurrentMonthBudget reflects the current month only` 是与时间耦合的既有测试（依赖机器当前是 10 月），与本轮无关（git blame 验证未动过该文件）。
+
+### 踩坑笔记
+
+1. **`AppDataReset` 不能在测试里直接 `throw IllegalStateException("never used")` 构造**（super 立即执行）→ 抽出 `DataResetExecutor` fun interface，测试用 lambda 注入。
+2. **`Context` 是 abstract** → 无法子类化 → 不能让测试 fake `DailyPoolRefreshScheduler`（它构造器要 `@ApplicationContext Context`）→ 抽出 `DailyPoolRefresher` 接口，避开 Context 构造。
+3. **`MutableSharedFlow.emit` 默认 SUSPEND** → 无订阅者时 `resetAll()` 内部 emit 挂起 → 测试里 `UncompletedCoroutinesError`。改成 `extraBufferCapacity + DROP_OLDEST`，且 test 用 launch + advanceUntilIdle 推动虚拟时间。
+4. **`override fun` 不能给默认值**（Kotlin 限制）→ 把默认值放在 `interface` 声明，三处调用点改 `scheduleNext(System.current.timeMillis())` 显式传。
+5. **Kotlin 不能 mockable Context**（项目未开 `testOptions { unitTests.isReturnDefaultValues = true }` for JVM）→ 同样的原因走抽象接口方案。
+
+### 已知约束（已入 README）
+
+- 清除后建议重启 App 一次：AlarmManager 上的事件 / 任务精确闹钟无 tag cancel API，仅靠 `BootReceiver` 下次开机按空表重建。
+- 当前台账 TopSpeed "598 JVM + 6 instrumented" 未重测（数字上 **603 JVM** 已确认）。
+
+### 下一个入口
+
+- **10b / 10c 仍是 🟨**，需要 AVD `google_apis` 镜像（README 顶层已注明）或真机做 instrumented 真跑 + 真人目测（详见 Phase 11 起点候选）。
+- 本轮清除数据功能本身仍需在真机走"新建账户 → 加几条数据 → 清空 → 重新登录"冒烟——AVD `aosp_atd` 镜像全黑屏，真机可用再补。

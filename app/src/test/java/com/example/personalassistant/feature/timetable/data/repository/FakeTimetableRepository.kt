@@ -25,10 +25,16 @@ class FakeTimetableRepository : TimetableRepository {
     override fun observeCoursesBySemester(semester: String): Flow<List<Course>> =
         coursesState.map { list -> list.filter { it.semester == semester } }
 
+    /**
+     * Phase 12：观察全部学期所有课程
+     */
+    override fun observeAllCourses(): Flow<List<Course>> = coursesState
+
     override fun observeCoursesByDay(semester: String, dayOfWeek: Int): Flow<List<Course>> =
         coursesState.map { list -> list.filter { it.semester == semester && it.dayOfWeek == dayOfWeek } }
 
-    override suspend fun getCourseById(id: Long): Course? = null
+    override suspend fun getCourseById(id: Long): Course? =
+        coursesState.value.firstOrNull { it.id == id }
 
     override suspend fun findConflicts(
         semester: String?,
@@ -36,7 +42,13 @@ class FakeTimetableRepository : TimetableRepository {
         startTime: Int,
         endTime: Int,
         excludeId: Long,
-    ): List<Course> = emptyList()
+    ): List<Course> = coursesState.value.filter { c ->
+        c.id != excludeId &&
+            (semester == null || c.semester == semester) &&
+            c.dayOfWeek == dayOfWeek &&
+            c.startTime < endTime &&
+            c.endTime > startTime
+    }
 
     override suspend fun upsertCourse(course: Course): Long {
         upsertCount++
@@ -50,6 +62,12 @@ class FakeTimetableRepository : TimetableRepository {
     }
 
     override suspend fun switchSemester(name: String) = Unit
+
+    override suspend fun renameSemesterReferences(oldName: String, newName: String) {
+        coursesState.value = coursesState.value.map {
+            if (it.semester == oldName) it.copy(semester = newName) else it
+        }
+    }
 
     // ===== Semester =====
 

@@ -14,6 +14,8 @@ import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.me.data.local.StudentProfileDao
+import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileDao
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import com.example.personalassistant.feature.task.data.local.SubTaskEntity
@@ -40,7 +42,7 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
  *
  * ⚠️ 升版时必须同步：本常量 + 新 Migration + `BackupFormatVersion.DB_VERSION`。
  */
-const val APP_DATABASE_VERSION = 10
+const val APP_DATABASE_VERSION = 12
 
 /**
  * App 主数据库
@@ -89,8 +91,12 @@ const val APP_DATABASE_VERSION = 10
         HolidayEntity::class,
         // 账户（Phase 3）
         UserProfileEntity::class,
+        // 「我」档案（Phase 12）
+        StudentProfileEntity::class,
     ],
     // v10（Phase 5）：transactions.transferAccountId + user_profiles.initialBalance
+    // v11（Phase 12）：courses.credit + courses.gradePoint + student_profile 表
+    // v12（Phase 12 GPA 规则）：student_profile.gpaRuleJson
     version = APP_DATABASE_VERSION,
     exportSchema = true
 )
@@ -105,6 +111,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun financeDao(): FinanceDao
     abstract fun holidayDao(): HolidayDao
     abstract fun userProfileDao(): UserProfileDao
+    abstract fun studentProfileDao(): StudentProfileDao
 
     companion object {
         const val DATABASE_NAME = "personal_assistant.db"
@@ -126,6 +133,8 @@ abstract class AppDatabase : RoomDatabase() {
                 Migration_7_8,
                 Migration_8_9,
                 Migration_9_10,
+                Migration_10_11,
+                Migration_11_12,
             )
     }
 }

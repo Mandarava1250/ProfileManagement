@@ -192,13 +192,15 @@ interface FinanceRepository {
      *
      * - 返回落库后的 budget id
      * - 立即触发零钱池重算（不依赖 WorkManager）
+     * - [warningThreshold] 传 null 表示「未设置警告阈值」，落库为 0.0；
+     *   传具体数值则照存。
      */
     suspend fun setMonthlyBudget(
         yearMonth: String,
         totalAmount: Double,
         isAutoRefresh: Boolean,
         carryOverEnabled: Boolean,
-        warningThreshold: Double,
+        warningThreshold: Double?,
     ): Long
 
     // ===== 零钱池 =====

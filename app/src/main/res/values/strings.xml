@@ -8,6 +8,7 @@
     <string name="tab_tasks">任务</string>
     <string name="tab_finance">记账</string>
     <string name="tab_calendar">日历</string>
+    <string name="tab_me">我</string>
 
     <!-- Common -->
     <string name="action_save">保存</string>
@@ -35,6 +36,9 @@
     <string name="timetable_edit_course">编辑课程</string>
     <string name="timetable_semester">学期</string>
     <string name="timetable_no_courses">还没有课程，点击 + 添加</string>
+    <!-- Phase 10：课表 TopAppBar 右上角导入入口 -->
+    <string name="timetable_action_import">导入课表</string>
+    <string name="timetable_action_import_coming_soon">课表导入功能开发中，敬请期待♪</string>
 
     <!-- 任务 -->
     <string name="tasks_title">任务</string>

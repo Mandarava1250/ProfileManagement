@@ -67,7 +67,7 @@ class PersonalAssistantApp : Application(), Configuration.Provider {
             try {
                 Log.i(TAG, "🟢 App.onCreate: refresh daily pool + schedule next worker")
                 refreshDailyPool(System.currentTimeMillis())
-                dailyPoolScheduler.scheduleNext()
+                dailyPoolScheduler.scheduleNext(System.currentTimeMillis())
             } catch (e: Exception) {
                 // 不阻断 App 启动；下次 Worker 触发或用户进 Finance tab 时再试
                 Log.w(TAG, "bootstrapFinance failed: ${e.message}", e)

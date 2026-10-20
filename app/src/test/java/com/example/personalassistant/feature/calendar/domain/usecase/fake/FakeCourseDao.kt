@@ -68,6 +68,11 @@ class FakeCourseDao : CourseDao {
     override fun observeBySemester(semester: String): Flow<List<CourseEntity>> =
         flowOf(store.values.filter { it.semester == semester })
 
+    /**
+     * Phase 12：观察全部课程
+     */
+    override fun observeAll(): Flow<List<CourseEntity>> = flowOf(store.values.toList())
+
     override fun observeBySemesterAndDay(semester: String, dayOfWeek: Int): Flow<List<CourseEntity>> =
         flowOf(store.values.filter { it.semester == semester && it.dayOfWeek == dayOfWeek })
 
@@ -83,6 +88,13 @@ class FakeCourseDao : CourseDao {
     override fun searchCourses(keyword: String): Flow<List<CourseEntity>> = flowOf(emptyList())
 
     override suspend fun getAllCourses(): List<CourseEntity> = store.values.toList()
+
+    /**
+     * Phase 8 Sub-step 4 备用：批量重命名学期引用
+     */
+    override suspend fun renameSemesterReferences(oldName: String, newName: String) {
+        store.replaceAll { _, v -> if (v.semester == oldName) v.copy(semester = newName) else v }
+    }
 }
 
 /**

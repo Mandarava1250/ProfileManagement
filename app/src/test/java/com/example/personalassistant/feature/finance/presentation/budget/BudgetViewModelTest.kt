@@ -2,8 +2,9 @@ package com.example.personalassistant.feature.finance.presentation.budget
 
 import com.example.personalassistant.feature.finance.data.repository.FakeFinanceRepository
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
-import com.example.personalassistant.feature.finance.domain.usecase.ObserveMonthlyBudgetUseCase
+import com.example.personalassistant.feature.finance.domain.usecase.ObserveAllBudgetsUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.SetMonthlyBudgetUseCase
+import com.example.personalassistant.feature.finance.presentation.util.Feedback
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -15,6 +16,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -28,6 +30,10 @@ import org.junit.Test
  * - save 调用 setMonthlyBudget 并透传 totalAmount + threshold
  * - loadFromPersisted 把持久化值还原成 state（threshold=0 显示空字符串）
  * - canSave: 非法 amount → false
+ *
+ * C 重构阶段 2/4 新增：
+ * - save with invalid amount emits Warning feedback（不再 silently return）
+ * - save with blank threshold persists 0_0 to repo（null 落 0.0 仍正确）
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class BudgetViewModelTest {
@@ -41,7 +47,7 @@ class BudgetViewModelTest {
         Dispatchers.setMain(testDispatcher)
         repo = FakeFinanceRepository()
         vm = BudgetViewModel(
-            observeMonthlyBudget = ObserveMonthlyBudgetUseCase(repo),
+            observeAllBudgets = ObserveAllBudgetsUseCase(repo),
             setMonthlyBudget = SetMonthlyBudgetUseCase(repo),
         )
     }
@@ -89,8 +95,12 @@ class BudgetViewModelTest {
         assertTrue(doneCalled)
     }
 
+    /**
+     * C 重构后："空字符串 ⇒ null 传 use case ⇒ Impl 落 0.0"。
+     * 测试观察的是**仓库层**结果，仍然是 0.0；这条用例只是为语义改名。
+     */
     @Test
-    fun `save with blank threshold persists 0_0`() = runTest(testDispatcher) {
+    fun `save with blank threshold persists 0_0 via nullable`() = runTest(testDispatcher) {
         vm.setAmount("3000")
         vm.setWarningThreshold("")
         advanceUntilIdle()
@@ -99,6 +109,7 @@ class BudgetViewModelTest {
 
         val current = repo.observeCurrentMonthBudget().first()
         assertNotNull(current)
+        // null 经 Impl 转 0.0 落库，与旧版本行为对齐
         assertEquals(0.0, current!!.warningThreshold, 0.001)
     }
 
@@ -133,5 +144,28 @@ class BudgetViewModelTest {
         vm.setAmount("abc")
         advanceUntilIdle()
         assertEquals(false, vm.editing.value.canSave)
+    }
+
+    /**
+     * C 重构阶段 2 新增：非法金额 → Feedback.Warning，不再 silently return。
+     * 同时验证 onDone 没被触发（保存失败时不关 sheet）。
+     */
+    @Test
+    fun `save with invalid amount emits Warning feedback`() = runTest(testDispatcher) {
+        vm.setAmount("abc")
+        advanceUntilIdle()
+        var doneCalled = false
+        vm.save(onDone = { doneCalled = true })
+        advanceUntilIdle()
+
+        val fb = vm.feedback.value
+        assertNotNull("应当收到反馈", fb)
+        assertTrue("应当是 Warning, got $fb", fb is Feedback.Warning)
+        assertTrue("Warning 文案应说明金额格式, got ${(fb as Feedback.Warning).message}",
+            (fb).message.contains("金额"))
+        assertEquals(false, doneCalled)
+        // 不应写入 repo
+        val current = repo.observeCurrentMonthBudget().first()
+        assertNull("非法金额不应创建预算行", current)
     }
 }

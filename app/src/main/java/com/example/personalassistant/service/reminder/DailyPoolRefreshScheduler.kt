@@ -30,7 +30,7 @@ import javax.inject.Singleton
 @Singleton
 class DailyPoolRefreshScheduler @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : DailyPoolRefresher {
     private val workManager: WorkManager by lazy { WorkManager.getInstance(context) }
 
     /**
@@ -39,7 +39,7 @@ class DailyPoolRefreshScheduler @Inject constructor(
      * - 已存在同名任务会被 REPLACE 替换
      * - delay = (明日 00:01 - now) 毫秒数
      */
-    fun scheduleNext(now: Long = System.currentTimeMillis()) {
+    override fun scheduleNext(now: Long) {
         val zone = ZoneId.systemDefault()
         val nowDateTime = LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(now), zone)
         val nextMidnight = if (nowDateTime.toLocalTime().isBefore(LocalTime.MIDNIGHT)) {
@@ -69,7 +69,7 @@ class DailyPoolRefreshScheduler @Inject constructor(
     }
 
     /** 取消已调度的任务（设置里关闭"每日零钱池刷新"等场景） */
-    fun cancelNext() {
+    override fun cancelNext() {
         workManager.cancelUniqueWork(UNIQUE_WORK_NAME)
     }
 

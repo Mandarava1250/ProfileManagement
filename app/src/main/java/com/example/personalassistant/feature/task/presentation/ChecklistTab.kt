@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -27,7 +28,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.presentation.components.ChecklistItem
 
@@ -43,6 +48,18 @@ fun ChecklistTab(
     modifier: Modifier = Modifier,
 ) {
     var input by rememberSaveable { mutableStateOf("") }
+    val canSubmit = input.isNotBlank()
+
+    // Phase 10 修复：把提交逻辑抽出来，IconButton 点击 + 软键盘「完成」共用同一条路径，
+    // 保证两条入口行为一致（trim 校验、清空输入框、调 onAdd）。每次重组重建 lambda
+    // 是 OK 的 —— 重建只是 OnClick 的引用更新，Compose 会按需重组 IconButton，逻辑等价。
+    val submit: () -> Unit = {
+        val title = input.trim()
+        if (title.isNotEmpty()) {
+            onAdd(title)
+            input = ""
+        }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -57,21 +74,34 @@ fun ChecklistTab(
                 placeholder = { Text("添加清单项…") },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
+                // Phase 10 修复：让软键盘右下角变成「完成」，按回车真的能提交。
+                // 之前没接 imeAction，singleLine=true 时回车只是被吞掉，提示语
+                // 「回车或点击 + 即可添加」只兑现了一半，用户以为 + 没反应。
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Done,
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = { submit() },
+                ),
             )
             Spacer(Modifier.width(8.dp))
             IconButton(
-                onClick = {
-                    val title = input.trim()
-                    if (title.isNotEmpty()) {
-                        onAdd(title)
-                        input = ""
-                    }
-                },
-                enabled = input.isNotBlank(),
+                // Phase 10 修复：保留 enabled 守卫避免提交空项，但 disabled 时显式
+                // 给 Icon 一个 outline 灰色并加透明度，让「+ 不可点」这件事一眼可见。
+                // 之前 enabled=false 时 IconButton 自动降 alpha 在某些主题下不明显，
+                // 用户空着输入框点 + 看不到任何反馈，以为按钮坏了。
+                onClick = submit,
+                enabled = canSubmit,
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "添加",
+                    tint = if (canSubmit) {
+                        LocalContentColor.current
+                    } else {
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                    },
                 )
             }
         }
@@ -90,7 +120,7 @@ fun ChecklistTab(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = "上方输入框回车或点击 + 即可添加",
+                        text = "在上方输入文字后点击 + 添加",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline,
                     )

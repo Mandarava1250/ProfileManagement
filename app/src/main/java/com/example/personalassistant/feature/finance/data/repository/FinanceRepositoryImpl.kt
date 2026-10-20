@@ -362,7 +362,7 @@ class FinanceRepositoryImpl @Inject constructor(
         totalAmount: Double,
         isAutoRefresh: Boolean,
         carryOverEnabled: Boolean,
-        warningThreshold: Double,
+        warningThreshold: Double?,
     ): Long = withContext(dispatcher) {
         val accountId = awaitAccountId()
         val now = System.currentTimeMillis()
@@ -374,7 +374,8 @@ class FinanceRepositoryImpl @Inject constructor(
             totalAmount = totalAmount,
             isAutoRefresh = isAutoRefresh,
             carryOverEnabled = carryOverEnabled,
-            warningThreshold = warningThreshold,
+            // null = 未设置，落 0.0；语义与"关闭警告"等价
+            warningThreshold = warningThreshold ?: 0.0,
             createdAt = existing?.createdAt ?: now,
             updatedAt = now,
         )

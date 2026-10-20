@@ -23,7 +23,7 @@ import javax.inject.Named
  * - 复合策略让两条路各司其职
  */
 @Singleton
-class CompositeReminderScheduler @Inject constructor(
+open class CompositeReminderScheduler @Inject constructor(
     @Named(NAMED_WORK) private val workManager: ReminderScheduler,
     @Named(NAMED_ALARM) private val alarmManager: ReminderScheduler,
 ) : ReminderScheduler {

@@ -36,6 +36,10 @@ data class Course(
     val weeks: String? = null,
     val reminderMinutes: Int = 15,
     val note: String? = null,
+    /** 学分（Phase 12 新增；null = 未填） */
+    val credit: Double? = null,
+    /** 绩点（0.0-4.0；Phase 12 新增；null = 未填） */
+    val gradePoint: Double? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
 ) {

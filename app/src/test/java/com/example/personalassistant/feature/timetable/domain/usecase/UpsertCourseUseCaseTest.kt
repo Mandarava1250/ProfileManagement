@@ -22,6 +22,7 @@ class UpsertCourseUseCaseTest {
     private fun course(
         id: Long = 0L,
         name: String = "高数",
+        teacher: String = "",
         dayOfWeek: Int = 1,
         startTime: Int = 540,
         endTime: Int = 600,
@@ -29,6 +30,7 @@ class UpsertCourseUseCaseTest {
     ) = Course(
         id = id,
         name = name,
+        teacher = teacher,
         dayOfWeek = dayOfWeek,
         startTime = startTime,
         endTime = endTime,
@@ -44,6 +46,10 @@ class UpsertCourseUseCaseTest {
         val upserted = mutableListOf<Course>()
         var deletedIds = mutableListOf<Long>()
 
+        override fun observeCoursesBySemester(semester: String): Flow<List<Course>> = flowOf(existing)
+        override fun observeAllCourses(): Flow<List<Course>> = flowOf(existing)
+        override fun observeCoursesByDay(semester: String, dayOfWeek: Int): Flow<List<Course>> = flowOf(emptyList())
+        override suspend fun getCourseById(id: Long): Course? = existing.firstOrNull { it.id == id }
         override suspend fun findConflicts(
             semester: String?,
             dayOfWeek: Int,
@@ -64,10 +70,8 @@ class UpsertCourseUseCaseTest {
         }
 
         override suspend fun deleteCourse(id: Long) { deletedIds += id }
-        override fun observeCoursesBySemester(semester: String): Flow<List<Course>> = flowOf(existing)
-        override fun observeCoursesByDay(semester: String, dayOfWeek: Int): Flow<List<Course>> = flowOf(emptyList())
-        override suspend fun getCourseById(id: Long): Course? = existing.firstOrNull { it.id == id }
         override suspend fun switchSemester(name: String) {}
+        override suspend fun renameSemesterReferences(oldName: String, newName: String) {}
         override fun observeAllSemesters(): Flow<List<Semester>> = flowOf(emptyList())
         override fun observeCurrentSemester(): Flow<Semester?> = flowOf(null)
         override suspend fun getSemesterByName(name: String): Semester? = null
@@ -151,5 +155,33 @@ class UpsertCourseUseCaseTest {
         val result = useCase(newCourse)
 
         assertTrue(result.conflicts.isEmpty())
+    }
+
+    /**
+     * Phase 12：teacher 字段透传（推翻之前"UI 写死空串"的设计）
+     */
+    @Test
+    fun `teacher 字段被原样保存到 DB`() = runBlocking {
+        val repo = FakeTimetableRepository(emptyList())
+        val useCase = UpsertCourseUseCase(repo)
+
+        val c = course(id = 0L, name = "高数", teacher = "张老师", dayOfWeek = 1)
+        useCase(c)
+
+        assertEquals(1, repo.upserted.size)
+        val stored = repo.upserted[0]
+        assertEquals("张老师", stored.teacher)
+    }
+
+    @Test
+    fun `teacher 字段为空串也能保存（默认情况）`() = runBlocking {
+        val repo = FakeTimetableRepository(emptyList())
+        val useCase = UpsertCourseUseCase(repo)
+
+        val c = course(id = 0L, name = "高数", teacher = "", dayOfWeek = 1)
+        useCase(c)
+
+        assertEquals(1, repo.upserted.size)
+        assertEquals("", repo.upserted[0].teacher)
     }
 }
