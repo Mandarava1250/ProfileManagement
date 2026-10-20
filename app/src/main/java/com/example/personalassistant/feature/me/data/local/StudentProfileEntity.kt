@@ -37,8 +37,14 @@ data class StudentProfileEntity(
      * 为避免引入 Room migration，新规则以 JSON 字符串塞进单列：
      *  - 空串 → 使用 [GpaRule.DEFAULT]（4.0 制默认转换表）
      *  - 非空 → kotlinx.serialization 反序列化为 [GpaRule]
+     *
+     * 关于 `@ColumnInfo(defaultValue = "''")`：
+     *  - Migration_11_12 实际跑的 SQL 是 `ALTER TABLE student_profile ADD COLUMN gpaRuleJson TEXT DEFAULT ''`
+     *  - Room 默认对 Kotlin 非空 String 字段生成的 defaultValue 是 `'undefined'`（Room 的 sentinel）
+     *  - 二者不一致 → Room schema 校验抛 `Migration didn't properly handle` 闪退
+     *  - 显式声明 `defaultValue = "''"` 让 Room 期望值与已有 migration 落库结果对齐
      */
-    @ColumnInfo(name = "gpaRuleJson")
+    @ColumnInfo(name = "gpaRuleJson", defaultValue = "''")
     val gpaRuleJson: String = "",
 
     @ColumnInfo(name = "updatedAt")

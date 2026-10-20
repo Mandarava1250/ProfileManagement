@@ -307,6 +307,51 @@ class AppDatabaseMigrationsTest {
         db10.close()
     }
 
+    /**
+     * 11→12：Phase 12「我」模块扩展 GPA 规则
+     *
+     * 验证 [Migration_11_12] 在真 SQLite 上按序执行成功，结果符合 v12 Room schema：
+     * 1. `helper.runMigrationsAndValidate(TEST_DB, 12, true, Migration_11_12)` —— 迁移跑通，
+     *    且迁移后的实际表结构与导出的 12.json 完全一致
+     *    （索引名/列/FK 任一不符即抛 IllegalStateException —— 跟线上闪退的栈完全一致）
+     * 2. `student_profile.gpaRuleJson` 列存在，且 NOT NULL DEFAULT ''
+     *
+     * 线上闪退的根因：v12 的 Room 期望 `defaultValue='undefined'`，但
+     * Migration_11_12 实际写的是 `TEXT DEFAULT ''`。修法：[StudentProfileEntity] 用
+     * `@ColumnInfo(defaultValue = "''")` 显式声明对齐。本测试保证 schema 一致性，防止回归。
+     */
+    @Test
+    fun migrate11To12ValidatesSchemaAndAddsGpaRuleJson() {
+        // v11 的 student_profile（实测 11.json）：(accountId, gpaTarget=4.0, resumeText='', updatedAt)
+        // —— 没有 gpaRuleJson
+        val db11 = helper.createDatabase(TEST_DB, 11)
+        db11.close()
+
+        // runMigrationsAndValidate 内部会读 12.json 与迁移后的实际表比对
+        val db12 = helper.runMigrationsAndValidate(TEST_DB, 12, true, Migration_11_12)
+
+        // PRAGMA table_info 验证 gpaRuleJson 列定义
+        db12.query("PRAGMA table_info(`student_profile`)").use { c ->
+            var found = false
+            while (c.moveToNext()) {
+                if (c.getString(1) == "gpaRuleJson") {
+                    found = true
+                    // notnull: 1 = NOT NULL 约束
+                    assertEquals("gpaRuleJson 应为 NOT NULL", 1, c.getInt(3))
+                    // dflt_value: '' —— Room 期望与 SQLite 实际一致（闪退修法）
+                    assertEquals(
+                        "gpaRuleJson defaultValue 必须为 ''",
+                        "''",
+                        c.getString(4),
+                    )
+                }
+            }
+            assertTrue("gpaRuleJson 列必须存在", found)
+        }
+
+        db12.close()
+    }
+
     // ===== helpers =====
 
     private fun foreignKeysEnabled(db: androidx.sqlite.db.SupportSQLiteDatabase): Int =

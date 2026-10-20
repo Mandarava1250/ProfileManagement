@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 12,
-    "identityHash": "4e586b60eb6a922e0b6a37bf2b04f73d",
+    "identityHash": "b1a0612c0587059b5facc213b9303ec1",
     "entities": [
       {
         "tableName": "courses",
@@ -1321,7 +1321,7 @@
       },
       {
         "tableName": "student_profile",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` INTEGER NOT NULL, `gpaTarget` REAL NOT NULL, `resumeText` TEXT NOT NULL, `gpaRuleJson` TEXT NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`accountId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` INTEGER NOT NULL, `gpaTarget` REAL NOT NULL, `resumeText` TEXT NOT NULL, `gpaRuleJson` TEXT NOT NULL DEFAULT '', `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`accountId`))",
         "fields": [
           {
             "fieldPath": "accountId",
@@ -1345,7 +1345,8 @@
             "fieldPath": "gpaRuleJson",
             "columnName": "gpaRuleJson",
             "affinity": "TEXT",
-            "notNull": true
+            "notNull": true,
+            "defaultValue": "''"
           },
           {
             "fieldPath": "updatedAt",
@@ -1367,7 +1368,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4e586b60eb6a922e0b6a37bf2b04f73d')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b1a0612c0587059b5facc213b9303ec1')"
     ]
   }
 }

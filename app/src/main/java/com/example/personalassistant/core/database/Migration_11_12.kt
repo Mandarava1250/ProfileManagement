@@ -6,17 +6,16 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 /**
  * Migration 11 → 12：Phase 12「我」模块扩展 GPA 规则
  *
- * 给 `student_profile` 加 `gpaRuleJson`（TEXT，nullable，默认 ''）：
+ * 给 `student_profile` 加 `gpaRuleJson`（TEXT，NOT NULL，默认 ''）：
  *  - 为避免引入 Room migration 与跨表耦合，规则以 JSON 字符串塞进单列
  *  - 空串 → 使用 [com.example.personalassistant.feature.me.domain.model.GpaRule.DEFAULT]（4.0 制默认转换表）
  *  - 非空 → kotlinx.serialization 反序列化为 [GpaRule]
  *  - 旧客户端读到的 gpaRuleJson = '' 时落回默认规则，**不抛异常、不丢历史绩点**
  *
- * ## 为什么是 nullable + DEFAULT ''
- *  - 与 [StudentProfileEntity] 的 `gpaRuleJson: String = ""` 对齐（Room schema 一致性要求）
- *  - SQLite ALTER ADD COLUMN 不支持 `NOT NULL DEFAULT ''` 之外的形式（nullability 必须靠"列类型"而非约束）
- *  - 实测：`TEXT DEFAULT ''` 行为与 `TEXT NULL DEFAULT NULL` 一致地允许旧行 NULL 出现，
- *    mapper 层用 `json.isBlank() → DEFAULT` 兜底，正反都对得上
+ * ## 为什么 defaultValue = ''（而非 Room 默认 sentinel）
+ *  - [StudentProfileEntity] 用 `@ColumnInfo(defaultValue = "''")` 显式声明 Room 期望 `''`
+ *  - SQLite ALTER ADD COLUMN：写的就是 `TEXT DEFAULT ''`
+ *  - 两边完全一致 → Room schema 校验通过，启动不再闪退
  *
  * ⚠️ 一旦发布不允许删除或修改。
  */
