@@ -46,6 +46,17 @@ import com.example.personalassistant.feature.timetable.domain.model.TimeSlotSche
  */
 private val MINUTE_HEIGHT_DP = 0.9f
 
+/**
+ * 左侧时间轴的固定宽度。
+ *
+ * ⚠️ **导出为公开常量是刻意的**：TimetableScreen 的 DayHeaderRow 必须与本 grid 的
+ * 7 列共用同一套横向基准 —— header 左侧补一个同宽 Spacer 才能对齐。
+ * 以前 `val axisWidth = 56.dp` 是函数内的局部变量，header 那边无从引用，
+ * 只好各自硬编码，结果两边宽度漂移（实测周一列被顶到最右、标签被切一半）。
+ * 现在两边引用同一个值，改宽度只需改这一处。
+ */
+val TIMETABLE_AXIS_WIDTH = 56.dp
+
 @Composable
 fun TimetableGrid(
     coursesByDay: Map<Int, List<Course>>,
@@ -59,7 +70,6 @@ fun TimetableGrid(
     val lastEnd = timeSlotSchedule.lastEnd
     val totalMinutes = (lastEnd - firstStart).coerceAtLeast(60)
     val contentHeight = (totalMinutes * MINUTE_HEIGHT_DP).dp
-    val axisWidth = 56.dp
 
     Box(modifier = modifier.fillMaxSize()) {
         // 整张 grid 放在可滚动容器里
@@ -76,7 +86,7 @@ fun TimetableGrid(
                 // ============ 左侧：时间轴 ============
                 Column(
                     modifier = Modifier
-                        .width(axisWidth)
+                        .width(TIMETABLE_AXIS_WIDTH)
                         .height(contentHeight)
                         .padding(end = 2.dp),
                 ) {

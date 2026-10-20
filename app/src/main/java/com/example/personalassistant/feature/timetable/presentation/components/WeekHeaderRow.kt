@@ -85,8 +85,12 @@ fun DayHeaderRow(
     modifier: Modifier = Modifier,
 ) {
     val labels = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+    // ⚠️ 这里刻意**不写** fillMaxWidth()。
+    // 调用方（TimetableScreen）把它放进 `Row { Spacer(TIMETABLE_AXIS_WIDTH); DayHeaderRow(weight=1f) }`，
+    // fillMaxWidth 会强行撑满父 Row、吃掉 weight 算出来的宽度，Spacer 之外的部分就错位了。
+    // 单独使用（无 weight）时行为不变：weight 默认 0 时 Row 会给它剩余全部宽度。
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 4.dp),
+        modifier = modifier.padding(horizontal = 4.dp),
     ) {
         labels.forEachIndexed { index, label ->
             val date = weekStart.plusDays(index.toLong())

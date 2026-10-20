@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FileUpload
@@ -45,6 +47,7 @@ import com.example.personalassistant.feature.timetable.presentation.TimetableVie
 import com.example.personalassistant.feature.timetable.presentation.components.DayHeaderRow
 import com.example.personalassistant.feature.timetable.presentation.components.SemesterCreateDialog
 import com.example.personalassistant.feature.timetable.presentation.components.SemesterSelector
+import com.example.personalassistant.feature.timetable.presentation.components.TIMETABLE_AXIS_WIDTH
 import com.example.personalassistant.feature.timetable.presentation.components.TimetableGrid
 import com.example.personalassistant.feature.timetable.presentation.components.WeekHeaderRow
 import com.example.personalassistant.navigation.Screen
@@ -201,9 +204,24 @@ fun TimetableScreen(
 
             Spacer(Modifier.height(4.dp))
 
-            DayHeaderRow(
-                weekStart = LocalDate.now().minusDays(((LocalDate.now().dayOfWeek.value - 1).toLong())),
-            )
+            // 周几表头必须与下方 TimetableGrid 的列严格对齐。
+            //
+            // TimetableGrid 是「左 TIMETABLE_AXIS_WIDTH 时间轴 + 右 7 列 weight=1f 均分剩余宽度」，
+            // 而 DayHeaderRow 原本整宽均分 7 列 —— 两者横向基准差一个轴宽，
+            // 导致标签与实际列错位（周一被推到最右、标签被切一半）。
+            //
+            // 修法（A2）：外层 Row 左边补一个等宽 Spacer，
+            // 让 DayHeaderRow 只占「剩余宽度」，与 grid 的 7 列共享同一套宽度基准。
+            // 轴宽常量从 TimetableGrid 导出，两边引用同一个值，杜绝以后再漂。
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Spacer(Modifier.width(TIMETABLE_AXIS_WIDTH))
+                DayHeaderRow(
+                    weekStart = LocalDate.now().minusDays(((LocalDate.now().dayOfWeek.value - 1).toLong())),
+                    modifier = Modifier.weight(1f),
+                )
+            }
 
             HorizontalDivider(thickness = 0.5.dp)
 
