@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 12,
-    "identityHash": "b1a0612c0587059b5facc213b9303ec1",
+    "identityHash": "60e6a786335ba9aea9fb76df4335fa45",
     "entities": [
       {
         "tableName": "courses",
@@ -1321,7 +1321,7 @@
       },
       {
         "tableName": "student_profile",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` INTEGER NOT NULL, `gpaTarget` REAL NOT NULL, `resumeText` TEXT NOT NULL, `gpaRuleJson` TEXT NOT NULL DEFAULT '', `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`accountId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accountId` INTEGER NOT NULL, `gpaTarget` REAL NOT NULL DEFAULT 4.0, `resumeText` TEXT NOT NULL DEFAULT '', `gpaRuleJson` TEXT DEFAULT '', `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`accountId`))",
         "fields": [
           {
             "fieldPath": "accountId",
@@ -1333,19 +1333,21 @@
             "fieldPath": "gpaTarget",
             "columnName": "gpaTarget",
             "affinity": "REAL",
-            "notNull": true
+            "notNull": true,
+            "defaultValue": "4.0"
           },
           {
             "fieldPath": "resumeText",
             "columnName": "resumeText",
             "affinity": "TEXT",
-            "notNull": true
+            "notNull": true,
+            "defaultValue": "''"
           },
           {
             "fieldPath": "gpaRuleJson",
             "columnName": "gpaRuleJson",
             "affinity": "TEXT",
-            "notNull": true,
+            "notNull": false,
             "defaultValue": "''"
           },
           {
@@ -1368,7 +1370,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b1a0612c0587059b5facc213b9303ec1')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '60e6a786335ba9aea9fb76df4335fa45')"
     ]
   }
 }

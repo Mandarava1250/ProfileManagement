@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.example.personalassistant.core.backup.di.AttachmentCleanupScheduler
+import com.example.personalassistant.core.utils.CrashLogger
 import com.example.personalassistant.core.utils.NotificationHelper
 import com.example.personalassistant.feature.finance.domain.usecase.RefreshDailyPoolUseCase
 import com.example.personalassistant.service.reminder.DailyPoolRefreshScheduler
@@ -49,6 +50,9 @@ class PersonalAssistantApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        // ⚠️ 必须装在最前面：任何后续初始化抛的异常都要能被 capture 到。
+        // 崩溃栈落到 filesDir/crash.log，一条 adb 命令就能捞出来（见 CrashLogger 的注释）。
+        CrashLogger.install(this)
         createNotificationChannels()
         bootstrapFinance()
 

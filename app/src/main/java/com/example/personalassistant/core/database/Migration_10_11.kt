@@ -16,6 +16,20 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * - SQLite 不支持 ADD COLUMN 带 NOT NULL DEFAULT NULL；写 NOT NULL DEFAULT 0 会把存量课程"算 0 学分"，
  *   与 [CalculateGpaUseCase] "缺则排除"语义冲突；nullable 是更诚实的选择
  *
+ * ## ⚠️ 手写 CREATE TABLE 的 DEFAULT 必须与 Entity 逐字一致
+ *
+ * `student_profile` 是这里**手写**建出来的（不是 Room 自己建），所以它的 DEFAULT
+ * 必须与 Room 从 [com.example.personalassistant.feature.me.data.local.StudentProfileEntity]
+ * 推出来的期望**逐字一致**，否则启动时 Room 校验 schema 失败：
+ *
+ * ```
+ * java.lang.IllegalStateException: Migration didn't properly handle: student_profile
+ * ```
+ *
+ * Room 2.6 的列比对是**双向**的 —— 数据库有 DEFAULT 而 Entity 没声明，同样算不匹配。
+ * 所以 Entity 侧必须写 `@ColumnInfo(defaultValue = "4.0")` / `defaultValue = "''"`
+ * 与下面的 `DEFAULT 4.0` / `DEFAULT ''` 对上。
+ *
  * ⚠️ 一旦发布不允许删除或修改。
  */
 val Migration_10_11: Migration = object : Migration(10, 11) {

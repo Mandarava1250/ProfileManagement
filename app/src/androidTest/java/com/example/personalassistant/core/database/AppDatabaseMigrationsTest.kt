@@ -308,21 +308,86 @@ class AppDatabaseMigrationsTest {
     }
 
     /**
-     * 11→12：Phase 12「我」模块扩展 GPA 规则
+     * 10→11→12：**从 v10 起跑全链**（真实升级路径）
      *
-     * 验证 [Migration_11_12] 在真 SQLite 上按序执行成功，结果符合 v12 Room schema：
-     * 1. `helper.runMigrationsAndValidate(TEST_DB, 12, true, Migration_11_12)` —— 迁移跑通，
-     *    且迁移后的实际表结构与导出的 12.json 完全一致
-     *    （索引名/列/FK 任一不符即抛 IllegalStateException —— 跟线上闪退的栈完全一致）
-     * 2. `student_profile.gpaRuleJson` 列存在，且 NOT NULL DEFAULT ''
+     * 这是线上闪退的**决定性回归守卫**。
      *
-     * 线上闪退的根因：v12 的 Room 期望 `defaultValue='undefined'`，但
-     * Migration_11_12 实际写的是 `TEXT DEFAULT ''`。修法：[StudentProfileEntity] 用
-     * `@ColumnInfo(defaultValue = "''")` 显式声明对齐。本测试保证 schema 一致性，防止回归。
+     * ## 为什么要从 v10 起，而不是 v11
+     *
+     * `student_profile` 表是 [Migration_10_11] **手写 CREATE TABLE** 建出来的：
+     * ```sql
+     * `gpaTarget`  REAL NOT NULL DEFAULT 4.0,
+     * `resumeText` TEXT NOT NULL DEFAULT '',
+     * ```
+     * 而 `gpaRuleJson` 是 [Migration_11_12] 用 `ALTER TABLE ADD COLUMN` 加的
+     * （SQLite 的 ADD COLUMN 不附带 NOT NULL → 该列天生 nullable）。
+     *
+     * 如果只从 v11 起跑（`createDatabase(TEST_DB, 11)` 用 11.json 建表），
+     * 11.json 里的 student_profile 是**Room 自己生成的形状**（无 DEFAULT），
+     * Migration_10_11 根本没执行 → gpaTarget/resumeText 的 DEFAULT 差异测不出来。
+     * 这正是之前那版测试漏掉两列的原因。
+     *
+     * ## 这个测试验证什么
+     *
+     * 1. `runMigrationsAndValidate(TEST_DB, 12, true, Migration_10_11, Migration_11_12)`
+     *    —— Room **逐表逐列**把迁移后的实际表与 12.json 比对，
+     *    任何一列的 notNull / defaultValue / type 不符就抛 IllegalStateException，
+     *    **与线上闪退的栈完全一致**
+     * 2. PRAGMA table_info 逐列断言 student_profile 三列的 notNull 与 dflt_value
+     *
+     * 线上闪退实测（Expected = Room 期望，Found = SQLite 实际）：
+     * ```
+     * gpaTarget   Expected dflt='undefined'  Found dflt='4.0'   → 不匹配
+     * resumeText  Expected dflt='undefined'  Found dflt=''      → 不匹配
+     * gpaRuleJson Expected notNull=true     Found notNull=false → 不匹配
+     * ```
+     * 三列都要对齐，漏一列照样闪退。
      */
     @Test
+    fun migrate10To12ValidatesSchemaAcrossFullChain() {
+        // ===== 1. 造一份 v10 结构的库（10.json 里还没有 student_profile 表）=====
+        val db10 = helper.createDatabase(TEST_DB, 10)
+        db10.close()
+
+        // ===== 2. 跑 10→11→12 全链，Room 逐表逐列校验 =====
+        val db12 = helper.runMigrationsAndValidate(
+            TEST_DB, 12, true, Migration_10_11, Migration_11_12,
+        )
+
+        // ===== 3. 逐列断言 student_profile 的三列 =====
+        val columns = mutableMapOf<String, Pair<Int, String?>>() // name -> (notNull, dflt_value)
+        db12.query("PRAGMA table_info(`student_profile`)").use { c ->
+            while (c.moveToNext()) {
+                columns[c.getString(1)] = c.getInt(3) to c.getString(4)
+            }
+        }
+
+        // gpaTarget：Migration_10_11 建的是 `REAL NOT NULL DEFAULT 4.0`
+        assertTrue("gpaTarget 列必须存在", columns.containsKey("gpaTarget"))
+        assertEquals("gpaTarget 应为 NOT NULL", 1, columns.getValue("gpaTarget").first)
+        assertEquals("gpaTarget defaultValue 必须为 4.0", "4.0", columns.getValue("gpaTarget").second)
+
+        // resumeText：Migration_10_11 建的是 `TEXT NOT NULL DEFAULT ''`
+        assertTrue("resumeText 列必须存在", columns.containsKey("resumeText"))
+        assertEquals("resumeText 应为 NOT NULL", 1, columns.getValue("resumeText").first)
+        assertEquals("resumeText defaultValue 必须为 ''", "''", columns.getValue("resumeText").second)
+
+        // gpaRuleJson：ADD COLUMN 出来的，**nullable** + DEFAULT ''
+        assertTrue("gpaRuleJson 列必须存在", columns.containsKey("gpaRuleJson"))
+        assertEquals(
+            "gpaRuleJson 是 ADD COLUMN 加的，物理列必然 nullable（notNull=0）",
+            0,
+            columns.getValue("gpaRuleJson").first,
+        )
+        assertEquals("gpaRuleJson defaultValue 必须为 ''", "''", columns.getValue("gpaRuleJson").second)
+
+        db12.close()
+    }
+
+    /** 11→12 单独跑：只加 gpaRuleJson 一列 */
+    @Test
     fun migrate11To12ValidatesSchemaAndAddsGpaRuleJson() {
-        // v11 的 student_profile（实测 11.json）：(accountId, gpaTarget=4.0, resumeText='', updatedAt)
+        // v11 的 student_profile（实测 11.json）：(accountId, gpaTarget, resumeText, updatedAt)
         // —— 没有 gpaRuleJson
         val db11 = helper.createDatabase(TEST_DB, 11)
         db11.close()
@@ -336,8 +401,12 @@ class AppDatabaseMigrationsTest {
             while (c.moveToNext()) {
                 if (c.getString(1) == "gpaRuleJson") {
                     found = true
-                    // notnull: 1 = NOT NULL 约束
-                    assertEquals("gpaRuleJson 应为 NOT NULL", 1, c.getInt(3))
+                    // notnull: 0 —— ADD COLUMN 出来的列天生 nullable
+                    assertEquals(
+                        "gpaRuleJson 由 ADD COLUMN 加出，物理列必然 nullable",
+                        0,
+                        c.getInt(3),
+                    )
                     // dflt_value: '' —— Room 期望与 SQLite 实际一致（闪退修法）
                     assertEquals(
                         "gpaRuleJson defaultValue 必须为 ''",
