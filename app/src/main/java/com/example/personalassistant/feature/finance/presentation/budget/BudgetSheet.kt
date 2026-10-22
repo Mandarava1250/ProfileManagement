@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.personalassistant.feature.finance.domain.BillingCycle
 
 /**
  * C 重构阶段 3：月度预算 Sheet
@@ -45,6 +46,8 @@ fun BudgetSheet(
     val persisted by viewModel.persistedBudget.collectAsStateWithLifecycle()
     // C：当前选中的月份（来自 VM）
     val yearMonth by viewModel.yearMonth.collectAsStateWithLifecycle()
+    // 月截止日策略（全局设置）
+    val cutoffPolicy by viewModel.cutoffPolicy.collectAsStateWithLifecycle()
     // C：是否显示年份选择 Sheet
     var showYearMonthPicker by remember { mutableStateOf(false) }
 
@@ -78,6 +81,7 @@ fun BudgetSheet(
                 onPrev = { viewModel.goPrevMonth() },
                 onNext = { viewModel.goNextMonth() },
                 onTapYearMonth = { showYearMonthPicker = true },
+                subtitle = BillingCycle.displayRange(yearMonth, cutoffPolicy),
             )
 
             OutlinedTextField(
@@ -96,6 +100,28 @@ fun BudgetSheet(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth(),
+            )
+
+            // ===== 月截止日（全局设置，所有月份共用）=====
+            OutlinedTextField(
+                value = editing.cutoffDayText,
+                onValueChange = viewModel::setCutoffDay,
+                label = { Text("月截止日（1-28，留空不改）") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            // 账期区间预览：让用户立刻看到"这个月到底算哪几天"
+            Text(
+                text = "当前账期：${BillingCycle.displayRange(yearMonth, cutoffPolicy)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = "修改后从当前账期开始生效，历史账期不变",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Row(

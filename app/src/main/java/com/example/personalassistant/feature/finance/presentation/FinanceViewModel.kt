@@ -2,6 +2,7 @@ package com.example.personalassistant.feature.finance.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
@@ -24,6 +25,7 @@ import com.example.personalassistant.feature.finance.domain.usecase.SearchTransa
 import com.example.personalassistant.feature.finance.domain.usecase.TransferUseCase
 import com.example.personalassistant.feature.profile.data.CurrentAccountRepository
 import com.example.personalassistant.feature.profile.data.local.AccountIds
+import com.example.personalassistant.feature.settings.FinanceCutoffSettings
 import com.example.personalassistant.feature.finance.presentation.util.FinanceDateUtils
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -67,6 +69,7 @@ class FinanceViewModel @Inject constructor(
     observeAccountBalances: ObserveAccountBalancesUseCase,
     private val transfer: TransferUseCase,
     private val currentAccountRepository: CurrentAccountRepository,
+    private val settingsRepository: FinanceCutoffSettings,
 ) : ViewModel() {
 
     /** 7b：导入导出反馈（Snackbar 显示） */
@@ -112,6 +115,23 @@ class FinanceViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList(),
         )
+
+    /**
+     * 记账账期的月截止日策略（全局设置）
+     *
+     * 同样不挤进 uiState（理由见上：combine 已占满 5 个 flow 上限）。
+     * 只用于给月报卡片算账期区间副标题，不参与统计口径（口径在 UseCase / Repository 层）。
+     */
+    val cutoffPolicy: StateFlow<MonthCutoffPolicy> = combine(
+        settingsRepository.financeMonthCutoffDay,
+        settingsRepository.financeMonthCutoffEffectiveFrom,
+    ) { day, effectiveFrom ->
+        MonthCutoffPolicy(cutoffDay = day, effectiveFromYm = effectiveFrom)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = MonthCutoffPolicy(),
+    )
 
     /** 跨账户合计（由 [accountBudgetSummaries] 折叠而来，不另开一条查库流） */
     val budgetTotals: StateFlow<BudgetSummaryTotals> = accountBudgetSummaries

@@ -8,6 +8,8 @@ import com.example.personalassistant.feature.finance.data.local.TransactionEntit
 import com.example.personalassistant.feature.finance.data.mapper.toDomain
 import com.example.personalassistant.feature.finance.data.mapper.toEntity
 import com.example.personalassistant.feature.finance.data.seed.DefaultCategories
+import com.example.personalassistant.feature.finance.domain.BillingCycle
+import com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy
 import com.example.personalassistant.feature.finance.domain.model.AccountBalanceSum
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
 import com.example.personalassistant.feature.finance.domain.model.Category
@@ -21,8 +23,11 @@ import com.example.personalassistant.feature.finance.domain.repository.FinanceRe
 import com.example.personalassistant.feature.finance.domain.repository.TransferNotAllowedException
 import com.example.personalassistant.feature.profile.data.AccountRepository
 import com.example.personalassistant.feature.profile.data.CurrentAccountRepository
+import com.example.personalassistant.feature.settings.FinanceCutoffSettings
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -81,11 +86,25 @@ class FinanceRepositoryImpl @Inject constructor(
     private val financeDao: FinanceDao,
     private val currentAccountRepository: CurrentAccountRepository,
     private val accountRepository: AccountRepository,
+    private val settingsRepository: FinanceCutoffSettings,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : FinanceRepository {
 
     /** 当前账户 id 的读源头：订阅即建立，切账户即重发 */
     private val accountIdFlow: Flow<Long> = currentAccountRepository.currentAccountIdFlow()
+
+    /**
+     * 记账账期的月截止日策略
+     *
+     * 默认 1 号 = 自然月，与本设置上线前行为完全一致。
+     * 用户改了之后，所有按月聚合的读路径都跟着改用新账期。
+     */
+    private val cutoffPolicyFlow: Flow<MonthCutoffPolicy> = combine(
+        settingsRepository.financeMonthCutoffDay,
+        settingsRepository.financeMonthCutoffEffectiveFrom,
+    ) { day, effectiveFrom ->
+        MonthCutoffPolicy(cutoffDay = day, effectiveFromYm = effectiveFrom)
+    }
 
     // ===================== 流水 =====================
 
@@ -261,26 +280,25 @@ class FinanceRepositoryImpl @Inject constructor(
     // 若哪天给它们加了 flatMapLatest，汇总会静默变成「只剩当前账户」，
     // 而账面看起来完全正常 —— 这是本轮最容易被无意破坏的地方。
 
-    override fun observeAccountBudgetSummaries(): Flow<List<AccountBudgetSummary>> {
-        val zone = ZoneId.systemDefault()
-        val ym = currentYearMonth()
-        val ymObj = YearMonth.parse(ym)
-        val monthStart = ymObj.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        // 下月 1 号 00:00：与 getMonthlyExpense 用同一套左闭右开区间，不拿 BETWEEN
-        val monthEnd = ymObj.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        return financeDao.observeAccountBudgetSummaries(ym, monthStart, monthEnd)
-    }
+    override fun observeAccountBudgetSummaries(): Flow<List<AccountBudgetSummary>> =
+        cutoffPolicyFlow.flatMapLatest { policy ->
+            val zone = ZoneId.systemDefault()
+            val ym = BillingCycle.yearMonthOf(LocalDate.now(zone), policy, zone)
+            // 账期区间：左闭右开，与 getMonthlyExpense 用同一套口径，不拿 BETWEEN
+            val (monthStart, monthEnd) = BillingCycle.rangeOf(ym, policy, zone)
+            financeDao.observeAccountBudgetSummaries(ym, monthStart, monthEnd)
+        }
 
     override fun observeBalanceSums(): Flow<List<AccountBalanceSum>> =
         financeDao.getBalanceSums()
 
-    override fun observeGlobalMonthlySums(): Flow<GlobalMonthlySums?> {
-        val zone = ZoneId.systemDefault()
-        val ymObj = YearMonth.now(zone)
-        val monthStart = ymObj.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        val monthEnd = ymObj.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
-        return financeDao.getGlobalMonthlySums(monthStart, monthEnd)
-    }
+    override fun observeGlobalMonthlySums(): Flow<GlobalMonthlySums?> =
+        cutoffPolicyFlow.flatMapLatest { policy ->
+            val zone = ZoneId.systemDefault()
+            val ym = BillingCycle.yearMonthOf(LocalDate.now(zone), policy, zone)
+            val (monthStart, monthEnd) = BillingCycle.rangeOf(ym, policy, zone)
+            financeDao.getGlobalMonthlySums(monthStart, monthEnd)
+        }
 
     override fun observeAllTransactions(): Flow<List<Transaction>> =
         accountIdFlow.flatMapLatest { accountId ->
@@ -348,9 +366,12 @@ class FinanceRepositoryImpl @Inject constructor(
     // ===================== 月度预算 =====================
 
     override fun observeCurrentMonthBudget(): Flow<MonthlyBudget?> =
-        accountIdFlow.flatMapLatest { accountId ->
-            financeDao.observeMonthlyBudget(accountId, currentYearMonth())
-        }.map { it?.toDomain() }
+        combine(accountIdFlow, cutoffPolicyFlow) { accountId, policy -> accountId to policy }
+            .flatMapLatest { (accountId, policy) ->
+                val zone = ZoneId.systemDefault()
+                val ym = BillingCycle.yearMonthOf(LocalDate.now(zone), policy, zone)
+                financeDao.observeMonthlyBudget(accountId, ym)
+            }.map { it?.toDomain() }
 
     override fun observeAllBudgets(): Flow<List<MonthlyBudget>> =
         accountIdFlow.flatMapLatest { accountId ->
@@ -380,8 +401,11 @@ class FinanceRepositoryImpl @Inject constructor(
             updatedAt = now,
         )
         financeDao.setMonthlyBudget(entity)
-        // 如果修改的是当月预算，触发立即刷新（不等 Worker）
-        if (yearMonth == currentYearMonth()) {
+        // 如果修改的是当月账期的预算，触发立即刷新（不等 Worker）
+        val policy = cutoffPolicyFlow.first()
+        val zone = ZoneId.systemDefault()
+        val currentCycleYm = BillingCycle.yearMonthOf(LocalDate.now(zone), policy, zone)
+        if (yearMonth == currentCycleYm) {
             refreshDailyPool(System.currentTimeMillis())
         }
         entity.id.takeIf { it > 0 } ?: now  // insert 后 id 不会变（Room 用 rowId）
@@ -402,30 +426,25 @@ class FinanceRepositoryImpl @Inject constructor(
     override suspend fun refreshDailyPool(today: Long) = withContext(dispatcher) {
         val accountId = awaitAccountId()
         val todayPoolDate = startOfDayMillis(today)
-        val ym = yearMonthOf(today)
         val zone = ZoneId.systemDefault()
+        val policy = cutoffPolicyFlow.first()
+        val todayDate = Instant.ofEpochMilli(today).atZone(zone).toLocalDate()
+        // 当前所在账期（标签 = 段起始所在自然月）
+        val ym = BillingCycle.yearMonthOf(todayDate, policy, zone)
 
-        // 1. 取当月预算；不存在 → no-op
+        // 1. 取当月账期预算；不存在 → no-op
         val budget = financeDao.getMonthlyBudget(accountId, ym) ?: return@withContext
 
-        // 2. 取当月已支出（含今日）
-        val monthStart = YearMonth.from(ymLocalDate(ym)).atDay(1)
-            .atStartOfDay(zone).toInstant().toEpochMilli()
-        // monthEndExclusive = 下月 1 号 00:00
-        val monthEndExclusive = YearMonth.from(ymLocalDate(ym)).plusMonths(1)
-            .atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        // 2. 取当月账期已支出（含今日）
+        val (monthStart, monthEndExclusive) = BillingCycle.rangeOf(ym, policy, zone)
         val monthExpense = financeDao.getMonthlyExpense(
             accountId = accountId,
             monthStart = monthStart,
             monthEnd = monthEndExclusive,
         ) ?: 0.0
 
-        // 3. dailyBudget = (totalAmount - 已支出) / 当月剩余天数（含今日，最少 1 天）
-        val todayDate = Instant.ofEpochMilli(today).atZone(zone).toLocalDate()
-        val ymObj = YearMonth.from(todayDate)
-        val daysInMonth = ymObj.lengthOfMonth()
-        val dayOfMonth = todayDate.dayOfMonth
-        val remainingDays = (daysInMonth - dayOfMonth + 1).coerceAtLeast(1)
+        // 3. dailyBudget = (totalAmount - 已支出) / 账期剩余天数（含今日，最少 1 天）
+        val remainingDays = BillingCycle.remainingDays(todayDate, policy, zone)
         val remainingAmount = (budget.totalAmount - monthExpense).coerceAtLeast(0.0)
         val dailyBudget = remainingAmount / remainingDays
 
@@ -502,19 +521,16 @@ class FinanceRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun currentYearMonth(): String {
-        return YearMonth.now(ZoneId.systemDefault()).toString() // "yyyy-MM"
-    }
-
-    private fun yearMonthOf(epochMillis: Long): String {
-        val date = Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDate()
-        return YearMonth.from(date).toString()
-    }
-
-    private fun ymLocalDate(ym: String): LocalDate {
-        val ymObj = YearMonth.parse(ym)
-        return ymObj.atDay(1)
-    }
+    /**
+     * 当前账期标签
+     *
+     * 账期由 [BillingCycle] 统一计算（受「月截止日」设置影响），
+     * 这里的 [policy] 决定用哪个截止日。
+     */
+    private suspend fun currentCycleYearMonth(
+        policy: MonthCutoffPolicy,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): String = BillingCycle.yearMonthOf(LocalDate.now(zone), policy, zone)
 
     /** 把任意毫秒时间戳归到当天 00:00（用于 pool.date / 月份区间起算） */
     private fun startOfDayMillis(epochMillis: Long): Long {

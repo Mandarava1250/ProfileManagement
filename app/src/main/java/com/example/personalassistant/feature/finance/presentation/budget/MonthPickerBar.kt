@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.finance.presentation.budget
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,7 @@ import androidx.compose.foundation.clickable
  *
  * - 左右箭头 → [onPrev] / [onNext]
  * - 中部文本可点 → [onTapYearMonth]（弹 [YearMonthPickerSheet]）
+ * - [subtitle]：可选副标题（账期区间，如 "10-15 ~ 11-14"），让用户看清这"月"是哪几天
  */
 @Composable
 internal fun MonthPickerBar(
@@ -30,6 +32,7 @@ internal fun MonthPickerBar(
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onTapYearMonth: () -> Unit,
+    subtitle: String? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -39,14 +42,24 @@ internal fun MonthPickerBar(
         IconButton(onClick = onPrev) {
             Icon(Icons.Filled.ChevronLeft, contentDescription = "上个月")
         }
-        Text(
-            text = yearMonth,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 4.dp)
-                .clickable(onClick = onTapYearMonth),
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.clickable(onClick = onTapYearMonth),
+        ) {
+            Text(
+                text = yearMonth,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         IconButton(onClick = onNext) {
             Icon(Icons.Filled.ChevronRight, contentDescription = "下个月")
         }

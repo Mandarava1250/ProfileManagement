@@ -1,12 +1,17 @@
 package com.example.personalassistant.feature.finance.presentation.budget
 
 import com.example.personalassistant.feature.finance.data.repository.FakeFinanceRepository
+import com.example.personalassistant.feature.finance.domain.BillingCycle
+import com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveAllBudgetsUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.SetMonthlyBudgetUseCase
 import com.example.personalassistant.feature.finance.presentation.util.Feedback
+import com.example.personalassistant.feature.settings.FinanceCutoffSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -20,6 +25,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Phase 7b：BudgetViewModel 单元测试
@@ -34,21 +41,27 @@ import org.junit.Test
  * C 重构阶段 2/4 新增：
  * - save with invalid amount emits Warning feedback（不再 silently return）
  * - save with blank threshold persists 0_0 to repo（null 落 0.0 仍正确）
+ *
+ * 月截止日新增：
+ * - 截止日输入框状态 / 范围校验 / 写入设置（用内存 fake，零 IO，行为确定）
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class BudgetViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var repo: FakeFinanceRepository
+    private lateinit var settings: FakeFinanceCutoffSettings
     private lateinit var vm: BudgetViewModel
 
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         repo = FakeFinanceRepository()
+        settings = FakeFinanceCutoffSettings()
         vm = BudgetViewModel(
             observeAllBudgets = ObserveAllBudgetsUseCase(repo),
             setMonthlyBudget = SetMonthlyBudgetUseCase(repo),
+            settingsRepository = settings,
         )
     }
 
@@ -167,5 +180,143 @@ class BudgetViewModelTest {
         // 不应写入 repo
         val current = repo.observeCurrentMonthBudget().first()
         assertNull("非法金额不应创建预算行", current)
+    }
+
+    // ===== 月截止日 =====
+
+    @Test
+    fun `cutoff day text defaults to blank meaning keep current setting`() = runTest(testDispatcher) {
+        assertEquals("", vm.editing.value.cutoffDayText)
+    }
+
+    @Test
+    fun `setCutoffDay updates state and canSave stays true for legal value`() = runTest(testDispatcher) {
+        vm.setAmount("3000")
+        vm.setCutoffDay("15")
+        advanceUntilIdle()
+
+        assertEquals("15", vm.editing.value.cutoffDayText)
+        assertTrue(vm.editing.value.canSave)
+    }
+
+    @Test
+    fun `canSave is false when cutoff day is out of range`() = runTest(testDispatcher) {
+        vm.setAmount("3000")
+        vm.setCutoffDay("29")
+        advanceUntilIdle()
+
+        assertEquals(false, vm.editing.value.canSave)
+    }
+
+    @Test
+    fun `canSave is false when cutoff day is not a number`() = runTest(testDispatcher) {
+        vm.setAmount("3000")
+        vm.setCutoffDay("abc")
+        advanceUntilIdle()
+
+        assertEquals(false, vm.editing.value.canSave)
+    }
+
+    @Test
+    fun `save with out of range cutoff emits Warning and keeps the sheet open`() =
+        runTest(testDispatcher) {
+            vm.setAmount("3000")
+            vm.setCutoffDay("29")
+            advanceUntilIdle()
+            var doneCalled = false
+            vm.save(onDone = { doneCalled = true })
+            advanceUntilIdle()
+
+            val fb = vm.feedback.value
+            assertNotNull("应当收到反馈", fb)
+            assertTrue("应当是 Warning, got $fb", fb is Feedback.Warning)
+            assertTrue("文案应说明截止日范围, got ${(fb as Feedback.Warning).message}",
+                fb.message.contains("截止日"))
+            assertEquals(false, doneCalled)
+            // 校验没过 → 整单不落库，设置也不动
+            assertNull(repo.observeCurrentMonthBudget().first())
+            assertEquals(BillingCycle.DEFAULT_CUTOFF_DAY, settings.day.value)
+        }
+
+    @Test
+    fun `save with changed cutoff writes setting and budget`() = runTest(testDispatcher) {
+        vm.setAmount("3000")
+        vm.setCutoffDay("15")
+        advanceUntilIdle()
+        vm.save(onDone = {})
+        advanceUntilIdle()
+
+        assertEquals(15, settings.day.value)
+        // 生效 ym = 当前账期，不是下个月
+        val expectedFrom = MonthCutoffPolicy.effectiveFromFor(
+            BillingCycle.yearMonthOf(
+                LocalDate.now(ZoneId.systemDefault()),
+                MonthCutoffPolicy(),
+            ),
+        )
+        assertEquals(expectedFrom, settings.effectiveFrom.value)
+
+        // 预算也照常写入
+        val current = repo.observeCurrentMonthBudget().first()
+        assertNotNull(current)
+        assertEquals(3000.0, current!!.totalAmount, 0.001)
+    }
+
+    @Test
+    fun `save with blank cutoff keeps existing setting untouched`() = runTest(testDispatcher) {
+        // 先把截止日改成 15
+        vm.setAmount("3000")
+        vm.setCutoffDay("15")
+        advanceUntilIdle()
+        vm.save(onDone = {})
+        advanceUntilIdle()
+
+        // 再存一次，这次留空 → 不应改动设置
+        vm.setCutoffDay("")
+        advanceUntilIdle()
+        vm.save(onDone = {})
+        advanceUntilIdle()
+
+        assertEquals(15, settings.day.value)
+    }
+
+    @Test
+    fun `save with unchanged cutoff does not rewrite the setting`() = runTest(testDispatcher) {
+        settings.day.value = 15
+        settings.effectiveFrom.value = "2026-10"
+
+        vm.setAmount("3000")
+        vm.setCutoffDay("15")
+        advanceUntilIdle()
+        vm.save(onDone = {})
+        advanceUntilIdle()
+
+        // 截止日没变 → 不该重写"生效 ym"
+        assertEquals("2026-10", settings.effectiveFrom.value)
+        assertEquals(0, settings.writeCount)
+    }
+}
+
+/**
+ * 内存版 [FinanceCutoffSettings]
+ *
+ * 零 IO，所以 `runTest` 的虚拟时间能完整推进 —— 行为完全确定，不会 flaky。
+ */
+private class FakeFinanceCutoffSettings : FinanceCutoffSettings {
+
+    val day = MutableStateFlow(BillingCycle.DEFAULT_CUTOFF_DAY)
+    val effectiveFrom = MutableStateFlow(MonthCutoffPolicy.DEFAULT_EFFECTIVE_FROM)
+
+    /** 写了几次，用来验证"没变就不重写" */
+    var writeCount = 0
+        private set
+
+    override val financeMonthCutoffDay: Flow<Int> = day
+    override val financeMonthCutoffEffectiveFrom: Flow<String> = effectiveFrom
+
+    override suspend fun setFinanceMonthCutoff(day: Int, effectiveFromYm: String) {
+        writeCount++
+        this.day.value = day
+        this.effectiveFrom.value = effectiveFromYm
     }
 }

@@ -19,11 +19,12 @@ import javax.inject.Singleton
  * - 主题偏好已迁移至 [com.example.personalassistant.feature.settings.theme.ThemeRepository]（Phase 8 Sub-step 6）
  * - Phase 8 Sub-step 4：自动备份开关、备份目录 URI、上次备份时间
  * - Phase 8 Sub-step 8：节假日避让总开关、提前通知开关/时间
+ * - 记账月截止日（实现 [FinanceCutoffSettings]，让上层能拿接口去单测）
  */
 @Singleton
 class SettingsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>
-) {
+) : FinanceCutoffSettings {
     // ========== Phase 8 Sub-step 4：备份偏好 ==========
 
     /** 自动备份开关（默认 false） */
@@ -114,6 +115,42 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    // ========== 记账：月截止日 ==========
+
+    /**
+     * 记账账期的月截止日（默认 1 = 自然月）
+     *
+     * 这里的值是**原始值**，不做范围夹取 —— 夹取统一在
+     * [com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy] 里做，
+     * 避免 settings 层反向依赖 finance 域。
+     */
+    override val financeMonthCutoffDay: Flow<Int> = dataStore.data.map { prefs ->
+        prefs[KEY_FINANCE_MONTH_CUTOFF_DAY] ?: DEFAULT_FINANCE_MONTH_CUTOFF_DAY
+    }
+
+    /**
+     * 新截止日从哪个 ym 开始生效（默认 "1970-01" = 一直生效）
+     *
+     * 改了截止日之后，更早的账期区间保持不变，靠的就是这个字段。
+     */
+    override val financeMonthCutoffEffectiveFrom: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_FINANCE_MONTH_CUTOFF_EFFECTIVE_FROM] ?: DEFAULT_FINANCE_MONTH_CUTOFF_EFFECTIVE_FROM
+    }
+
+    /**
+     * 写入月截止日
+     *
+     * @param day 截止日（1-28）
+     * @param effectiveFromYm 新规则从哪个 ym 开始生效（"yyyy-MM"）
+     */
+    override suspend fun setFinanceMonthCutoff(day: Int, effectiveFromYm: String) {
+        require(day in 1..28) { "month cutoff day must be 1..28, got $day" }
+        dataStore.edit { prefs ->
+            prefs[KEY_FINANCE_MONTH_CUTOFF_DAY] = day
+            prefs[KEY_FINANCE_MONTH_CUTOFF_EFFECTIVE_FROM] = effectiveFromYm
+        }
+    }
+
     companion object {
         val KEY_AUTO_BACKUP_ENABLED = booleanPreferencesKey("auto_backup_enabled")
         val KEY_BACKUP_FOLDER_URI = stringPreferencesKey("backup_folder_uri")
@@ -122,5 +159,14 @@ class SettingsRepository @Inject constructor(
         val KEY_HOLIDAY_EVENING_ENABLED = booleanPreferencesKey("holiday_evening_enabled")
         val KEY_HOLIDAY_EVENING_HOUR = intPreferencesKey("holiday_evening_hour")
         val KEY_HOLIDAY_EVENING_MINUTE = intPreferencesKey("holiday_evening_minute")
+        val KEY_FINANCE_MONTH_CUTOFF_DAY = intPreferencesKey("finance_month_cutoff_day")
+        val KEY_FINANCE_MONTH_CUTOFF_EFFECTIVE_FROM =
+            stringPreferencesKey("finance_month_cutoff_effective_from")
+
+        /** 默认截止日 = 1 号（自然月，与本设置上线前行为一致） */
+        const val DEFAULT_FINANCE_MONTH_CUTOFF_DAY = 1
+
+        /** 默认生效 ym = 永远早于任何真实月份 */
+        const val DEFAULT_FINANCE_MONTH_CUTOFF_EFFECTIVE_FROM = "1970-01"
     }
 }

@@ -57,6 +57,8 @@ import com.example.personalassistant.feature.finance.presentation.components.Dai
 import com.example.personalassistant.feature.finance.presentation.components.MonthlyReportCard
 import com.example.personalassistant.feature.finance.presentation.components.SearchBar
 import com.example.personalassistant.feature.finance.presentation.components.TransactionRow
+import com.example.personalassistant.feature.finance.domain.BillingCycle
+import com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
 import com.example.personalassistant.feature.finance.domain.model.BudgetSummaryTotals
 import com.example.personalassistant.feature.finance.presentation.components.AccountSummaryCard
@@ -94,6 +96,8 @@ fun FinanceScreen(
     val budgetTotals by viewModel.budgetTotals.collectAsStateWithLifecycle()
     val budgetRows by viewModel.accountBudgetSummaries.collectAsStateWithLifecycle()
     val accountBalances by viewModel.accountBalances.collectAsStateWithLifecycle()
+    // 月截止日策略：月报卡片要显示账期区间（"本月"可能不是自然月）
+    val cutoffPolicy by viewModel.cutoffPolicy.collectAsStateWithLifecycle()
     // 转账行要显示「转出至 / 转入自 哪个账户」；用余额列表做 id→名字映射，
     // 不为此再开一条 observeAccounts（两者本质是同一批账户）
     val accountNameById = remember(accountBalances) {
@@ -173,6 +177,7 @@ fun FinanceScreen(
         FinanceContent(
             uiState = uiState,
             contentPadding = padding,
+            cutoffPolicy = cutoffPolicy,
             onTransactionClick = { tx ->
                 editingTx = tx
                 showSheet = true
@@ -267,6 +272,8 @@ private fun FinanceContent(
     // ===== Phase 9b B2 =====
     accountSwitcherState: AccountSwitcherState,
     onSwitchAccount: (Long) -> Unit,
+    // ===== 月截止日 =====
+    cutoffPolicy: MonthCutoffPolicy,
 ) {
     if (uiState.isLoading) {
         Box(
@@ -322,6 +329,10 @@ private fun FinanceContent(
                 report = uiState.monthReport,
                 categoryById = uiState.categoryById,
                 modifier = Modifier.padding(vertical = 4.dp),
+                billingRangeText = BillingCycle.displayRange(
+                    uiState.monthReport?.yearMonth ?: FinanceDateUtils.currentYearMonth(),
+                    cutoffPolicy,
+                ),
             )
         }
 

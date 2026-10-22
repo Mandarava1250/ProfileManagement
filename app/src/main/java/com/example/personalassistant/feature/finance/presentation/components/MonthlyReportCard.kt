@@ -44,6 +44,7 @@ import com.example.personalassistant.feature.finance.presentation.util.MoneyForm
  * 7b 范围克制：纯 Compose + Canvas，零依赖。
  *
  * @param categoryById 分类 id → Category（用于解析 icon + 颜色）
+ * @param billingRangeText 账期区间副标题（如 "10-15 ~ 11-14"）；null 则不显示
  * @param onDayBucketClick 可选：点击折线上某一天 → 跳明细（7b 暂不接，留接口）
  */
 @Composable
@@ -51,6 +52,7 @@ fun MonthlyReportCard(
     report: MonthlyReport?,
     categoryById: Map<Long, Category>,
     modifier: Modifier = Modifier,
+    billingRangeText: String? = null,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -69,6 +71,15 @@ fun MonthlyReportCard(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
+
+            // 账期区间副标题：截止日 ≠ 1 号时，"本月"不是自然月，必须说清楚是哪几天
+            if (billingRangeText != null) {
+                Text(
+                    text = billingRangeText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             if (report == null) {
                 Text(
