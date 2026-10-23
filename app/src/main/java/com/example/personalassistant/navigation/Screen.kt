@@ -53,6 +53,21 @@ sealed class Screen(val route: String) {
     data object AddTransaction : Screen("finance/add")
     data object MonthlyBudget : Screen("finance/budget")
 
+    /**
+     * Phase 13：分类管理（独立 route）
+     *
+     * 之前是 [com.example.personalassistant.feature.finance.FinanceScreen] 内的本地 state，
+     * 设置页跳不过去 —— 提成独立 route 后，记账页和设置页都能进。
+     */
+    data object FinanceCategory : Screen("finance/category")
+
+    /**
+     * Phase 13：预算设置（独立 route）
+     *
+     * 同上：原本是 FinanceScreen 内的 showBudgetSheet 本地 state。
+     */
+    data object FinanceBudget : Screen("finance/budget")
+
     /** Phase 8 Sub-step 3：全局搜索（点击命中项后跳对应详情页） */
     data object GlobalSearch : Screen("globalsearch")
 
@@ -77,21 +92,27 @@ sealed class Screen(val route: String) {
 }
 
 /**
- * 底部导航 5 个主 Tab（Phase 12 把「我」加进来）
+ * 底部导航 6 个主 Tab
+ *
+ * Phase 13：把「设置」从「我」页的隐式入口提升为底部第 6 个 Tab，
+ * 设置页内部按 课表 / 任务 / 记账 / 日历 / 我的 分组。
  */
 enum class BottomTab(
     val screen: Screen,
     @StringRes val labelRes: Int,
-    val icon: ImageVector
+    val icon: ImageVector,
+    /**
+     * 是否常显文字标签
+     *
+     * 设置只给图标：6 个 tab 挤在窄屏上，全带文字会挤到字都看不清。
+     * 其余 5 个保持原样（一直带文字）。
+     */
+    val alwaysShowLabel: Boolean = true,
 ) {
     Timetable(Screen.Timetable, R.string.tab_timetable, Icons.Filled.Today),
     Tasks(Screen.Tasks, R.string.tab_tasks, Icons.Filled.Checklist),
     Finance(Screen.Finance, R.string.tab_finance, Icons.Filled.AccountBalanceWallet),
     Calendar(Screen.Calendar, R.string.tab_calendar, Icons.Filled.CalendarMonth),
-    Me(Screen.Me, R.string.tab_me, Icons.Filled.Person);
-
-    companion object {
-        // 设置页不在 BottomBar；从「我」Tab 进入
-        val SETTINGS = Screen.Settings to Icons.Filled.Settings
-    }
+    Me(Screen.Me, R.string.tab_me, Icons.Filled.Person),
+    Settings(Screen.Settings, R.string.tab_settings, Icons.Filled.Settings, alwaysShowLabel = false);
 }

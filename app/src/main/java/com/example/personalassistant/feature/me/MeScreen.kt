@@ -15,8 +15,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -34,7 +32,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -75,11 +72,11 @@ fun MeScreen(
                 },
                 actions = {
                     // 右上角：GPA 规则编辑入口（伙伴要求）
+                    //
+                    // Phase 13：原来的 ⚙️ 设置入口已移除 —— 设置现在是底部导航的第 6 个 Tab，
+                    // 「我」页再放一个入口只会让人以为两处设置的东西不一样。
                     IconButton(onClick = { navController.navigate(Screen.EditGpaRule.route) }) {
                         Icon(Icons.Filled.Tune, contentDescription = "GPA 规则")
-                    }
-                    IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
-                        Icon(Icons.Filled.Settings, contentDescription = "设置")
                     }
                 },
             )
@@ -176,33 +173,8 @@ private fun MeContent(
 
         Spacer(Modifier.height(24.dp))
 
-        // ===== 设置入口 =====
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = { /* 占位：避免 experimental API */ },
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.Edit, contentDescription = null)
-                Spacer(Modifier.height(0.dp))
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp),
-                ) {
-                    Text("设置", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = "主题 · 备份 · 课程表设置 · 通知",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
+        // Phase 13：这里原来有一张「设置」入口卡片（主题 · 备份 · 课程表设置 · 通知）。
+        // 设置已升级为底部导航的独立 Tab，入口卡片随之移除。
     }
 }
 

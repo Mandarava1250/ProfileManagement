@@ -25,8 +25,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.time.LocalDate
-import java.time.ZoneId
 
 /**
  * Phase 7b：BudgetViewModel 单元测试
@@ -182,119 +180,10 @@ class BudgetViewModelTest {
         assertNull("非法金额不应创建预算行", current)
     }
 
-    // ===== 月截止日 =====
-
-    @Test
-    fun `cutoff day text defaults to blank meaning keep current setting`() = runTest(testDispatcher) {
-        assertEquals("", vm.editing.value.cutoffDayText)
-    }
-
-    @Test
-    fun `setCutoffDay updates state and canSave stays true for legal value`() = runTest(testDispatcher) {
-        vm.setAmount("3000")
-        vm.setCutoffDay("15")
-        advanceUntilIdle()
-
-        assertEquals("15", vm.editing.value.cutoffDayText)
-        assertTrue(vm.editing.value.canSave)
-    }
-
-    @Test
-    fun `canSave is false when cutoff day is out of range`() = runTest(testDispatcher) {
-        vm.setAmount("3000")
-        vm.setCutoffDay("29")
-        advanceUntilIdle()
-
-        assertEquals(false, vm.editing.value.canSave)
-    }
-
-    @Test
-    fun `canSave is false when cutoff day is not a number`() = runTest(testDispatcher) {
-        vm.setAmount("3000")
-        vm.setCutoffDay("abc")
-        advanceUntilIdle()
-
-        assertEquals(false, vm.editing.value.canSave)
-    }
-
-    @Test
-    fun `save with out of range cutoff emits Warning and keeps the sheet open`() =
-        runTest(testDispatcher) {
-            vm.setAmount("3000")
-            vm.setCutoffDay("29")
-            advanceUntilIdle()
-            var doneCalled = false
-            vm.save(onDone = { doneCalled = true })
-            advanceUntilIdle()
-
-            val fb = vm.feedback.value
-            assertNotNull("应当收到反馈", fb)
-            assertTrue("应当是 Warning, got $fb", fb is Feedback.Warning)
-            assertTrue("文案应说明截止日范围, got ${(fb as Feedback.Warning).message}",
-                fb.message.contains("截止日"))
-            assertEquals(false, doneCalled)
-            // 校验没过 → 整单不落库，设置也不动
-            assertNull(repo.observeCurrentMonthBudget().first())
-            assertEquals(BillingCycle.DEFAULT_CUTOFF_DAY, settings.day.value)
-        }
-
-    @Test
-    fun `save with changed cutoff writes setting and budget`() = runTest(testDispatcher) {
-        vm.setAmount("3000")
-        vm.setCutoffDay("15")
-        advanceUntilIdle()
-        vm.save(onDone = {})
-        advanceUntilIdle()
-
-        assertEquals(15, settings.day.value)
-        // 生效 ym = 当前账期，不是下个月
-        val expectedFrom = MonthCutoffPolicy.effectiveFromFor(
-            BillingCycle.yearMonthOf(
-                LocalDate.now(ZoneId.systemDefault()),
-                MonthCutoffPolicy(),
-            ),
-        )
-        assertEquals(expectedFrom, settings.effectiveFrom.value)
-
-        // 预算也照常写入
-        val current = repo.observeCurrentMonthBudget().first()
-        assertNotNull(current)
-        assertEquals(3000.0, current!!.totalAmount, 0.001)
-    }
-
-    @Test
-    fun `save with blank cutoff keeps existing setting untouched`() = runTest(testDispatcher) {
-        // 先把截止日改成 15
-        vm.setAmount("3000")
-        vm.setCutoffDay("15")
-        advanceUntilIdle()
-        vm.save(onDone = {})
-        advanceUntilIdle()
-
-        // 再存一次，这次留空 → 不应改动设置
-        vm.setCutoffDay("")
-        advanceUntilIdle()
-        vm.save(onDone = {})
-        advanceUntilIdle()
-
-        assertEquals(15, settings.day.value)
-    }
-
-    @Test
-    fun `save with unchanged cutoff does not rewrite the setting`() = runTest(testDispatcher) {
-        settings.day.value = 15
-        settings.effectiveFrom.value = "2026-10"
-
-        vm.setAmount("3000")
-        vm.setCutoffDay("15")
-        advanceUntilIdle()
-        vm.save(onDone = {})
-        advanceUntilIdle()
-
-        // 截止日没变 → 不该重写"生效 ym"
-        assertEquals("2026-10", settings.effectiveFrom.value)
-        assertEquals(0, settings.writeCount)
-    }
+    // Phase 13：月截止日的用例已迁到
+    // `com.example.personalassistant.feature.settings.MonthCutoffViewModelTest`
+    // —— 截止日读写搬到了设置页的「记账」分组，不再由预算 VM 负责。
+    // 本 VM 只保留 [BudgetViewModel.cutoffPolicy] 的读（用于展示账期区间）。
 }
 
 /**

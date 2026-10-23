@@ -2,7 +2,6 @@ package com.example.personalassistant.feature.finance.presentation.budget
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.personalassistant.feature.finance.domain.BillingCycle
 import com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveAllBudgetsUseCase
@@ -16,12 +15,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import java.time.YearMonth
-import java.time.ZoneId
 import javax.inject.Inject
 
 /**
@@ -129,11 +125,11 @@ class BudgetViewModel @Inject constructor(
         process(Intent.SetWarningThreshold(text))
     }
 
-    /** 用户输入月截止日（1-28） */
-    fun setCutoffDay(text: String) {
-        process(Intent.SetCutoffDay(text))
-    }
-
+    /**
+     * Phase 13：月截止日的读写已搬到 `MonthCutoffViewModel`（设置页的「记账」分组）。
+     *
+     * 这里只保留 [cutoffPolicy] 的**读** —— 预算弹窗要显示当前账期区间。
+     */
     fun save(onDone: () -> Unit) {
         process(Intent.Save(onDone))
     }
@@ -177,7 +173,6 @@ class BudgetViewModel @Inject constructor(
             is Intent.SetAutoRefresh -> _editing.value = _editing.value.copy(isAutoRefresh = intent.value)
             is Intent.SetCarryOverEnabled -> _editing.value = _editing.value.copy(carryOverEnabled = intent.value)
             is Intent.SetWarningThreshold -> _editing.value = _editing.value.copy(warningThresholdText = intent.text)
-            is Intent.SetCutoffDay -> _editing.value = _editing.value.copy(cutoffDayText = intent.text)
 
             is Intent.Save -> {
                 val s = _editing.value
@@ -189,40 +184,10 @@ class BudgetViewModel @Inject constructor(
                 }
                 // B 修复：空字符串 / 解析失败 ⇒ null（语义：未设置警告阈值）
                 val threshold = s.warningThresholdText.toDoubleOrNull()
-                // 月截止日：空串 = 不改（沿用已保存的值）
-                val cutoffDay = s.cutoffDayText.toIntOrNull()
-                if (s.cutoffDayText.isNotBlank() &&
-                    (cutoffDay == null ||
-                        cutoffDay < BillingCycle.MIN_CUTOFF_DAY ||
-                        cutoffDay > BillingCycle.MAX_CUTOFF_DAY)
-                ) {
-                    _feedback.value = Feedback.Warning(
-                        "月截止日要在 ${BillingCycle.MIN_CUTOFF_DAY}-${BillingCycle.MAX_CUTOFF_DAY} 之间",
-                    )
-                    return
-                }
                 // C：save 透传当前选中的 yearMonth，而不是固定的当月
                 val ym = _yearMonth.value
                 viewModelScope.launch {
                     runCatching {
-                        // 当前已保存的截止日 —— 直接读设置，不走 [cutoffPolicy].value：
-                        // 那个 StateFlow 是 WhileSubscribed，没人订阅时 .value 永远是初值 1，
-                        // 会把"没改截止日"误判成"改了"，从而重写生效 ym、
-                        // 把冻结点往前推（更早账期就不该再变了）。
-                        val savedCutoffDay = settingsRepository.financeMonthCutoffDay.first()
-                        // 截止日变了才写设置（没改就不动，避免误触发"生效 ym"重算）
-                        if (cutoffDay != null && cutoffDay != savedCutoffDay) {
-                            val currentPolicy = cutoffPolicy.value
-                            val currentCycleYm = BillingCycle.yearMonthOf(
-                                LocalDate.now(ZoneId.systemDefault()),
-                                currentPolicy,
-                            )
-                            settingsRepository.setFinanceMonthCutoff(
-                                day = cutoffDay,
-                                // 从**当前账期**开始生效：更早的账期区间保持不变
-                                effectiveFromYm = MonthCutoffPolicy.effectiveFromFor(currentCycleYm),
-                            )
-                        }
                         setMonthlyBudget(
                             yearMonth = ym,
                             totalAmount = amount,
@@ -251,7 +216,6 @@ class BudgetViewModel @Inject constructor(
         data class SetAutoRefresh(val value: Boolean) : Intent
         data class SetCarryOverEnabled(val value: Boolean) : Intent
         data class SetWarningThreshold(val text: String) : Intent
-        data class SetCutoffDay(val text: String) : Intent
         data class Save(val onDone: () -> Unit) : Intent
     }
 
@@ -260,8 +224,6 @@ class BudgetViewModel @Inject constructor(
         val isAutoRefresh: Boolean,
         val carryOverEnabled: Boolean,
         val warningThresholdText: String = "",
-        /** 月截止日输入框（空串 = 不修改已保存的值） */
-        val cutoffDayText: String = "",
     ) {
         companion object {
             fun empty() = UiState(
@@ -269,20 +231,12 @@ class BudgetViewModel @Inject constructor(
                 isAutoRefresh = true,
                 carryOverEnabled = true,
                 warningThresholdText = "",
-                cutoffDayText = "",
             )
         }
 
         val canSave: Boolean get() {
             val amount = totalAmountText.toDoubleOrNull() ?: return false
             if (amount < 0.0) return false
-            // 截止日填了就要合法（空串 = 不改）
-            if (cutoffDayText.isNotBlank()) {
-                val day = cutoffDayText.toIntOrNull() ?: return false
-                if (day < BillingCycle.MIN_CUTOFF_DAY || day > BillingCycle.MAX_CUTOFF_DAY) {
-                    return false
-                }
-            }
             return true
         }
     }

@@ -23,6 +23,8 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import com.example.personalassistant.feature.calendar.CalendarScreen
 import com.example.personalassistant.feature.finance.FinanceScreen
+import com.example.personalassistant.feature.finance.presentation.budget.BudgetScreen
+import com.example.personalassistant.feature.finance.presentation.category.CategoryManagementScreen
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHit
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHitType
 import com.example.personalassistant.feature.globalsearch.presentation.GlobalSearchScreen
@@ -36,10 +38,9 @@ import com.example.personalassistant.feature.task.presentation.edit.TaskEditScre
 import com.example.personalassistant.feature.timetable.TimetableScreen
 import com.example.personalassistant.feature.timetable.presentation.edit.CourseEditScreen
 import com.example.personalassistant.feature.timetable.presentation.settings.TimetableSettingsScreen
-import com.example.personalassistant.feature.timetable.presentation.edit.CourseEditScreen
 
 /**
- * 全局导航图：BottomBar 承载 4 个主 Tab + 设置页作为隐式入口
+ * 全局导航图：BottomBar 承载 6 个主 Tab（Phase 13 起「设置」也是 Tab）
  *
  * 各 Screen 的详细实现位于 feature/<module>/presentation/ 目录下
  *
@@ -90,15 +91,15 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
             startDestination = BottomTab.Timetable.screen.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            // === 5 个主 Tab（Phase 12 加 Me）===
+            // === 6 个主 Tab（Phase 13 加 Settings）===
             composable(BottomTab.Timetable.screen.route) { TimetableScreen(navController) }
             composable(BottomTab.Tasks.screen.route) { TaskScreen(navController) }
             composable(BottomTab.Finance.screen.route) { FinanceScreen(navController) }
             composable(BottomTab.Calendar.screen.route) { CalendarScreen(navController) }
             composable(BottomTab.Me.screen.route) { MeScreen(navController) }
+            composable(BottomTab.Settings.screen.route) { SettingsScreen(navController) }
 
             // === 二级页面 ===
-            composable(BottomTab.SETTINGS.first.route) { SettingsScreen(navController) }
 
             // === Phase 2 课表编辑页 ===
             composable(
@@ -208,6 +209,20 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
                     onBack = { navController.popBackStack() },
                 )
             }
+
+            // === Phase 13：记账子页（独立 route）===
+            //
+            // 这两页在记账页里本来是「同页替换」/「底部弹窗」，
+            // 设置页要放入口时跳不过去 —— 弹窗不是导航目的地。
+            // 提成独立 route 后两边共用同一套实现：
+            //  - 分类管理：记账页仍走原来的同页替换，设置页跳过来是独立页
+            //  - 预算设置：记账页仍用底部弹窗，设置页跳过来是整页
+            composable(Screen.FinanceCategory.route) {
+                CategoryManagementScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.FinanceBudget.route) {
+                BudgetScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }
@@ -258,7 +273,9 @@ private fun AppBottomBar(
                     }
                 },
                 icon = { Icon(tab.icon, contentDescription = null) },
-                label = { Text(stringResource(tab.labelRes)) }
+                label = { Text(stringResource(tab.labelRes)) },
+                // Phase 13：设置只给图标（6 个 tab 全带文字在窄屏上太挤）
+                alwaysShowLabel = tab.alwaysShowLabel,
             )
         }
     }

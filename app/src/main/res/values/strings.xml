@@ -9,6 +9,7 @@
     <string name="tab_finance">记账</string>
     <string name="tab_calendar">日历</string>
     <string name="tab_me">我</string>
+    <string name="tab_settings">设置</string>
 
     <!-- Common -->
     <string name="action_save">保存</string>
