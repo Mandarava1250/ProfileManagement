@@ -6,24 +6,29 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -41,6 +46,7 @@ import com.example.personalassistant.feature.settings.sections.ProfileSection
 import com.example.personalassistant.feature.settings.sections.TaskSection
 import com.example.personalassistant.feature.settings.sections.TimetableSection
 import com.example.personalassistant.navigation.Screen
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -84,6 +90,18 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    // ===== 分组导航栏的滚动状态 =====
+    //
+    // 内容用 LazyColumn（而不是 Column + verticalScroll）才能按分组索引跳转。
+    val listState = rememberLazyListState()
+    var selectedSectionIndex by remember { mutableIntStateOf(0) }
+    // 选中态跟随滚动位置：手动滑过去时高亮也跟着走
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .collect { selectedSectionIndex = it }
+    }
 
     // 操作反馈（账户改名、备份结果、截止日保存…）统一走 snackbar
     LaunchedEffect(statusMessage) {
@@ -179,72 +197,94 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
+                .padding(padding),
         ) {
-            // ===== 课表 =====
-            TimetableSection(navController = navController)
+            // ===== 分组导航栏（固定在顶部，点它跳到对应分组）=====
+            SettingsNavBar(
+                selectedIndex = selectedSectionIndex,
+                onSelect = { index ->
+                    scope.launch { listState.animateScrollToItem(index) }
+                },
+            )
 
-            // ===== 任务 =====
-            TaskSection()
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp),
+            ) {
+                // ===== 课表 =====
+                item(key = "section_timetable") {
+                    TimetableSection(navController = navController)
+                }
 
-            // ===== 记账 =====
-            FinanceSection(
-                accounts = accounts,
-                currentAccountId = currentAccountId,
-                pendingDelete = pendingDeletion,
-                onSwitch = viewModel::switchAccount,
-                onCreate = viewModel::createAccount,
-                onRename = viewModel::renameAccount,
-                onDeleteRequest = viewModel::requestDeleteAccount,
-                onConfirmDelete = viewModel::confirmDeleteAccount,
-                onDismissDelete = viewModel::dismissDeleteAccount,
-                onAvatarClick = { account ->
-                    avatarTargetAccountId = account.id
-                    avatarPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                // ===== 任务 =====
+                item(key = "section_task") {
+                    TaskSection()
+                }
+
+                // ===== 记账 =====
+                item(key = "section_finance") {
+                    FinanceSection(
+                        accounts = accounts,
+                        currentAccountId = currentAccountId,
+                        pendingDelete = pendingDeletion,
+                        onSwitch = viewModel::switchAccount,
+                        onCreate = viewModel::createAccount,
+                        onRename = viewModel::renameAccount,
+                        onDeleteRequest = viewModel::requestDeleteAccount,
+                        onConfirmDelete = viewModel::confirmDeleteAccount,
+                        onDismissDelete = viewModel::dismissDeleteAccount,
+                        onAvatarClick = { account ->
+                            avatarTargetAccountId = account.id
+                            avatarPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        },
+                        onAvatarRemove = viewModel::onAvatarRemoved,
+                        onSetInitialBalance = viewModel::setInitialBalance,
+                        cutoffPolicy = cutoffPolicy,
+                        cutoffDayText = cutoffDayText,
+                        onCutoffDayTextChange = cutoffViewModel::setCutoffDayText,
+                        currentCycleYm = cutoffViewModel.currentCycleYm,
+                        draftCutoffDay = cutoffViewModel.draftCutoffDay(),
+                        onSaveCutoff = cutoffViewModel::save,
+                        onOpenCategory = { navController.navigate(Screen.FinanceCategory.route) },
+                        onOpenBudget = { navController.navigate(Screen.FinanceBudget.route) },
                     )
-                },
-                onAvatarRemove = viewModel::onAvatarRemoved,
-                onSetInitialBalance = viewModel::setInitialBalance,
-                cutoffPolicy = cutoffPolicy,
-                cutoffDayText = cutoffDayText,
-                onCutoffDayTextChange = cutoffViewModel::setCutoffDayText,
-                currentCycleYm = cutoffViewModel.currentCycleYm,
-                draftCutoffDay = cutoffViewModel.draftCutoffDay(),
-                onSaveCutoff = cutoffViewModel::save,
-                onOpenCategory = { navController.navigate(Screen.FinanceCategory.route) },
-                onOpenBudget = { navController.navigate(Screen.FinanceBudget.route) },
-            )
+                }
 
-            // ===== 日历 =====
-            CalendarSection(
-                holidayState = holidayState,
-                onAvoidEnabledChange = viewModel::setHolidayAvoidEnabled,
-                onEveningEnabledChange = viewModel::setHolidayEveningEnabled,
-                onPickEveningTime = { showEveningTimePicker = true },
-                onSyncHolidays = viewModel::triggerHolidaySync,
-            )
+                // ===== 日历 =====
+                item(key = "section_calendar") {
+                    CalendarSection(
+                        holidayState = holidayState,
+                        onAvoidEnabledChange = viewModel::setHolidayAvoidEnabled,
+                        onEveningEnabledChange = viewModel::setHolidayEveningEnabled,
+                        onPickEveningTime = { showEveningTimePicker = true },
+                        onSyncHolidays = viewModel::triggerHolidaySync,
+                    )
+                }
 
-            // ===== 我的 =====
-            ProfileSection(
-                themePreferences = themePreferences,
-                onThemeModeChange = viewModel::setThemeMode,
-                onDynamicColorChange = viewModel::setDynamicColor,
-                onOpenGpaRule = { navController.navigate(Screen.EditGpaRule.route) },
-                backupState = backupState,
-                onAutoBackupChange = viewModel::setAutoBackup,
-                onPickBackupFolder = { openTreeLauncher.launch(null) },
-                onBackupNow = {
-                    createBackupLauncher.launch("cyrene-backup-${System.currentTimeMillis()}.zip")
-                },
-                onPreviewRestore = { navController.navigate(Screen.BackupPreview.route) },
-                onQuickRestore = { openBackupLauncher.launch(arrayOf("application/zip")) },
-                resetRunning = resetState is SettingsViewModel.ResetUiState.Running,
-                onRequestReset = viewModel::requestReset,
-            )
+                // ===== 我的 =====
+                item(key = "section_profile") {
+                    ProfileSection(
+                        themePreferences = themePreferences,
+                        onThemeModeChange = viewModel::setThemeMode,
+                        onDynamicColorChange = viewModel::setDynamicColor,
+                        onOpenGpaRule = { navController.navigate(Screen.EditGpaRule.route) },
+                        backupState = backupState,
+                        onAutoBackupChange = viewModel::setAutoBackup,
+                        onPickBackupFolder = { openTreeLauncher.launch(null) },
+                        onBackupNow = {
+                            createBackupLauncher.launch("cyrene-backup-${System.currentTimeMillis()}.zip")
+                        },
+                        onPreviewRestore = { navController.navigate(Screen.BackupPreview.route) },
+                        onQuickRestore = { openBackupLauncher.launch(arrayOf("application/zip")) },
+                        resetRunning = resetState is SettingsViewModel.ResetUiState.Running,
+                        onRequestReset = viewModel::requestReset,
+                    )
+                }
+            }
         }
     }
 
@@ -313,5 +353,35 @@ fun SettingsScreen(
             onSyncNow = { viewModel.triggerHolidaySync() },
             onDismiss = { viewModel.dismissHolidaySyncPrompt() },
         )
+    }
+}
+
+/**
+ * 分组标题（顺序必须与 LazyColumn 里的 item 顺序一致）
+ *
+ * 索引 → 分组：0 课表 / 1 任务 / 2 记账 / 3 日历 / 4 我的
+ */
+private val SETTINGS_SECTION_TITLES = listOf("课表", "任务", "记账", "日历", "我的")
+
+/**
+ * 设置页顶部的分组导航栏
+ *
+ * 固定在顶部、不随内容滚动；点一下就滚到对应分组。
+ * 选中态由外部传入 —— 它跟随内容滚动位置，所以手动滑过去时高亮也会跟着走。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsNavBar(
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+) {
+    TabRow(selectedTabIndex = selectedIndex) {
+        SETTINGS_SECTION_TITLES.forEachIndexed { index, title ->
+            Tab(
+                selected = selectedIndex == index,
+                onClick = { onSelect(index) },
+                text = { Text(title) },
+            )
+        }
     }
 }

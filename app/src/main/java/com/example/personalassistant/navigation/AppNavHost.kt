@@ -272,10 +272,11 @@ private fun AppBottomBar(
                         }
                     }
                 },
-                icon = { Icon(tab.icon, contentDescription = null) },
+                // Phase 13：6 个 tab 一律只显示图标 —— 文字标签会把每个位置压窄、字号缩小。
+                // 无障碍名称由图标 contentDescription 承担（视觉不显示，读屏仍能读出"课表"）。
+                icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
                 label = { Text(stringResource(tab.labelRes)) },
-                // Phase 13：设置只给图标（6 个 tab 全带文字在窄屏上太挤）
-                alwaysShowLabel = tab.alwaysShowLabel,
+                alwaysShowLabel = false,
             )
         }
     }

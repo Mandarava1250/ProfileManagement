@@ -96,23 +96,20 @@ sealed class Screen(val route: String) {
  *
  * Phase 13：把「设置」从「我」页的隐式入口提升为底部第 6 个 Tab，
  * 设置页内部按 课表 / 任务 / 记账 / 日历 / 我的 分组。
+ *
+ * **一律只显示图标**：6 个 tab 挤在窄屏上，文字标签会把每个位置压得极窄、
+ * 字号也跟着缩。图标本身已经能区分（今天 / 清单 / 钱包 / 月历 / 人 / 齿轮），
+ * 无障碍名称由图标 contentDescription 承担（见 AppNavHost 的 AppBottomBar）。
  */
 enum class BottomTab(
     val screen: Screen,
     @StringRes val labelRes: Int,
     val icon: ImageVector,
-    /**
-     * 是否常显文字标签
-     *
-     * 设置只给图标：6 个 tab 挤在窄屏上，全带文字会挤到字都看不清。
-     * 其余 5 个保持原样（一直带文字）。
-     */
-    val alwaysShowLabel: Boolean = true,
 ) {
     Timetable(Screen.Timetable, R.string.tab_timetable, Icons.Filled.Today),
     Tasks(Screen.Tasks, R.string.tab_tasks, Icons.Filled.Checklist),
     Finance(Screen.Finance, R.string.tab_finance, Icons.Filled.AccountBalanceWallet),
     Calendar(Screen.Calendar, R.string.tab_calendar, Icons.Filled.CalendarMonth),
     Me(Screen.Me, R.string.tab_me, Icons.Filled.Person),
-    Settings(Screen.Settings, R.string.tab_settings, Icons.Filled.Settings, alwaysShowLabel = false);
+    Settings(Screen.Settings, R.string.tab_settings, Icons.Filled.Settings);
 }
