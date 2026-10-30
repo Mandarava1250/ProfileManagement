@@ -6,12 +6,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.core.ui.theme.AppShadows
@@ -53,46 +53,60 @@ fun AppCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shape = RoundedCornerShape(AppRadii.card)
-    Card(
-        modifier = modifier
-            .then(
-                if (elevated) {
-                    Modifier.shadow(
-                        elevation = 3.dp,
-                        shape = shape,
-                        ambientColor = AppShadows.rest,
-                        spotColor = AppShadows.rest,
-                    )
-                } else {
-                    Modifier
-                }
-            )
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
-        shape = shape,
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    ) {
-        Row(
+    val layoutDirection = LocalLayoutDirection.current
+    val accentWidth = 4.dp
+
+    // Phase 14 修崩溃：这里原来用的是 Row(Modifier.height(IntrinsicSize.Min))。
+    //
+    // IntrinsicSize 会让父容器向下问子树的「内在高度」，
+    // 而 LazyList / BoxWithConstraints / TabRow 这类 SubcomposeLayout 明确不支持 intrinsic 测量 ——
+    // 一旦卡片里放进懒加载列表（标签行、月历网格…），整页直接崩。
+    // 现在卡片自己决定尺寸，色条改用 matchParentSize 覆盖层画，不再需要 intrinsic。
+    Box(modifier = modifier) {
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(IntrinsicSize.Min),
+                .then(
+                    if (elevated) {
+                        Modifier.shadow(
+                            elevation = 3.dp,
+                            shape = shape,
+                            ambientColor = AppShadows.rest,
+                            spotColor = AppShadows.rest,
+                        )
+                    } else {
+                        Modifier
+                    }
+                )
+                .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
+            shape = shape,
+            colors = CardDefaults.cardColors(containerColor = containerColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
-            if (accent != null) {
+            Column(
+                modifier = Modifier.padding(
+                    // 有色条时给内容让出 4dp，色条不会压在文字底下
+                    start = contentPadding.calculateStartPadding(layoutDirection) +
+                        if (accent != null) accentWidth else 0.dp,
+                    top = contentPadding.calculateTopPadding(),
+                    end = contentPadding.calculateEndPadding(layoutDirection),
+                    bottom = contentPadding.calculateBottomPadding(),
+                ),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.xs),
+                content = content,
+            )
+        }
+        if (accent != null) {
+            // 左侧 4dp 语义色条：matchParentSize 只跟随卡片尺寸，不参与尺寸计算
+            Box(modifier = Modifier.matchParentSize()) {
                 Box(
                     modifier = Modifier
-                        .width(4.dp)
+                        .width(accentWidth)
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(topStart = AppRadii.card, bottomStart = AppRadii.card))
                         .background(accent),
                 )
             }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(contentPadding),
-                verticalArrangement = Arrangement.spacedBy(AppSpacing.xs),
-                content = content,
-            )
         }
     }
 }
