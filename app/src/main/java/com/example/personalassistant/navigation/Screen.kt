@@ -87,6 +87,14 @@ sealed class Screen(val route: String) {
      *  - 行为：编辑 scaleMax / scaleMin / 百分制→绩点 转换表，保存回 StudentProfile.gpaRule
      */
     data object EditGpaRule : Screen("me/gpa-rule")
+
+    /**
+     * Phase 14：外观设置（主题模式 / 主题色 / 背景）
+     *
+     *  - 入口：「我」页 → 外观
+     *  - 行为：改完即时生效（写 DataStore → 顶层重新套色板）
+     */
+    data object Appearance : Screen("me/appearance")
 }
 
 /**

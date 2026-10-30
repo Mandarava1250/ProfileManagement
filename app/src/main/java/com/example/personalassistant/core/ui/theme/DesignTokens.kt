@@ -52,11 +52,11 @@ object AppRadii {
  * ambient / spot 颜色为樱花粉 tinted —— 这是「温柔感」的来源。
  */
 object AppShadows {
-    /** 静止卡片：0 3 14 rgba(216,27,96,.08) */
-    val rest = Color(0x14D81B60)
+    /** 静止卡片：0 3 14 rgba(11,87,208,.10) */
+    val rest = Color(0x1A0B57D0)
 
-    /** 浮起元素（FAB / 弹出层）：0 6 22 rgba(216,27,96,.12) */
-    val raised = Color(0x1FD81B60)
+    /** 浮起元素（FAB / 弹出层）：0 6 22 rgba(11,87,208,.14) */
+    val raised = Color(0x240B57D0)
 }
 
 /**

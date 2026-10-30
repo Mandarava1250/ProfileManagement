@@ -52,6 +52,8 @@ class MainActivity : ComponentActivity() {
             PersonalAssistantTheme(
                 themeMode = themePreferences.themeMode,
                 dynamicColor = themePreferences.dynamicColor,
+                primaryColor = themePreferences.primaryColor,
+                backgroundStyle = themePreferences.backgroundStyle,
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     // Phase 8 末尾补完：通知权限引导（Android 13+ 首次启动触发系统弹窗）

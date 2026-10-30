@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -31,8 +32,15 @@ class ThemeRepositoryImpl @Inject constructor(
         return combine(
             dataStore.data.map { prefs -> ThemeMode.fromKey(prefs[KEY_THEME_MODE]) },
             dataStore.data.map { prefs -> prefs[KEY_DYNAMIC_COLOR] ?: DEFAULT_DYNAMIC_COLOR },
-        ) { mode, dynamicColor ->
-            ThemePreferences(themeMode = mode, dynamicColor = dynamicColor)
+            dataStore.data.map { prefs -> prefs[KEY_PRIMARY_COLOR] },
+            dataStore.data.map { prefs -> BackgroundStyle.fromKey(prefs[KEY_BACKGROUND_STYLE]) },
+        ) { mode, dynamicColor, primaryColor, background ->
+            ThemePreferences(
+                themeMode = mode,
+                dynamicColor = dynamicColor,
+                primaryColor = primaryColor,
+                backgroundStyle = background,
+            )
         }
     }
 
@@ -48,6 +56,22 @@ class ThemeRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun setPrimaryColor(color: Int?) {
+        dataStore.edit { prefs ->
+            if (color == null) {
+                prefs.remove(KEY_PRIMARY_COLOR)
+            } else {
+                prefs[KEY_PRIMARY_COLOR] = color
+            }
+        }
+    }
+
+    override suspend fun setBackgroundStyle(style: BackgroundStyle) {
+        dataStore.edit { prefs ->
+            prefs[KEY_BACKGROUND_STYLE] = style.key
+        }
+    }
+
     companion object {
         /**
          * 沿用旧版本的 key，避免升级后用户主题设置被重置
@@ -58,6 +82,16 @@ class ThemeRepositoryImpl @Inject constructor(
          * Phase 8 Sub-step 6 新增：Material You 动态色开关
          */
         internal val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+
+        /**
+         * Phase 14：用户自选主色（ARGB）。没有这一项 = 用品牌默认蓝。
+         */
+        internal val KEY_PRIMARY_COLOR = intPreferencesKey("primary_color")
+
+        /**
+         * Phase 14：背景风格（见 [BackgroundStyle]）
+         */
+        internal val KEY_BACKGROUND_STYLE = stringPreferencesKey("background_style")
 
         /**
          * 动态色默认值：false

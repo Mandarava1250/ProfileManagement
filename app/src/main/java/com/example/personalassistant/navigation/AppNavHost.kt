@@ -55,6 +55,7 @@ import com.example.personalassistant.feature.globalsearch.presentation.GlobalSea
 import com.example.personalassistant.feature.me.MeScreen
 import com.example.personalassistant.feature.me.presentation.GpaRuleEditScreen
 import com.example.personalassistant.feature.settings.SettingsScreen
+import com.example.personalassistant.feature.settings.appearance.AppearanceScreen
 import com.example.personalassistant.feature.settings.backup.BackupPreviewScreen
 import com.example.personalassistant.feature.task.TaskScreen
 import com.example.personalassistant.feature.task.presentation.detail.TaskDetailScreen
@@ -251,6 +252,13 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
             // === Phase 12：GPA 规则编辑（学校定制）===
             composable(Screen.EditGpaRule.route) {
                 GpaRuleEditScreen(
+                    onBack = { navController.popBackStack() },
+                )
+            }
+
+            // === Phase 14：外观设置（主题模式 / 主题色 / 背景）===
+            composable(Screen.Appearance.route) {
+                AppearanceScreen(
                     onBack = { navController.popBackStack() },
                 )
             }

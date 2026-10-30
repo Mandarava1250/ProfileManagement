@@ -53,7 +53,7 @@ class ThemeViewModelTest {
         val fake = FakeObserveThemePreferencesUseCase(
             ThemePreferences(ThemeMode.DARK, dynamicColor = false)
         )
-        val vm = ThemeViewModel(fake)
+        val vm = ThemeViewModel(fake, NoopRepository)
 
         // stateIn 用 Eagerly 启动会立即收到第一个值
         val prefs = vm.themePreferences.first { it.themeMode == ThemeMode.DARK }
@@ -64,7 +64,7 @@ class ThemeViewModelTest {
     @Test
     fun `默认值是 SYSTEM + dynamicColor=false`() = runBlocking {
         val fake = FakeObserveThemePreferencesUseCase(ThemePreferences())
-        val vm = ThemeViewModel(fake)
+        val vm = ThemeViewModel(fake, NoopRepository)
 
         val prefs = vm.themePreferences.value
         assertEquals(ThemeMode.SYSTEM, prefs.themeMode)
@@ -74,7 +74,7 @@ class ThemeViewModelTest {
     @Test
     fun `upstream emit 新值后 StateFlow 也跟随更新`() = runBlocking {
         val fake = FakeObserveThemePreferencesUseCase(ThemePreferences())
-        val vm = ThemeViewModel(fake)
+        val vm = ThemeViewModel(fake, NoopRepository)
 
         // 触发初始订阅
         vm.themePreferences.value
@@ -95,6 +95,8 @@ class ThemeViewModelTest {
             override fun observe() = MutableStateFlow(ThemePreferences())
             override suspend fun setMode(mode: ThemeMode) = Unit
             override suspend fun setDynamicColor(enabled: Boolean) = Unit
+            override suspend fun setPrimaryColor(color: Int?) = Unit
+            override suspend fun setBackgroundStyle(style: BackgroundStyle) = Unit
         }
     }
 }
