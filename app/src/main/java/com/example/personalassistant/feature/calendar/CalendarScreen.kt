@@ -37,12 +37,13 @@ import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.presentation.CalendarViewModel
+import com.example.personalassistant.navigation.Screen
 import com.example.personalassistant.feature.calendar.presentation.EventEditState
 import com.example.personalassistant.feature.calendar.presentation.components.DayCalendarView
 import com.example.personalassistant.feature.calendar.presentation.components.DayDetailSheet
 import com.example.personalassistant.feature.calendar.presentation.components.EditEventSheet
 import com.example.personalassistant.feature.calendar.presentation.components.MonthCalendarGrid
-import com.example.personalassistant.feature.calendar.presentation.components.WeekCalendarView
+import com.example.personalassistant.feature.calendar.presentation.components.TimetableWeekView
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -76,6 +77,10 @@ fun CalendarScreen(
     val eventCategories by viewModel.eventCategories.collectAsStateWithLifecycle()
     val showCategoryManager by viewModel.showCategoryManager.collectAsStateWithLifecycle()
     val categoryManagerError by viewModel.categoryManagerError.collectAsStateWithLifecycle()
+    // Phase 14：日视图顶部的预算横条数据
+    val todayOverview by viewModel.todayOverview.collectAsStateWithLifecycle()
+    // Phase 14：周视图（课表风格）数据
+    val weekTimeline by viewModel.weekTimeline.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -148,11 +153,11 @@ fun CalendarScreen(
                         lunarLabels = uiState.monthLunarLabels,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    CalendarViewType.WEEK -> WeekCalendarView(
-                        cells = weekCells,
+                    CalendarViewType.WEEK -> TimetableWeekView(
+                        timeline = weekTimeline,
                         selectedDate = selectedDate,
                         onDateClick = viewModel::onDateClick,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxSize(),
                     )
                     CalendarViewType.DAY -> {
                         val anchor = selectedDate
@@ -162,6 +167,10 @@ fun CalendarScreen(
                                 date = anchor,
                                 dayDetail = selectedDayDetail,
                                 modifier = Modifier.fillMaxSize(),
+                                // Phase 14：预算横条 + 可直接勾选的今日待办
+                                overview = todayOverview,
+                                onToggleTask = { task, done -> viewModel.toggleTask(task, done) },
+                                onBudgetClick = { navController.navigate(Screen.Finance.route) },
                             )
                         } else {
                             EmptyViewPlaceholder(text = "请回到今天")

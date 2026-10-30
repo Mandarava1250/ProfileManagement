@@ -3,6 +3,16 @@ package com.example.personalassistant.feature.calendar.presentation
 import com.example.personalassistant.core.lunar.DefaultLunarCalendar
 import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarRepository
 import com.example.personalassistant.feature.calendar.data.repository.FakeEventCategoryRepository
+import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthEventsUseCase
+import com.example.personalassistant.feature.finance.data.repository.FakeFinanceRepository
+import com.example.personalassistant.feature.finance.domain.usecase.ObserveGlobalMonthlySumsUseCase
+import com.example.personalassistant.feature.finance.domain.usecase.ObserveMonthlyBudgetUseCase
+import com.example.personalassistant.feature.finance.domain.usecase.ObserveTodayPoolUseCase
+import com.example.personalassistant.feature.task.data.repository.FakeTaskRepository
+import com.example.personalassistant.feature.task.domain.usecase.ToggleTaskCompleteUseCase
+import com.example.personalassistant.feature.timetable.data.repository.FakeTimetableRepository
+import com.example.personalassistant.feature.timetable.domain.usecase.GetCoursesByWeekUseCase
+import com.example.personalassistant.feature.timetable.domain.usecase.ObserveCurrentSemesterUseCase
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.model.EventConflictInfo
 import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUseCase
@@ -186,6 +196,16 @@ class CalendarViewModelConflictTest {
             detectSavedConflict = detectSavedConflict,
             // Phase 8 Sub-step 9 Step 5：lunar 是纯函数库，直接用真实现
             lunarCalendar = DefaultLunarCalendar(),
+            // Phase 14：今日概览（预算横条）—— 用 fake 仓储，值都是空的
+            observeMonthlyBudget = ObserveMonthlyBudgetUseCase(FakeFinanceRepository()),
+            observeTodayPool = ObserveTodayPoolUseCase(FakeFinanceRepository()),
+            observeGlobalMonthlySums = ObserveGlobalMonthlySumsUseCase(FakeFinanceRepository()),
+            // Phase 14：日视图勾选待办
+            toggleTaskComplete = ToggleTaskCompleteUseCase(FakeTaskRepository()),
+            // Phase 14：周视图（课表风格）
+            observeCurrentSemester = ObserveCurrentSemesterUseCase(FakeTimetableRepository()),
+            getCoursesByWeek = GetCoursesByWeekUseCase(FakeTimetableRepository()),
+            observeMonthEvents = ObserveMonthEventsUseCase(repo),
         )
     }
 

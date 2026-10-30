@@ -4,6 +4,16 @@ import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.core.lunar.DefaultLunarCalendar
 import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarRepository
 import com.example.personalassistant.feature.calendar.data.repository.FakeEventCategoryRepository
+import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthEventsUseCase
+import com.example.personalassistant.feature.finance.data.repository.FakeFinanceRepository
+import com.example.personalassistant.feature.finance.domain.usecase.ObserveGlobalMonthlySumsUseCase
+import com.example.personalassistant.feature.finance.domain.usecase.ObserveMonthlyBudgetUseCase
+import com.example.personalassistant.feature.finance.domain.usecase.ObserveTodayPoolUseCase
+import com.example.personalassistant.feature.task.data.repository.FakeTaskRepository
+import com.example.personalassistant.feature.task.domain.usecase.ToggleTaskCompleteUseCase
+import com.example.personalassistant.feature.timetable.data.repository.FakeTimetableRepository
+import com.example.personalassistant.feature.timetable.domain.usecase.GetCoursesByWeekUseCase
+import com.example.personalassistant.feature.timetable.domain.usecase.ObserveCurrentSemesterUseCase
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
 import com.example.personalassistant.feature.calendar.domain.model.DaySummary
@@ -188,6 +198,16 @@ class CalendarViewModelTest {
             detectSavedConflict = NoopDetectEventSavedConflictsUseCase,
             // Phase 8 Sub-step 9 Step 5：lunar 是纯函数库，直接用真实现即可
             lunarCalendar = DefaultLunarCalendar(),
+            // Phase 14：今日概览（预算横条）—— 用 fake 仓储，值都是空的
+            observeMonthlyBudget = ObserveMonthlyBudgetUseCase(FakeFinanceRepository()),
+            observeTodayPool = ObserveTodayPoolUseCase(FakeFinanceRepository()),
+            observeGlobalMonthlySums = ObserveGlobalMonthlySumsUseCase(FakeFinanceRepository()),
+            // Phase 14：日视图勾选待办
+            toggleTaskComplete = ToggleTaskCompleteUseCase(FakeTaskRepository()),
+            // Phase 14：周视图（课表风格）
+            observeCurrentSemester = ObserveCurrentSemesterUseCase(FakeTimetableRepository()),
+            getCoursesByWeek = GetCoursesByWeekUseCase(FakeTimetableRepository()),
+            observeMonthEvents = ObserveMonthEventsUseCase(repo),
         )
     }
 
@@ -204,13 +224,15 @@ class CalendarViewModelTest {
     }
 
     @Test
-    fun `default viewType is MONTH`() = runTest(testDispatcher) {
-        assertEquals(CalendarViewType.MONTH, vm.viewType.value)
+    fun `default viewType is DAY`() = runTest(testDispatcher) {
+        // Phase 14：日历 Tab 是 App 首屏，默认落在「日」视图（= 今日）
+        assertEquals(CalendarViewType.DAY, vm.viewType.value)
     }
 
     @Test
-    fun `default selectedDate is null`() = runTest(testDispatcher) {
-        assertNull(vm.selectedDate.value)
+    fun `default selectedDate is today`() = runTest(testDispatcher) {
+        // Phase 14：日视图默认锚定今天（原来默认 null，进日视图会显示「请回到今天」）
+        assertEquals(DateUtils.todayStartMillis(), vm.selectedDate.value)
     }
 
     @Test
@@ -330,9 +352,13 @@ class CalendarViewModelTest {
     // ===== selectedDayDetail =====
 
     @Test
-    fun `selectedDayDetail is null initially`() = runTest(testDispatcher) {
+    fun `selectedDayDetail defaults to today`() = runTest(testDispatcher) {
+        // Phase 14：selectedDate 默认锚定今天，所以一进来就有当天的详情，
+        // 不再是「请回到今天」的空态。
         advanceUntilIdle()
-        assertNull(vm.selectedDayDetail.first())
+        val detail = vm.selectedDayDetail.first()
+        assertNotNull(detail)
+        assertEquals(DateUtils.todayStartMillis(), detail!!.date)
     }
 
     // ===== CalendarUiState 计算属性 =====

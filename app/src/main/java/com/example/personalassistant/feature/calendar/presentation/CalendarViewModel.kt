@@ -19,13 +19,23 @@ import com.example.personalassistant.feature.calendar.domain.usecase.DetectEvent
 import com.example.personalassistant.feature.calendar.domain.usecase.DetectEventSavedConflictsUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayDetailUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveEventCategoriesUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthEventsUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpsertEventCategoryUseCase
+import com.example.personalassistant.feature.calendar.domain.util.WeekCalculator
+import com.example.personalassistant.feature.finance.domain.usecase.ObserveGlobalMonthlySumsUseCase
+import com.example.personalassistant.feature.finance.domain.usecase.ObserveMonthlyBudgetUseCase
+import com.example.personalassistant.feature.finance.domain.usecase.ObserveTodayPoolUseCase
+import com.example.personalassistant.feature.task.domain.model.Task
+import com.example.personalassistant.feature.task.domain.usecase.ToggleTaskCompleteUseCase
+import com.example.personalassistant.feature.timetable.domain.usecase.GetCoursesByWeekUseCase
+import com.example.personalassistant.feature.timetable.domain.usecase.ObserveCurrentSemesterUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -76,15 +86,28 @@ class CalendarViewModel @Inject constructor(
     private val detectSavedConflict: DetectEventSavedConflictsUseCase,
     // Phase 8 Sub-step 9 Step 5：农历日期转换（用于月视图角标）
     private val lunarCalendar: LunarCalendar,
+    // Phase 14：今日概览（预算横条）—— 跨 feature 取记账数据
+    private val observeMonthlyBudget: ObserveMonthlyBudgetUseCase,
+    private val observeTodayPool: ObserveTodayPoolUseCase,
+    private val observeGlobalMonthlySums: ObserveGlobalMonthlySumsUseCase,
+    // Phase 14：日视图里直接勾选待办完成
+    private val toggleTaskComplete: ToggleTaskCompleteUseCase,
+    // Phase 14：周视图（课表风格）—— 跨 feature 取课表与事件数据
+    private val observeCurrentSemester: ObserveCurrentSemesterUseCase,
+    private val getCoursesByWeek: GetCoursesByWeekUseCase,
+    private val observeMonthEvents: ObserveMonthEventsUseCase,
 ) : ViewModel() {
 
     private val _currentYearMonth = MutableStateFlow(DateUtils.currentYearMonth())
     val currentYearMonth: StateFlow<String> = _currentYearMonth.asStateFlow()
 
-    private val _viewType = MutableStateFlow(CalendarViewType.MONTH)
+    // Phase 14：默认落在「日」视图 —— 日历 Tab 就是 App 的首屏，
+    // 而「日」视图承载的就是「今日」：今日课程 + 今日待办 + 预算横条 + 1 小时时间轴。
+    private val _viewType = MutableStateFlow(CalendarViewType.DAY)
     val viewType: StateFlow<CalendarViewType> = _viewType.asStateFlow()
 
-    private val _selectedDate = MutableStateFlow<Long?>(null)
+    // Phase 14：日视图默认锚定今天（原来默认 null，进日视图会显示「请回到今天」）
+    private val _selectedDate = MutableStateFlow<Long?>(DateUtils.todayStartMillis())
     val selectedDate: StateFlow<Long?> = _selectedDate.asStateFlow()
 
     /**
@@ -111,6 +134,32 @@ class CalendarViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList(),
         )
+
+    /**
+     * Phase 14：今日概览 —— 日视图顶部那条预算横条的数据
+     *
+     * **另开一个 StateFlow**，不塞进 uiState：
+     * uiState 已经有 6 路 combine，再加就是第 7 路，会把
+     * 「combine 最多 5 路」的便利重载顶掉，得改成 vararg 折叠。
+     *
+     * 口径固定为「真实当月」，不跟随视图切月 —— 预算横条说的是
+     * 「你这个月还剩多少」，翻到 8 月看历史时它不该跟着变。
+     */
+    val todayOverview: StateFlow<TodayOverview> = combine(
+        observeMonthlyBudget(),
+        observeTodayPool(),
+        observeGlobalMonthlySums(),
+    ) { budget, pool, sums ->
+        TodayOverview(
+            monthBudget = budget,
+            dailyPool = pool,
+            monthSpent = sums?.expense,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = TodayOverview(),
+    )
 
     /**
      * Phase 8 Sub-step 9：分类管理 Dialog 显示状态
@@ -207,6 +256,23 @@ class CalendarViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList(),
+        )
+
+    /**
+     * Phase 14：周视图（课表风格）数据
+     *
+     * 课程按「当前学期 + 第几周」查 —— 这样单双周课、起始周次都自动生效，
+     * 不需要在 UI 层再算一遍 [Course.appliesToWeek]。
+     * 事件按日期范围查，跨月的那一周也能拿全。
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val weekTimeline: StateFlow<WeekTimeline> = _selectedDate
+        .filterNotNull()
+        .flatMapLatest { date -> observeWeekTimeline(date) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = WeekTimeline(),
         )
 
     // 注意：本 init 块必须放在 uiState / selectedDayDetail / weekCells 之后。
@@ -312,6 +378,17 @@ class CalendarViewModel @Inject constructor(
     fun goToCurrent() {
         _currentYearMonth.value = DateUtils.currentYearMonth()
         _selectedDate.value = today
+    }
+
+    /**
+     * Phase 14：日视图里直接勾选待办完成
+     *
+     * 走 task 域自己的 [ToggleTaskCompleteUseCase]，不直接碰 Repository ——
+     * 这样「勾选完成」的规则（要不要顺带刷新零钱池、要不要改重复任务的下一期）
+     * 只在 task 域里定义一份。
+     */
+    fun toggleTask(task: Task, completed: Boolean) {
+        viewModelScope.launch { toggleTaskComplete(task.id, completed) }
     }
 
     // ===== Sub-step 5：事件编辑动作 =====
@@ -510,6 +587,43 @@ class CalendarViewModel @Inject constructor(
     }
 
     // ===== 内部 =====
+
+    /**
+     * 周视图数据源：本周 7 天，每天的课程 + 事件
+     */
+    private fun observeWeekTimeline(date: Long): Flow<WeekTimeline> {
+        val (weekStart, weekEndExclusive) = computeWeekRange(date)
+        return combine(
+            observeCurrentSemester(),
+            observeMonthEvents(weekStart, weekEndExclusive),
+        ) { semester, events -> semester to events }
+            .flatMapLatest { (semester, events) ->
+                val weekNumber = semester?.let {
+                    WeekCalculator.weekNumber(date, it.startDate, it.endDate)
+                }
+                // 没有学期或不在学期内 → 这一周没有课（周视图只显示事件）
+                val coursesFlow = if (semester != null && weekNumber != null) {
+                    getCoursesByWeek(semester.name, weekNumber)
+                } else {
+                    flowOf(emptyList())
+                }
+                coursesFlow.map { courses ->
+                    WeekTimeline(
+                        weekStart = weekStart,
+                        days = (0 until WeekTimeline.DAY_COUNT).map { offset ->
+                            val dayOfWeek = offset + 1
+                            val dayDate = weekStart + offset * WeekTimeline.ONE_DAY_MILLIS
+                            WeekDayColumn(
+                                date = dayDate,
+                                dayOfWeek = dayOfWeek,
+                                courses = courses.filter { it.dayOfWeek == dayOfWeek },
+                                events = events.filter { it.date == dayDate },
+                            )
+                        },
+                    )
+                }
+            }
+    }
 
     private fun buildUiState(
         summary: MonthSummary,
