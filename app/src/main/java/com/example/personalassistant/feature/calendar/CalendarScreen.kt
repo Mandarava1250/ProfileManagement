@@ -277,7 +277,7 @@ private fun headerTitle(
         // Phase 14：周视图标题显示选中日的完整日期 + 星期几，
         // 让「今天在哪一天」一眼就有答案，不用去数日期栏。
         if (selectedDate == null) "本周"
-        else fullDateLabel(selectedDate)
+        else weekRangeLabel(selectedDate)
     }
     CalendarViewType.DAY -> {
         if (selectedDate == null) "今日"
@@ -286,23 +286,21 @@ private fun headerTitle(
 }
 
 /**
- * 完整日期 + 星期几（周视图标题用）
+ * 周范围标题（周视图用）
  *
- * 「10月30日 星期五」—— 伙伴要的是精确定位：哪一天、星期几，一眼看见。
+ * 整周视图下，标题说「这一周是几号到几号」比说某一天更有用 ——
+ * 哪一天是星期几，星期头部那一行已经写得清清楚楚了。
  */
-private fun fullDateLabel(date: Long): String {
+private fun weekRangeLabel(date: Long): String {
     val zone = ZoneId.systemDefault()
-    val day = Instant.ofEpochMilli(date).atZone(zone).toLocalDate()
-    val weekday = when (day.dayOfWeek.value) {
-        1 -> "星期一"
-        2 -> "星期二"
-        3 -> "星期三"
-        4 -> "星期四"
-        5 -> "星期五"
-        6 -> "星期六"
-        else -> "星期日"
+    val (weekStart, weekEndExclusive) = CalendarViewModel.computeWeekRange(date)
+    val start = Instant.ofEpochMilli(weekStart).atZone(zone).toLocalDate()
+    val end = Instant.ofEpochMilli(weekEndExclusive - 1).atZone(zone).toLocalDate()
+    return if (start.monthValue == end.monthValue) {
+        "${start.monthValue}月${start.dayOfMonth}日 - ${end.dayOfMonth}日"
+    } else {
+        "${start.monthValue}月${start.dayOfMonth}日 - ${end.monthValue}月${end.dayOfMonth}日"
     }
-    return "${day.monthValue}月${day.dayOfMonth}日 $weekday"
 }
 
 private fun prevIcon(viewType: CalendarViewType) = when (viewType) {

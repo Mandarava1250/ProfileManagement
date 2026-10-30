@@ -2,14 +2,17 @@ package com.example.personalassistant.feature.calendar.presentation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -17,21 +20,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.School
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.example.personalassistant.core.ui.components.AppCard
+import androidx.compose.ui.unit.sp
 import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
@@ -39,22 +43,20 @@ import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.presentation.WeekDayColumn
 import com.example.personalassistant.feature.calendar.presentation.WeekTimeline
 import com.example.personalassistant.feature.task.domain.model.Task
-import com.example.personalassistant.feature.timetable.domain.model.Course
 import java.time.Instant
 import java.time.ZoneId
 
 /**
- * 周视图 = 一周导航 + 选中日详情（Phase 14）
+ * 周视图 = 整周 7 列并排的时间轴
  *
- * 伙伴要的结构（从上到下）：
+ * 伙伴给的草案（Demo_Week.html）长这样，从上到下：
  *
- * 1. **日期导航栏**：一周七天（几号 + 周一~周日），点一下切到那天
- * 2. **当天任务 / 计划**：可直接勾选完成
- * 3. **课程安排**：当天有几节课、几点到几点
- * 4. **时间轴**：1 小时行轴，课程、事件、任务各就各位
+ * 1. **星期头部**：周一~周日横排，上面是「一二三四五六日」，下面是日期圆圈，选中的那天是实心色圆
+ * 2. **全天标签区**：任务 / 全天日程摆成小标签，一行放不下就换行，整块最高 100dp 自己滚
+ * 3. **时间轴网格**：左边一列时间刻度，右边 7 列（周一~周日）并排，每列放各自的课程和事件
+ *    ——「现在」是一条红线，画在今天那一列上，左边带个小圆点
  *
- * 为什么不是 7 列大网格：7 列挤在 360dp 上，每列只有 40dp 出头，
- * 课程名根本写不下。改成「选一天 + 看一天」，每条信息都读得完整。
+ * 之前那版是「选一天看一天」，伙伴要的是整周一眼看完，所以换成了这个结构。
  */
 @Composable
 fun WeekCalendarView(
@@ -65,117 +67,389 @@ fun WeekCalendarView(
     onToggleTask: (Task, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
-    val tasks = remember(dayDetail) { dayDetail?.tasks.orEmpty() }
-    val courses = remember(dayDetail) { dayDetail?.courses.orEmpty() }
-    val timedEvents = remember(dayDetail) {
-        dayDetail?.events?.filter { !it.isEffectivelyAllDay && it.startTime != null }.orEmpty()
-    }
-    val allDayEvents = remember(dayDetail) {
-        dayDetail?.events?.filter { it.isEffectivelyAllDay }.orEmpty()
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(AppSpacing.sm),
-    ) {
-        // ===== 1. 日期导航栏 =====
-        WeekDayBar(
+    Column(modifier = modifier.fillMaxWidth()) {
+        // ===== 1. 星期头部 =====
+        WeekDayHeader(
             days = timeline.days,
             selectedDate = selectedDate,
             onDateClick = onDateClick,
         )
 
-        // ===== 2. 当天的任务 / 计划 =====
-        DayTodoSection(
-            tasks = tasks,
+        // ===== 2. 全天标签区 =====
+        AllDayTagArea(
+            tasks = dayDetail?.tasks.orEmpty(),
+            events = dayDetail?.events.orEmpty(),
             onToggleTask = onToggleTask,
-            title = "当天计划",
         )
 
-        // ===== 3. 课程安排 =====
-        CourseSection(courses = courses)
-
-        // ===== 全天事件 =====
-        if (allDayEvents.isNotEmpty()) {
-            AllDayEventsCard(events = allDayEvents)
+        // ===== 3. 时间轴 7 列 =====
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        ) {
+            WeekTimeGrid(days = timeline.days)
         }
-
-        // ===== 4. 时间轴 =====
-        DayTimelineView(
-            courses = courses,
-            timedEvents = timedEvents,
-            tasks = tasks,
-            emptyHint = "这天还没有安排",
-            // Phase 14：选中的就是今天时画「现在」红线
-            showNowLine = selectedDate != null && isToday(selectedDate),
-        )
-
-        Spacer(Modifier.height(AppSpacing.xl))
     }
 }
 
 // =====================================================================
-// 1. 日期导航栏
+// 1. 星期头部
 // =====================================================================
 
 @Composable
-private fun WeekDayBar(
+private fun WeekDayHeader(
     days: List<WeekDayColumn>,
     selectedDate: Long?,
     onDateClick: (Long) -> Unit,
 ) {
-    if (days.isEmpty()) return
-    AppCard(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = AppSpacing.sm, vertical = AppSpacing.xs),
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = AppSpacing.sm),
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            days.forEach { day ->
-                val selected = selectedDate != null && day.date == selectedDate
-                Column(
+        days.forEach { day ->
+            val selected = selectedDate != null && day.date == selectedDate
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(AppSpacing.sm))
+                    .clickable { onDateClick(day.date) }
+                    .padding(vertical = 2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = weekDayLabel(day.dayOfWeek),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                )
+                Spacer(Modifier.height(4.dp))
+                Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(AppSpacing.sm))
-                        .clickable { onDateClick(day.date) }
-                        .padding(vertical = AppSpacing.xxs),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .then(
+                            if (selected) {
+                                Modifier.background(MaterialTheme.colorScheme.primary)
+                            } else {
+                                Modifier
+                            }
+                        ),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = weekDayLabel(day.dayOfWeek),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        text = dayOfMonth(day.date),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
                     )
-                    Spacer(Modifier.height(2.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(30.dp)
-                            .clip(CircleShape)
-                            .then(
-                                if (selected) {
-                                    Modifier.background(MaterialTheme.colorScheme.primary)
-                                } else {
-                                    Modifier
-                                }
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = dayOfMonth(day.date),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selected) MaterialTheme.colorScheme.onPrimary
-                            else MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
                 }
             }
         }
     }
 }
+
+// =====================================================================
+// 2. 全天标签区
+// =====================================================================
+
+/**
+ * 任务 / 全天日程摆成小标签，一行四个，超出换行，整块最高 100dp 自己滚。
+ */
+@Composable
+private fun AllDayTagArea(
+    tasks: List<Task>,
+    events: List<Event>,
+    onToggleTask: (Task, Boolean) -> Unit,
+) {
+    val allDayEvents = remember(events) { events.filter { it.isEffectivelyAllDay } }
+    if (tasks.isEmpty() && allDayEvents.isEmpty()) return
+
+    // remember 的 lambda 里不能调 MaterialTheme —— 颜色先在外面取出来
+    val primary = MaterialTheme.colorScheme.primary
+    val rows = remember(tasks, allDayEvents, primary) {
+        val tags = tasks.map {
+            TagItem(
+                text = it.title,
+                color = primary,
+                strikethrough = it.isCompleted,
+                taskId = it.id,
+            )
+        } + allDayEvents.map {
+            TagItem(
+                text = it.title,
+                color = Color(it.color),
+                strikethrough = false,
+                taskId = null,
+            )
+        }
+        tags.chunked(4)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 100.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = AppSpacing.sm),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                row.forEach { tag ->
+                    TagChip(
+                        text = tag.text,
+                        color = tag.color,
+                        strikethrough = tag.strikethrough,
+                        onClick = {
+                            val task = tag.taskId?.let { id -> tasks.firstOrNull { it.id == id } }
+                            if (task != null) onToggleTask(task, !task.isCompleted)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private data class TagItem(
+    val text: String,
+    val color: Color,
+    val strikethrough: Boolean,
+    /** 任务标签才有 id —— 点一下能勾选完成 */
+    val taskId: Long?,
+)
+
+@Composable
+private fun TagChip(
+    text: String,
+    color: Color,
+    strikethrough: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(color.copy(alpha = 0.16f))
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface,
+            textDecoration = if (strikethrough) TextDecoration.LineThrough else null,
+        )
+    }
+}
+
+// =====================================================================
+// 3. 时间轴 7 列
+// =====================================================================
+
+@Composable
+private fun WeekTimeGrid(days: List<WeekDayColumn>) {
+    val hourHeight = 46.dp
+    val gutterWidth = 42.dp
+    val scrollState = rememberScrollState()
+    val density = LocalDensity.current
+    val nowMinute = remember { currentMinuteOfDay() }
+    val todayIndex = remember(days) { days.indexOfFirst { isToday(it.date) } }
+
+    // 打开就落在「现在」附近 —— 24 小时的轴从 00:00 划到上午十点要好几屏
+    LaunchedEffect(todayIndex) {
+        if (todayIndex >= 0) {
+            val target = with(density) {
+                (nowMinute / 60f * hourHeight.toPx() - 80.dp.toPx()).coerceAtLeast(0f)
+            }
+            scrollState.scrollTo(target.toInt())
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(scrollState),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(hourHeight * 24),
+        ) {
+            // 左边：时间刻度
+            Column(
+                modifier = Modifier
+                    .width(gutterWidth)
+                    .fillMaxHeight(),
+            ) {
+                repeat(24) { hour ->
+                    Box(
+                        modifier = Modifier.height(hourHeight),
+                        contentAlignment = Alignment.TopEnd,
+                    ) {
+                        Text(
+                            text = DateUtils.formatMinutesOfDay(hour * 60),
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
+                }
+            }
+
+            // 右边：7 列
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+            ) {
+                days.forEachIndexed { index, day ->
+                    WeekDayColumnView(
+                        day = day,
+                        hourHeight = hourHeight,
+                        showNowLine = index == todayIndex,
+                        nowMinute = nowMinute,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 周一~周日里的一列。
+ *
+ * 列窄（360dp 屏上每列 40dp 出头），所以块里的字很小 —— 能认出是「高等数学」就行，
+ * 想读全名点进日视图。
+ */
+@Composable
+private fun WeekDayColumnView(
+    day: WeekDayColumn,
+    hourHeight: Dp,
+    showNowLine: Boolean,
+    nowMinute: Int,
+    modifier: Modifier = Modifier,
+) {
+    val blocks = remember(day) { day.buildWeekBlocks() }
+
+    Box(modifier = modifier.fillMaxHeight()) {
+        // 整点横线
+        repeat(24) { hour ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    .align(Alignment.TopStart)
+                    .offset(y = hourHeight * hour),
+            )
+        }
+
+        // 课程 / 事件块
+        blocks.forEach { block ->
+            val top = hourHeight * (block.startMinute / 60f)
+            val height = hourHeight * ((block.endMinute - block.startMinute) / 60f)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 1.dp)
+                    .offset(y = top)
+                    .height(height - 1.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(block.color.copy(alpha = 0.18f)),
+            ) {
+                // 左侧 3dp 语义色条
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .fillMaxHeight()
+                        .background(block.color),
+                )
+                Text(
+                    text = block.title,
+                    fontSize = 9.sp,
+                    lineHeight = 11.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = 5.dp, top = 2.dp, end = 2.dp),
+                )
+            }
+        }
+
+        // 「现在」红线：只画在今天那一列，左边带个小圆点
+        if (showNowLine) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .background(MaterialTheme.colorScheme.error)
+                    .align(Alignment.TopStart)
+                    .offset(y = hourHeight * (nowMinute / 60f)),
+            )
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.error)
+                    .align(Alignment.TopStart)
+                    .offset(x = (-4).dp, y = hourHeight * (nowMinute / 60f) - 3.dp),
+            )
+        }
+    }
+}
+
+/** 一列里要画哪些块：课程 + 带时刻的事件 */
+private fun WeekDayColumn.buildWeekBlocks(): List<WeekBlock> {
+    val courseBlocks = courses.map { course ->
+        WeekBlock(
+            title = course.name,
+            startMinute = course.startTime,
+            endMinute = course.endTime,
+            color = Color(course.color),
+        )
+    }
+    val eventBlocks = events.mapNotNull { event ->
+        if (event.isEffectivelyAllDay) return@mapNotNull null
+        val start = event.startTime?.toInt() ?: return@mapNotNull null
+        WeekBlock(
+            title = event.title,
+            startMinute = start,
+            // 没有结束时间就按 1 小时算 —— 零高度的块在屏幕上等于不存在
+            endMinute = event.endTime?.toInt() ?: (start + 60),
+            color = Color(event.color),
+        )
+    }
+    return (courseBlocks + eventBlocks).sortedBy { it.startMinute }
+}
+
+private data class WeekBlock(
+    val title: String,
+    val startMinute: Int,
+    val endMinute: Int,
+    val color: Color,
+)
+
+// =====================================================================
+// 小工具
+// =====================================================================
 
 /** dayOfWeek（1 = 周一 … 7 = 周日）→ 单字 */
 private fun weekDayLabel(dayOfWeek: Int): String = when (dayOfWeek) {
@@ -191,124 +465,4 @@ private fun weekDayLabel(dayOfWeek: Int): String = when (dayOfWeek) {
 private fun dayOfMonth(dateMillis: Long): String {
     val zone = ZoneId.systemDefault()
     return Instant.ofEpochMilli(dateMillis).atZone(zone).toLocalDate().dayOfMonth.toString()
-}
-
-// =====================================================================
-// 3. 课程安排
-// =====================================================================
-
-@Composable
-private fun CourseSection(courses: List<Course>) {
-    if (courses.isEmpty()) return
-    AppCard(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(AppSpacing.sm),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Outlined.School,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = "课程安排",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = "${courses.size}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.height(AppSpacing.xxs))
-        courses.sortedBy { it.startTime }.forEach { course ->
-            CourseRow(course = course)
-        }
-    }
-}
-
-@Composable
-private fun CourseRow(course: Course) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .width(4.dp)
-                .height(26.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Color(course.color)),
-        )
-        Spacer(Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = course.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (course.location.isNotBlank()) {
-                Text(
-                    text = course.location,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = "${DateUtils.formatMinutesOfDay(course.startTime)} - " +
-                DateUtils.formatMinutesOfDay(course.endTime),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-// =====================================================================
-// 全天事件
-// =====================================================================
-
-@Composable
-private fun AllDayEventsCard(events: List<Event>) {
-    AppCard(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(AppSpacing.sm),
-    ) {
-        Text(
-            text = "全天",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(AppSpacing.xxs))
-        events.forEach { event ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(4.dp)
-                        .height(16.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color(event.color)),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = event.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
 }
