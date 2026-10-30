@@ -9,12 +9,12 @@ import androidx.compose.ui.graphics.Color
 // Light scheme
 val PrimaryLight = Color(0xFFD81B60)            // 樱花粉
 val OnPrimaryLight = Color(0xFFFFFFFF)
-val PrimaryContainerLight = Color(0xFFFFD9E2)
+val PrimaryContainerLight = Color(0xFFFFE3EC)   // Phase 14：调暖一档，粉调更柔
 val OnPrimaryContainerLight = Color(0xFF3E001B)
 
 val SecondaryLight = Color(0xFF74565F)
 val OnSecondaryLight = Color(0xFFFFFFFF)
-val SecondaryContainerLight = Color(0xFFFFD9E2)
+val SecondaryContainerLight = Color(0xFFFFE3EC)
 val OnSecondaryContainerLight = Color(0xFF2B151C)
 
 val TertiaryLight = Color(0xFF7C5635)
@@ -27,9 +27,9 @@ val OnErrorLight = Color(0xFFFFFFFF)
 val ErrorContainerLight = Color(0xFFFFDAD6)
 val OnErrorContainerLight = Color(0xFF410002)
 
-val BackgroundLight = Color(0xFFFFF8F8)
+val BackgroundLight = Color(0xFFFFFBFC)         // Phase 14：比纯白更暖一点
 val OnBackgroundLight = Color(0xFF20191B)
-val SurfaceLight = Color(0xFFFFF8F8)
+val SurfaceLight = Color(0xFFFFFBFC)
 val OnSurfaceLight = Color(0xFF20191B)
 val SurfaceVariantLight = Color(0xFFF2DDE1)
 val OnSurfaceVariantLight = Color(0xFF514347)

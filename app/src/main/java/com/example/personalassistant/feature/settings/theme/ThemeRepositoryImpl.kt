@@ -60,8 +60,15 @@ class ThemeRepositoryImpl @Inject constructor(
         internal val KEY_DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
 
         /**
-         * 动态色默认值：true（与未升级前的行为一致）
+         * 动态色默认值：false
+         *
+         * Phase 14 樱花粉 2.0 决策：Material You 壁纸取色会把品牌色「樱花粉」整个盖掉，
+         * 导致同一套 UI 在不同设备上颜色完全不同。新装 / 从未设置过的用户默认走品牌色板，
+         * 想用壁纸色的仍可在设置页打开开关。
+         *
+         * 注意：只影响「DataStore 里没有 dynamic_color 这一项」的安装。
+         * 已经手动开过或关过的用户，存量值原样保留，不会被重置。
          */
-        internal const val DEFAULT_DYNAMIC_COLOR = true
+        internal const val DEFAULT_DYNAMIC_COLOR = false
     }
 }

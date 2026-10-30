@@ -62,13 +62,13 @@ class ThemeViewModelTest {
     }
 
     @Test
-    fun `默认值是 SYSTEM + dynamicColor=true`() = runBlocking {
+    fun `默认值是 SYSTEM + dynamicColor=false`() = runBlocking {
         val fake = FakeObserveThemePreferencesUseCase(ThemePreferences())
         val vm = ThemeViewModel(fake)
 
         val prefs = vm.themePreferences.value
         assertEquals(ThemeMode.SYSTEM, prefs.themeMode)
-        assertEquals(true, prefs.dynamicColor)
+        assertEquals(false, prefs.dynamicColor)
     }
 
     @Test

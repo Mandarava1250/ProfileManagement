@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.finance.domain.model.Category
+import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.feature.finance.domain.model.MonthlyReport
 import com.example.personalassistant.feature.finance.presentation.util.IconRegistry
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
@@ -136,7 +137,8 @@ fun MonthlyReportCard(
                         categoryName = cat?.name ?: "未分类",
                         icon = cat?.let { IconRegistry.resolve(it.iconName) }
                             ?: IconRegistry.DEFAULT_ICON,
-                        color = cat?.let { GraphicsColor(it.color) } ?: GraphicsColor(0xFF9E9E9E),
+                        color = cat?.let { GraphicsColor(it.color) }
+                            ?: LocalAppColors.current.unknownCategory,
                         amount = sum.total,
                         ratio = (sum.total / max).coerceIn(0.0, 1.0).toFloat(),
                     )

@@ -58,11 +58,13 @@ class ThemeRepositoryImplTest {
     private fun newRepository(): ThemeRepositoryImpl = ThemeRepositoryImpl(dataStore)
 
     @Test
-    fun `observe 返回默认偏好（mode=SYSTEM, dynamicColor=true）`() = runBlocking {
+    fun `observe 返回默认偏好（mode=SYSTEM, dynamicColor=false）`() = runBlocking {
         val repo = newRepository()
         val prefs = repo.observe().first()
         assertEquals(ThemeMode.SYSTEM, prefs.themeMode)
-        assertEquals(true, prefs.dynamicColor)
+        // Phase 14：动态色默认关闭 —— 樱花粉 2.0 的主色是设计好的，
+        // 让系统取色会把这套粉调打乱。
+        assertEquals(false, prefs.dynamicColor)
     }
 
     @Test

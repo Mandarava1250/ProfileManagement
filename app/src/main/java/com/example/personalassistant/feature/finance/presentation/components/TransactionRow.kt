@@ -25,6 +25,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.personalassistant.core.ui.theme.AppRadii
+import com.example.personalassistant.core.ui.theme.LocalAppColors
+import com.example.personalassistant.core.ui.theme.onColorFor
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.domain.model.Transaction
 import com.example.personalassistant.feature.finance.domain.model.TransactionType
@@ -66,7 +69,9 @@ fun TransactionRow(
 ) {
     val isTransfer = transaction.type.isTransfer
     val categoryName = category?.name ?: "未知分类"
-    val categoryColor = category?.color?.let { Color(it) } ?: Color(0xFF9E9E9E)
+    // Phase 14：语义色统一从 LocalAppColors 取，组件层不再写死色值
+    val appColors = LocalAppColors.current
+    val categoryColor = category?.color?.let { Color(it) } ?: appColors.unknownCategory
     val iconName = category?.iconName ?: "Category"
     // Phase 2：首张附件（attachmentUri 是逗号分隔的 file:// URI 串）
     val firstAttachmentUri = transaction.attachmentUri
@@ -83,10 +88,11 @@ fun TransactionRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // 分类彩色圆形
+        val circleColor = if (isTransfer) appColors.transferInk else categoryColor
         Surface(
             modifier = Modifier.size(40.dp),
             shape = CircleShape,
-            color = if (isTransfer) TRANSFER_COLOR else categoryColor,
+            color = circleColor,
         ) {
             Icon(
                 imageVector = if (isTransfer) {
@@ -95,7 +101,13 @@ fun TransactionRow(
                     IconRegistry.resolve(iconName)
                 },
                 contentDescription = if (isTransfer) "转账" else categoryName,
-                tint = Color.White,
+                // Phase 14：分类色是用户自己挑的，可能很浅 —— 白图标会看不见。
+                // 按底色亮度自动选黑/白，两种情况都保证可读。
+                tint = if (isTransfer) {
+                    appColors.onTransferContainer
+                } else {
+                    onColorFor(categoryColor)
+                },
                 modifier = Modifier.padding(8.dp),
             )
         }
@@ -133,7 +145,7 @@ fun TransactionRow(
                     modifier = Modifier
                         .size(32.dp)
                         .padding(top = 4.dp)
-                        .clip(RoundedCornerShape(6.dp)),
+                        .clip(RoundedCornerShape(AppRadii.chip)),
                 )
             }
         }
@@ -154,10 +166,10 @@ fun TransactionRow(
                 TransactionType.TRANSFER_IN -> transaction.amount
             }
             val color = when (transaction.type) {
-                TransactionType.EXPENSE -> Color(0xFFD32F2F)
-                TransactionType.INCOME -> Color(0xFF388E3C)
-                TransactionType.TRANSFER_OUT -> TRANSFER_COLOR
-                TransactionType.TRANSFER_IN -> TRANSFER_COLOR
+                TransactionType.EXPENSE -> appColors.expenseInk
+                TransactionType.INCOME -> appColors.incomeInk
+                TransactionType.TRANSFER_OUT -> appColors.transferInk
+                TransactionType.TRANSFER_IN -> appColors.transferInk
             }
             Text(
                 text = MoneyFormat.format(signed),
@@ -173,9 +185,6 @@ fun TransactionRow(
         }
     }
 }
-
-/** 转账行颜色：蓝灰（与 DefaultCategories 里转账分类同调，但这是 UI 主题色，不共常量） */
-private val TRANSFER_COLOR = Color(0xFF546E7A)
 
 /**
  * 转账行标题：「转出 至 微信」/「转入 自 支付宝」

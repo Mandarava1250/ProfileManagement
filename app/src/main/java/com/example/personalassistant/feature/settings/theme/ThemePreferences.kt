@@ -11,9 +11,10 @@ package com.example.personalassistant.feature.settings.theme
  *
  * 默认值：
  * - mode = SYSTEM：尊重用户系统设置
- * - dynamicColor = true：保持 Android 12+ Material You 行为不变
+ * - dynamicColor = false：Phase 14 起默认走品牌色板（樱花粉），
+ *   想用 Material You 壁纸取色的用户在设置页自行打开
  */
 data class ThemePreferences(
     val themeMode: ThemeMode = ThemeMode.DEFAULT,
-    val dynamicColor: Boolean = true,
+    val dynamicColor: Boolean = false,
 )
