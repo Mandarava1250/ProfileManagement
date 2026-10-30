@@ -131,6 +131,8 @@ fun DayCalendarView(
             timedEvents = timedEvents,
             tasks = tasks,
             emptyHint = "今天没有课程和日程",
+            // Phase 14：今天是今天就画「现在」红线，一眼知道现在几点
+            showNowLine = isToday(date),
         )
 
         Spacer(Modifier.height(AppSpacing.xl))

@@ -78,6 +78,7 @@ fun DayTimelineView(
     timedEvents: List<Event>,
     tasks: List<Task> = emptyList(),
     emptyHint: String = "今天没有课程和日程",
+    showNowLine: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -93,6 +94,8 @@ fun DayTimelineView(
     val hourHeight = 56.dp
     val gutterWidth = 42.dp
     val columnGap = 3.dp
+    // 进入时取一次当前时刻就固定住 —— 红线跟着秒针跳的话看着晕
+    val nowMinute = remember { currentMinuteOfDay() }
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val totalWidth = maxWidth
@@ -129,6 +132,20 @@ fun DayTimelineView(
                             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
                             .align(Alignment.TopStart)
                             .offset(y = hourHeight * hour),
+                    )
+                }
+
+                // Phase 14：「现在」红线。
+                // 24 小时的轴一眼望过去看不出「现在几点」，画一条线就一目了然 ——
+                // 线上方是已经过去的，下面是还没到的。
+                if (showNowLine) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .background(MaterialTheme.colorScheme.error)
+                            .align(Alignment.TopStart)
+                            .offset(y = hourHeight * (nowMinute / 60f)),
                     )
                 }
 
@@ -214,6 +231,19 @@ internal fun minuteOfDay(millis: Long): Int? {
         return null
     }
     return time.hour * 60 + time.minute
+}
+
+/** 此刻是今天的第几分钟（0..1439） */
+internal fun currentMinuteOfDay(): Int {
+    val now = java.time.LocalDateTime.now(ZoneId.systemDefault())
+    return now.hour * 60 + now.minute
+}
+
+/** 这天是不是今天（按本地日期比） */
+internal fun isToday(millis: Long): Boolean {
+    val zone = ZoneId.systemDefault()
+    val target = Instant.ofEpochMilli(millis).atZone(zone).toLocalDate()
+    return target == java.time.LocalDate.now(zone)
 }
 
 @Composable

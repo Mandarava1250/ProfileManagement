@@ -152,9 +152,7 @@ fun CalendarScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 when (viewType) {
                     CalendarViewType.MONTH -> Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState()),
+                        modifier = Modifier.fillMaxSize(),
                     ) {
                         MonthCalendarGrid(
                             cells = uiState.monthCells,
@@ -162,16 +160,16 @@ fun CalendarScreen(
                             onDateClick = viewModel::onDateClick,
                             // Phase 8 Sub-step 9 Step 5：农历角标 map（key = cell.date）
                             lunarLabels = uiState.monthLunarLabels,
-                            modifier = Modifier.fillMaxWidth(),
+                            // Phase 14：网格拿剩余空间（有界高度），不能套 verticalScroll ——
+                            // LazyVerticalGrid 在无限高度约束下会直接崩。
+                            modifier = Modifier.weight(1f),
                         )
                         // Phase 14：网格下面用标签列出这一天的日程 / 任务 / 课程
-                        Spacer(Modifier.height(AppSpacing.md))
                         MonthTagList(
                             dayDetail = selectedDayDetail,
                             modifier = Modifier.padding(horizontal = AppSpacing.md),
                             onEventClick = { event -> viewModel.startEditEvent(event) },
                         )
-                        Spacer(Modifier.height(AppSpacing.xl))
                     }
                     CalendarViewType.WEEK -> WeekCalendarView(
                         timeline = weekTimeline,
@@ -276,8 +274,10 @@ private fun headerTitle(
         if (parts.size == 2) "${parts[0]} 年 ${parts[1].toInt()} 月" else yearMonth
     }
     CalendarViewType.WEEK -> {
+        // Phase 14：周视图标题显示选中日的完整日期 + 星期几，
+        // 让「今天在哪一天」一眼就有答案，不用去数日期栏。
         if (selectedDate == null) "本周"
-        else weekRangeLabel(selectedDate)
+        else fullDateLabel(selectedDate)
     }
     CalendarViewType.DAY -> {
         if (selectedDate == null) "今日"
@@ -285,18 +285,24 @@ private fun headerTitle(
     }
 }
 
-private fun weekRangeLabel(date: Long): String {
+/**
+ * 完整日期 + 星期几（周视图标题用）
+ *
+ * 「10月30日 星期五」—— 伙伴要的是精确定位：哪一天、星期几，一眼看见。
+ */
+private fun fullDateLabel(date: Long): String {
     val zone = ZoneId.systemDefault()
-    val (weekStart, weekEndExclusive) = CalendarViewModel.computeWeekRange(date)
-    val start = Instant.ofEpochMilli(weekStart).atZone(zone).toLocalDate()
-    val end = Instant.ofEpochMilli(weekEndExclusive - 1).atZone(zone).toLocalDate()
-    val sMonth = start.monthValue
-    val eMonth = end.monthValue
-    return if (sMonth == eMonth) {
-        "${sMonth}月${start.dayOfMonth}日 - ${end.dayOfMonth}日"
-    } else {
-        "${sMonth}月${start.dayOfMonth}日 - ${eMonth}月${end.dayOfMonth}日"
+    val day = Instant.ofEpochMilli(date).atZone(zone).toLocalDate()
+    val weekday = when (day.dayOfWeek.value) {
+        1 -> "星期一"
+        2 -> "星期二"
+        3 -> "星期三"
+        4 -> "星期四"
+        5 -> "星期五"
+        6 -> "星期六"
+        else -> "星期日"
     }
+    return "${day.monthValue}月${day.dayOfMonth}日 $weekday"
 }
 
 private fun prevIcon(viewType: CalendarViewType) = when (viewType) {

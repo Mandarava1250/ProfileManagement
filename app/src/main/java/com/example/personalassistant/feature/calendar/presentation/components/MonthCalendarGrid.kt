@@ -3,6 +3,7 @@ package com.example.personalassistant.feature.calendar.presentation.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -57,11 +58,15 @@ fun MonthCalendarGrid(
         }
 
         // 6×7 网格
+        //
+        // Phase 14 修崩溃：LazyVerticalGrid 不能放进 Column(Modifier.verticalScroll()) ——
+        // 外层给了无限高度约束，lazy 容器直接抛 IllegalStateException，App 直接崩。
+        // 现在外层给它一份有界高度（weight(1f) 分配的剩余空间），网格自己在里面滚。
         LazyVerticalGrid(
             columns = GridCells.Fixed(7),
             horizontalArrangement = Arrangement.spacedBy(0.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(),
         ) {
             items(cells, key = { it.date }) { cell ->
                 val label = lunarLabels[cell.date]

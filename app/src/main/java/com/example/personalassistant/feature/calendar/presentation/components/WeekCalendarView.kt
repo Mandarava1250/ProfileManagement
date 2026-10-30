@@ -108,6 +108,8 @@ fun WeekCalendarView(
             timedEvents = timedEvents,
             tasks = tasks,
             emptyHint = "这天还没有安排",
+            // Phase 14：选中的就是今天时画「现在」红线
+            showNowLine = selectedDate != null && isToday(selectedDate),
         )
 
         Spacer(Modifier.height(AppSpacing.xl))
