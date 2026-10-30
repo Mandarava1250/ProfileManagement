@@ -1,7 +1,25 @@
 package com.example.personalassistant.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -10,22 +28,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.navigation.NavController
-import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.NavType
-import androidx.navigation.navArgument
+import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.feature.calendar.CalendarScreen
 import com.example.personalassistant.feature.finance.FinanceScreen
 import com.example.personalassistant.feature.finance.presentation.budget.BudgetScreen
 import com.example.personalassistant.feature.finance.presentation.category.CategoryManagementScreen
-import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHit
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHitType
 import com.example.personalassistant.feature.globalsearch.presentation.GlobalSearchScreen
 import com.example.personalassistant.feature.me.MeScreen
@@ -40,22 +64,38 @@ import com.example.personalassistant.feature.timetable.presentation.edit.CourseE
 import com.example.personalassistant.feature.timetable.presentation.settings.TimetableSettingsScreen
 
 /**
- * 全局导航图：BottomBar 承载 6 个主 Tab（Phase 13 起「设置」也是 Tab）
+ * 全局导航图（Phase 14：底栏 4 Tab + 「更多」面板）
  *
  * 各 Screen 的详细实现位于 feature/<module>/presentation/ 目录下
+ *
+ * **底栏结构**
+ * - 4 个高频功能 Tab：日历 / 任务 / 课表 / 记账，图标 + 文字标签常显
+ * - 第 5 个位置：「更多」→ 在底栏上方弹出 ModalBottomSheet，里面是「我」和「设置」
+ * - 「我」「设置」不再是 Tab，但**路由保留**（deeplink 白名单里的 me / settings 仍然有效）
+ *
+ * **底栏可见性**
+ * 底栏在这 6 个 route 上都显示（4 个 Tab + 我 + 设置）。
+ * 从「更多」进入「我」「设置」后底栏还在，用户可以直接切走 ——
+ * 这是 Phase 13 之前就存在的坑（「我」是 Tab 时底栏判定用 BottomTab.entries，
+ * 一旦「我」「设置」移出 BottomTab，这条判定就会让底栏消失）。
  *
  * **通知 deeplink 处理（plan 8final §2.1 v2）**：
  * - [pendingNavRoute] 由 [com.example.personalassistant.MainActivity] 写入
  * - `LaunchedEffect(pendingNavRoute)` 监听值变化 → 校验 → `navController.navigate`
  * - **route 白名单**：仅允许已注册的 `Screen.route` 前缀，防止恶意 Intent 跳到未注册路径
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
-    val showBottomBar = currentRoute in BottomTab.entries.map { it.screen.route }
+    val showBottomBar = currentRoute in BOTTOM_BAR_ROUTES
+
+    // 「更多」面板的开关状态。放这里而不是底栏组件内部，
+    // 是因为 ModalBottomSheet 要渲染在 Scaffold 内容层之上，不能塞进 bottomBar slot。
+    var showMoreSheet by rememberSaveable { mutableStateOf(false) }
 
     // === 通知 deeplink 消费：监听 pendingNavRoute，命中白名单则 navigate ===
     val pendingRoute = pendingNavRoute?.value
@@ -79,7 +119,11 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
-                AppBottomBar(navController = navController, currentRoute = currentRoute)
+                AppBottomBar(
+                    navController = navController,
+                    currentRoute = currentRoute,
+                    onMoreClick = { showMoreSheet = true },
+                )
             }
         }
     ) { innerPadding ->
@@ -88,16 +132,17 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
         // 屏幕底部、与 BottomBar 重叠，内层各页的 FAB（课表 / 任务）都被 BottomBar 盖住。
         NavHost(
             navController = navController,
-            startDestination = BottomTab.Timetable.screen.route,
+            // Phase 14：首屏改为日历 —— 日历的「日」视图就是「今日」，符合今日优先的思路
+            startDestination = BottomTab.Calendar.screen.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            // === 6 个主 Tab（Phase 13 加 Settings）===
-            composable(BottomTab.Timetable.screen.route) { TimetableScreen(navController) }
-            composable(BottomTab.Tasks.screen.route) { TaskScreen(navController) }
-            composable(BottomTab.Finance.screen.route) { FinanceScreen(navController) }
+            // === 4 个主 Tab + 「我」「设置」（后两者从更多面板进入）===
             composable(BottomTab.Calendar.screen.route) { CalendarScreen(navController) }
-            composable(BottomTab.Me.screen.route) { MeScreen(navController) }
-            composable(BottomTab.Settings.screen.route) { SettingsScreen(navController) }
+            composable(BottomTab.Tasks.screen.route) { TaskScreen(navController) }
+            composable(BottomTab.Timetable.screen.route) { TimetableScreen(navController) }
+            composable(BottomTab.Finance.screen.route) { FinanceScreen(navController) }
+            composable(Screen.Me.route) { MeScreen(navController) }
+            composable(Screen.Settings.route) { SettingsScreen(navController) }
 
             // === 二级页面 ===
 
@@ -225,12 +270,49 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
             }
         }
     }
+
+    // === 「更多」面板 ===
+    if (showMoreSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showMoreSheet = false },
+        ) {
+            MoreMenu(
+                onNavigate = { route ->
+                    showMoreSheet = false
+                    navController.navigate(route) {
+                        // 「我」「设置」是二级页，不是 Tab —— 不走 Tab 的 saveState 策略，
+                        // 跟通知 deeplink 用同一套：回到起始栈但保留底栏可切走。
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = false
+                            inclusive = false
+                        }
+                        launchSingleTop = true
+                    }
+                },
+            )
+        }
+    }
 }
+
+/**
+ * 底栏可见的 route 白名单
+ *
+ * 4 个主 Tab + 「我」+ 「设置」。后两者虽然不再是 Tab，但进入后底栏要留着，
+ * 否则用户点进「我」就找不到返回主界面的路（系统返回键能退，但视觉上没有出口）。
+ */
+private val BOTTOM_BAR_ROUTES = setOf(
+    Screen.Calendar.route,
+    Screen.Tasks.route,
+    Screen.Timetable.route,
+    Screen.Finance.route,
+    Screen.Me.route,
+    Screen.Settings.route,
+)
 
 /**
  * 通知 deeplink 路由白名单（plan 8final §2.1 v2 要求）
  *
- * **只** 接受已注册到 NavHost 的 route 前缀。新增 Screen 时必须同步更新此处。
+ * **只**接受已注册到 NavHost 的 route 前缀。新增 Screen 时必须同步更新此处。
  *
  * **避免 hack**：用硬编码前缀字面量，不用 `removeSuffix("{xxx}")` —— 后者一旦
  * 模板占位符改名会误判。
@@ -251,10 +333,17 @@ private fun isKnownDeepLinkRoute(route: String): Boolean {
         route == Screen.EditGpaRule.route
 }
 
+/**
+ * 底部导航栏：4 个功能 Tab + 「更多」
+ *
+ * Phase 14：文字标签**常显**（alwaysShowLabel = true）。
+ * 4 项每格 90dp，11sp 的两个汉字（20dp）绰绰有余，不用再靠猜图标区分。
+ */
 @Composable
 private fun AppBottomBar(
     navController: NavHostController,
-    currentRoute: String?
+    currentRoute: String?,
+    onMoreClick: () -> Unit,
 ) {
     NavigationBar {
         BottomTab.entries.forEach { tab ->
@@ -272,11 +361,107 @@ private fun AppBottomBar(
                         }
                     }
                 },
-                // Phase 13：6 个 tab 一律只显示图标 —— 文字标签会把每个位置压窄、字号缩小。
-                // 无障碍名称由图标 contentDescription 承担（视觉不显示，读屏仍能读出"课表"）。
-                icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
-                label = { Text(stringResource(tab.labelRes)) },
-                alwaysShowLabel = false,
+                // 文字标签已经承担了语义，图标 contentDescription 设 null 避免读屏重复朗读
+                icon = { Icon(tab.icon, contentDescription = null) },
+                label = {
+                    Text(
+                        text = stringResource(tab.labelRes),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                },
+                alwaysShowLabel = true,
+            )
+        }
+
+        // 第 5 个位置：「更多」
+        val moreSelected = currentRoute == Screen.Me.route || currentRoute == Screen.Settings.route
+        NavigationBarItem(
+            selected = moreSelected,
+            onClick = onMoreClick,
+            icon = { Icon(Icons.Rounded.MoreHoriz, contentDescription = null) },
+            label = {
+                Text(
+                    text = stringResource(R.string.tab_more),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            },
+            alwaysShowLabel = true,
+        )
+    }
+}
+
+/**
+ * 「更多」面板的内容：我 / 设置
+ */
+@Composable
+private fun MoreMenu(onNavigate: (String) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.tab_more),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 8.dp),
+        )
+        MoreMenuItem(
+            icon = Icons.Rounded.Person,
+            title = stringResource(R.string.tab_me),
+            subtitle = stringResource(R.string.me_subtitle),
+            onClick = { onNavigate(Screen.Me.route) },
+        )
+        MoreMenuItem(
+            icon = Icons.Rounded.Settings,
+            title = stringResource(R.string.tab_settings),
+            subtitle = stringResource(R.string.settings_subtitle),
+            onClick = { onNavigate(Screen.Settings.route) },
+        )
+    }
+}
+
+@Composable
+private fun MoreMenuItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(AppRadii.card))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(AppRadii.chip))
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

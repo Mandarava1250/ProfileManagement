@@ -10,6 +10,10 @@
     <string name="tab_calendar">日历</string>
     <string name="tab_me">我</string>
     <string name="tab_settings">设置</string>
+    <!-- Phase 14：底栏第 5 个位置 = 「更多」，点开弹出面板（我 / 设置） -->
+    <string name="tab_more">更多</string>
+    <string name="me_subtitle">学生档案 · GPA · 绩点规则</string>
+    <string name="settings_subtitle">主题 · 记账账户 · 备份恢复</string>
 
     <!-- Common -->
     <string name="action_save">保存</string>

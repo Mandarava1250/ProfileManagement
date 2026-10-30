@@ -65,6 +65,9 @@ fun MeScreen(
         topBar = {
             TopAppBar(
                 title = { Text("我") },
+                // Phase 14：「我」不再是底部 Tab，而是从「更多」面板进入的二级页。
+                // 既然是二级页，返回箭头是合理的（也能用系统返回键）——
+                // 底栏一直都在，不需要靠顶栏箭头当唯一出口。
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -73,7 +76,7 @@ fun MeScreen(
                 actions = {
                     // 右上角：GPA 规则编辑入口（伙伴要求）
                     //
-                    // Phase 13：原来的 ⚙️ 设置入口已移除 —— 设置现在是底部导航的第 6 个 Tab，
+                    // Phase 13：原来的 ⚙️ 设置入口已移除 —— 设置现在从底栏「更多」进入，
                     // 「我」页再放一个入口只会让人以为两处设置的东西不一样。
                     IconButton(onClick = { navController.navigate(Screen.EditGpaRule.route) }) {
                         Icon(Icons.Filled.Tune, contentDescription = "GPA 规则")
