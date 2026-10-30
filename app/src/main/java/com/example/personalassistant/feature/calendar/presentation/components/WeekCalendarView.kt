@@ -2,7 +2,6 @@ package com.example.personalassistant.feature.calendar.presentation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,14 +30,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.core.utils.DateUtils
-import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.presentation.WeekDayColumn
 import com.example.personalassistant.feature.calendar.presentation.WeekTimeline
@@ -46,22 +43,28 @@ import com.example.personalassistant.feature.task.domain.model.Task
 import java.time.Instant
 import java.time.ZoneId
 
+/** 左边时间刻度列的宽度 —— 全天标签区也要留出这么多，两边才对得齐 */
+private val GutterWidth = 42.dp
+
+/** 一小时占多高 */
+private val HourHeight = 46.dp
+
 /**
  * 周视图 = 整周 7 列并排的时间轴
  *
  * 伙伴给的草案（Demo_Week.html）长这样，从上到下：
  *
  * 1. **星期头部**：周一~周日横排，上面是「一二三四五六日」，下面是日期圆圈，选中的那天是实心色圆
- * 2. **全天标签区**：任务 / 全天日程摆成小标签，一行放不下就换行，整块最高 100dp 自己滚
- * 3. **时间轴网格**：左边一列时间刻度，右边 7 列（周一~周日）并排，每列放各自的课程和事件
+ * 2. **全天标签区**：没有时刻的任务和全天日程，**按天分列**，位置跟下面的时间轴一一对齐
+ * 3. **时间轴网格**：左边一列时间刻度，右边 7 列（周一~周日）并排，每列放各自的课程、事件和任务
  *    ——「现在」是一条红线，画在今天那一列上，左边带个小圆点
  *
- * 之前那版是「选一天看一天」，伙伴要的是整周一眼看完，所以换成了这个结构。
+ * 一条铁律：**每一件东西都待在自己那一天的列里**。
+ * 任务堆在一个不分日期的地方，用户就分不清它是周几的（Phase 14 修的就是这个）。
  */
 @Composable
 fun WeekCalendarView(
     timeline: WeekTimeline,
-    dayDetail: DayDetail?,
     selectedDate: Long?,
     onDateClick: (Long) -> Unit,
     onToggleTask: (Task, Boolean) -> Unit = { _, _ -> },
@@ -75,10 +78,9 @@ fun WeekCalendarView(
             onDateClick = onDateClick,
         )
 
-        // ===== 2. 全天标签区 =====
-        AllDayTagArea(
-            tasks = dayDetail?.tasks.orEmpty(),
-            events = dayDetail?.events.orEmpty(),
+        // ===== 2. 全天标签区（按天分列）=====
+        AllDayRow(
+            days = timeline.days,
             onToggleTask = onToggleTask,
         )
 
@@ -88,7 +90,10 @@ fun WeekCalendarView(
                 .fillMaxWidth()
                 .weight(1f),
         ) {
-            WeekTimeGrid(days = timeline.days)
+            WeekTimeGrid(
+                days = timeline.days,
+                onToggleTask = onToggleTask,
+            )
         }
     }
 }
@@ -159,104 +164,103 @@ private fun WeekDayHeader(
 }
 
 // =====================================================================
-// 2. 全天标签区
+// 2. 全天标签区 —— 按天分列，跟时间轴对齐
 // =====================================================================
 
 /**
- * 任务 / 全天日程摆成小标签，一行四个，超出换行，整块最高 100dp 自己滚。
+ * 没有时刻的任务和全天日程摆在这。
+ *
+ * 关键在于**按天分列**：每个标签就在自己那一天的列里，
+ * 跟下面的时间轴对齐，一眼就知道这条是周几的。
  */
 @Composable
-private fun AllDayTagArea(
-    tasks: List<Task>,
-    events: List<Event>,
+private fun AllDayRow(
+    days: List<WeekDayColumn>,
     onToggleTask: (Task, Boolean) -> Unit,
 ) {
-    val allDayEvents = remember(events) { events.filter { it.isEffectivelyAllDay } }
-    if (tasks.isEmpty() && allDayEvents.isEmpty()) return
-
-    // remember 的 lambda 里不能调 MaterialTheme —— 颜色先在外面取出来
     val primary = MaterialTheme.colorScheme.primary
-    val rows = remember(tasks, allDayEvents, primary) {
-        val tags = tasks.map {
-            TagItem(
-                text = it.title,
-                color = primary,
-                strikethrough = it.isCompleted,
-                taskId = it.id,
-            )
-        } + allDayEvents.map {
-            TagItem(
-                text = it.title,
-                color = Color(it.color),
-                strikethrough = false,
-                taskId = null,
-            )
-        }
-        tags.chunked(4)
-    }
+    val itemsByDay = remember(days, primary) { days.map { it.allDayItems(primary) } }
+    if (itemsByDay.all { it.isEmpty() }) return
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 100.dp)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = AppSpacing.sm),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .heightIn(max = 84.dp)
+            .verticalScroll(rememberScrollState()),
     ) {
-        rows.forEach { row ->
-            Row(
+        // 左边留出刻度列的宽度，跟下面的时间轴列对齐
+        Spacer(Modifier.width(GutterWidth))
+        itemsByDay.forEach { items ->
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    .weight(1f)
+                    .padding(horizontal = 1.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                row.forEach { tag ->
-                    TagChip(
-                        text = tag.text,
-                        color = tag.color,
-                        strikethrough = tag.strikethrough,
-                        onClick = {
-                            val task = tag.taskId?.let { id -> tasks.firstOrNull { it.id == id } }
-                            if (task != null) onToggleTask(task, !task.isCompleted)
-                        },
-                    )
+                items.forEach { item ->
+                    AllDayTag(item = item, onToggleTask = onToggleTask)
                 }
             }
         }
     }
 }
 
-private data class TagItem(
-    val text: String,
-    val color: Color,
-    val strikethrough: Boolean,
-    /** 任务标签才有 id —— 点一下能勾选完成 */
-    val taskId: Long?,
-)
-
 @Composable
-private fun TagChip(
-    text: String,
-    color: Color,
-    strikethrough: Boolean,
-    onClick: () -> Unit,
+private fun AllDayTag(
+    item: AllDayItem,
+    onToggleTask: (Task, Boolean) -> Unit,
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(color.copy(alpha = 0.16f))
-            .clickable { onClick() }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(4.dp))
+            .background(item.color.copy(alpha = 0.18f))
+            .then(
+                if (item.task != null) {
+                    Modifier.clickable { onToggleTask(item.task, true) }
+                } else {
+                    Modifier
+                }
+            )
+            .padding(horizontal = 3.dp, vertical = 2.dp),
     ) {
         Text(
-            text = text,
-            fontSize = 11.sp,
-            maxLines = 1,
+            text = item.text,
+            fontSize = 9.sp,
+            lineHeight = 10.sp,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             color = MaterialTheme.colorScheme.onSurface,
-            textDecoration = if (strikethrough) TextDecoration.LineThrough else null,
         )
     }
+}
+
+private data class AllDayItem(
+    val text: String,
+    val color: Color,
+    /** 是任务的话，点一下就能勾完成 */
+    val task: Task?,
+)
+
+/**
+ * 这一天「没有时刻」的条目。
+ *
+ * 任务带时刻的去时间轴，这里只放两种：
+ * - 任务没填截止时刻（或者只填了日期）
+ * - 全天日程
+ */
+private fun WeekDayColumn.allDayItems(primary: Color): List<AllDayItem> {
+    val result = mutableListOf<AllDayItem>()
+    tasks.forEach { task ->
+        val minute = task.dueDate?.let { minuteOfDay(it) }
+        if (minute == null) {
+            result += AllDayItem(text = task.title, color = primary, task = task)
+        }
+    }
+    events.filter { it.isEffectivelyAllDay }.forEach { event ->
+        result += AllDayItem(text = event.title, color = Color(event.color), task = null)
+    }
+    return result
 }
 
 // =====================================================================
@@ -264,19 +268,21 @@ private fun TagChip(
 // =====================================================================
 
 @Composable
-private fun WeekTimeGrid(days: List<WeekDayColumn>) {
-    val hourHeight = 46.dp
-    val gutterWidth = 42.dp
+private fun WeekTimeGrid(
+    days: List<WeekDayColumn>,
+    onToggleTask: (Task, Boolean) -> Unit,
+) {
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
     val nowMinute = remember { currentMinuteOfDay() }
     val todayIndex = remember(days) { days.indexOfFirst { isToday(it.date) } }
+    val primary = MaterialTheme.colorScheme.primary
 
     // 打开就落在「现在」附近 —— 24 小时的轴从 00:00 划到上午十点要好几屏
     LaunchedEffect(todayIndex) {
         if (todayIndex >= 0) {
             val target = with(density) {
-                (nowMinute / 60f * hourHeight.toPx() - 80.dp.toPx()).coerceAtLeast(0f)
+                (nowMinute / 60f * HourHeight.toPx() - 80.dp.toPx()).coerceAtLeast(0f)
             }
             scrollState.scrollTo(target.toInt())
         }
@@ -290,17 +296,17 @@ private fun WeekTimeGrid(days: List<WeekDayColumn>) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(hourHeight * 24),
+                .height(HourHeight * 24),
         ) {
             // 左边：时间刻度
             Column(
                 modifier = Modifier
-                    .width(gutterWidth)
+                    .width(GutterWidth)
                     .fillMaxHeight(),
             ) {
                 repeat(24) { hour ->
                     Box(
-                        modifier = Modifier.height(hourHeight),
+                        modifier = Modifier.height(HourHeight),
                         contentAlignment = Alignment.TopEnd,
                     ) {
                         Text(
@@ -322,9 +328,10 @@ private fun WeekTimeGrid(days: List<WeekDayColumn>) {
                 days.forEachIndexed { index, day ->
                     WeekDayColumnView(
                         day = day,
-                        hourHeight = hourHeight,
                         showNowLine = index == todayIndex,
                         nowMinute = nowMinute,
+                        primary = primary,
+                        onToggleTask = onToggleTask,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -342,12 +349,16 @@ private fun WeekTimeGrid(days: List<WeekDayColumn>) {
 @Composable
 private fun WeekDayColumnView(
     day: WeekDayColumn,
-    hourHeight: Dp,
     showNowLine: Boolean,
     nowMinute: Int,
+    primary: Color,
+    onToggleTask: (Task, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val blocks = remember(day) { day.buildWeekBlocks() }
+    val blocks = remember(day, primary) { day.buildWeekBlocks(primary) }
+    // 同一天里时间撞上的块平分成几列并排，不然会盖住
+    val placed = remember(blocks) { blocks.assignColumns() }
+    val columnCount = placed.maxOfOrNull { it.second + 1 } ?: 1
 
     Box(modifier = modifier.fillMaxHeight()) {
         // 整点横线
@@ -358,39 +369,29 @@ private fun WeekDayColumnView(
                     .height(1.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                     .align(Alignment.TopStart)
-                    .offset(y = hourHeight * hour),
+                    .offset(y = HourHeight * hour),
             )
         }
 
-        // 课程 / 事件块
-        blocks.forEach { block ->
-            val top = hourHeight * (block.startMinute / 60f)
-            val height = hourHeight * ((block.endMinute - block.startMinute) / 60f)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 1.dp)
-                    .offset(y = top)
-                    .height(height - 1.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(block.color.copy(alpha = 0.18f)),
-            ) {
-                // 左侧 3dp 语义色条
+        // 块
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(HourHeight * 24),
+        ) {
+            repeat(columnCount) { col ->
                 Box(
                     modifier = Modifier
-                        .width(3.dp)
-                        .fillMaxHeight()
-                        .background(block.color),
-                )
-                Text(
-                    text = block.title,
-                    fontSize = 9.sp,
-                    lineHeight = 11.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(start = 5.dp, top = 2.dp, end = 2.dp),
-                )
+                        .weight(1f)
+                        .fillMaxHeight(),
+                ) {
+                    placed.filter { it.second == col }.forEach { (block) ->
+                        TimelineBlockChip(
+                            block = block,
+                            onToggleTask = onToggleTask,
+                        )
+                    }
+                }
             }
         }
 
@@ -402,7 +403,7 @@ private fun WeekDayColumnView(
                     .height(2.dp)
                     .background(MaterialTheme.colorScheme.error)
                     .align(Alignment.TopStart)
-                    .offset(y = hourHeight * (nowMinute / 60f)),
+                    .offset(y = HourHeight * (nowMinute / 60f)),
             )
             Box(
                 modifier = Modifier
@@ -410,20 +411,63 @@ private fun WeekDayColumnView(
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.error)
                     .align(Alignment.TopStart)
-                    .offset(x = (-4).dp, y = hourHeight * (nowMinute / 60f) - 3.dp),
+                    .offset(x = (-4).dp, y = HourHeight * (nowMinute / 60f) - 3.dp),
             )
         }
     }
 }
 
-/** 一列里要画哪些块：课程 + 带时刻的事件 */
-private fun WeekDayColumn.buildWeekBlocks(): List<WeekBlock> {
+@Composable
+private fun TimelineBlockChip(
+    block: WeekBlock,
+    onToggleTask: (Task, Boolean) -> Unit,
+) {
+    val top = HourHeight * (block.startMinute / 60f)
+    val height = HourHeight * ((block.endMinute - block.startMinute) / 60f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 1.dp)
+            .offset(y = top)
+            .height(height - 1.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(block.color.copy(alpha = 0.18f))
+            .then(
+                if (block.task != null) {
+                    Modifier.clickable { onToggleTask(block.task, true) }
+                } else {
+                    Modifier
+                }
+            ),
+    ) {
+        // 左侧 3dp 语义色条
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(block.color),
+        )
+        Text(
+            text = block.title,
+            fontSize = 9.sp,
+            lineHeight = 11.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = 5.dp, top = 2.dp, end = 2.dp),
+        )
+    }
+}
+
+/** 一列里要画哪些块：课程 + 带时刻的事件 + 带时刻的任务 */
+private fun WeekDayColumn.buildWeekBlocks(primary: Color): List<WeekBlock> {
     val courseBlocks = courses.map { course ->
         WeekBlock(
             title = course.name,
             startMinute = course.startTime,
             endMinute = course.endTime,
             color = Color(course.color),
+            task = null,
         )
     }
     val eventBlocks = events.mapNotNull { event ->
@@ -435,9 +479,50 @@ private fun WeekDayColumn.buildWeekBlocks(): List<WeekBlock> {
             // 没有结束时间就按 1 小时算 —— 零高度的块在屏幕上等于不存在
             endMinute = event.endTime?.toInt() ?: (start + 60),
             color = Color(event.color),
+            task = null,
         )
     }
-    return (courseBlocks + eventBlocks).sortedBy { it.startMinute }
+    val taskBlocks = tasks.mapNotNull { task ->
+        val due = task.dueDate ?: return@mapNotNull null
+        // 只填了日期没填时刻的任务不进时间轴，它待在全天标签区
+        val minute = minuteOfDay(due) ?: return@mapNotNull null
+        WeekBlock(
+            title = task.title,
+            startMinute = minute,
+            // 任务没有时长概念，统一按 1 小时占位
+            endMinute = minute + 60,
+            color = primary,
+            task = task,
+        )
+    }
+    return (courseBlocks + eventBlocks + taskBlocks).sortedBy { it.startMinute }
+}
+
+/**
+ * 同一天里时间重叠的块平分成几列并排。
+ *
+ * 贪心：找一个已经结束的列放进去，没有就新开一列。
+ */
+private fun List<WeekBlock>.assignColumns(): List<Pair<WeekBlock, Int>> {
+    val result = mutableListOf<Pair<WeekBlock, Int>>()
+    val columnEnds = mutableListOf<Int>()
+    forEach { block ->
+        var target = -1
+        for (i in columnEnds.indices) {
+            if (columnEnds[i] <= block.startMinute) {
+                target = i
+                break
+            }
+        }
+        if (target < 0) {
+            columnEnds += block.endMinute
+            target = columnEnds.size - 1
+        } else {
+            columnEnds[target] = block.endMinute
+        }
+        result += block to target
+    }
+    return result
 }
 
 private data class WeekBlock(
@@ -445,6 +530,8 @@ private data class WeekBlock(
     val startMinute: Int,
     val endMinute: Int,
     val color: Color,
+    /** 是任务的话，点一下就能勾完成 */
+    val task: Task?,
 )
 
 // =====================================================================

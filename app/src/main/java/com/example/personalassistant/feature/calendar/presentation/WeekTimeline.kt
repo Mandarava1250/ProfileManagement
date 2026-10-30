@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.calendar.presentation
 
 import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.timetable.domain.model.Course
 
 /**
@@ -39,4 +40,11 @@ data class WeekDayColumn(
     val dayOfWeek: Int = 1,
     val courses: List<Course> = emptyList(),
     val events: List<Event> = emptyList(),
+    /**
+     * 这天的任务
+     *
+     * Phase 14：任务得跟着自己那一天走 —— 堆在一个不分日期的地方，
+     * 用户就分不清哪个任务是周几的。
+     */
+    val tasks: List<Task> = emptyList(),
 )

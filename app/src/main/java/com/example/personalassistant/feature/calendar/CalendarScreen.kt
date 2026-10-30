@@ -173,7 +173,6 @@ fun CalendarScreen(
                     }
                     CalendarViewType.WEEK -> WeekCalendarView(
                         timeline = weekTimeline,
-                        dayDetail = selectedDayDetail,
                         selectedDate = selectedDate,
                         onDateClick = viewModel::onDateClick,
                         onToggleTask = { task, done -> viewModel.toggleTask(task, done) },

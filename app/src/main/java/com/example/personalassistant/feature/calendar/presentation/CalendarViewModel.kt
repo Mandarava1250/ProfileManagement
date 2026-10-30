@@ -596,8 +596,9 @@ class CalendarViewModel @Inject constructor(
         return combine(
             observeCurrentSemester(),
             observeMonthEvents(weekStart, weekEndExclusive),
-        ) { semester, events -> semester to events }
-            .flatMapLatest { (semester, events) ->
+            observeWeekDayDetails(weekStart),
+        ) { semester, events, dayDetails -> Triple(semester, events, dayDetails) }
+            .flatMapLatest { (semester, events, dayDetails) ->
                 val weekNumber = semester?.let {
                     WeekCalculator.weekNumber(date, it.startDate, it.endDate)
                 }
@@ -618,11 +619,29 @@ class CalendarViewModel @Inject constructor(
                                 dayOfWeek = dayOfWeek,
                                 courses = courses.filter { it.dayOfWeek == dayOfWeek },
                                 events = events.filter { it.date == dayDate },
+                                // Phase 14：任务必须落在它自己的那一列，
+                                // 否则周视图里任务的位置和日期对不上。
+                                // dayDetails 是按周一~周日顺序给的，第 offset 个就是这一天 ——
+                                // 按顺序取，不依赖 DayDetail.date 的口径。
+                                tasks = dayDetails.getOrNull(offset)?.tasks.orEmpty(),
                             )
                         },
                     )
                 }
             }
+    }
+
+    /**
+     * 一周七天的当天详情（任务就是从这儿来的）。
+     *
+     * 每列要显示自己那天的任务，所以七天都要拿到 —— 复用 [observeDayDetail]，
+     * 不动数据层接口。
+     */
+    private fun observeWeekDayDetails(weekStart: Long): Flow<List<com.example.personalassistant.feature.calendar.domain.model.DayDetail>> {
+        val flows = (0 until WeekTimeline.DAY_COUNT).map { offset ->
+            observeDayDetail(weekStart + offset * WeekTimeline.ONE_DAY_MILLIS)
+        }
+        return combine(flows) { array -> array.toList() }
     }
 
     private fun buildUiState(
