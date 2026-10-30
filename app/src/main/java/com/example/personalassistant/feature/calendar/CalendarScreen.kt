@@ -2,9 +2,13 @@ package com.example.personalassistant.feature.calendar
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronLeft
@@ -33,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
 import com.example.personalassistant.feature.calendar.domain.model.Event
@@ -43,7 +48,8 @@ import com.example.personalassistant.feature.calendar.presentation.components.Da
 import com.example.personalassistant.feature.calendar.presentation.components.DayDetailSheet
 import com.example.personalassistant.feature.calendar.presentation.components.EditEventSheet
 import com.example.personalassistant.feature.calendar.presentation.components.MonthCalendarGrid
-import com.example.personalassistant.feature.calendar.presentation.components.TimetableWeekView
+import com.example.personalassistant.feature.calendar.presentation.components.MonthTagList
+import com.example.personalassistant.feature.calendar.presentation.components.WeekCalendarView
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -145,18 +151,34 @@ fun CalendarScreen(
             // 主视图
             Box(modifier = Modifier.fillMaxSize()) {
                 when (viewType) {
-                    CalendarViewType.MONTH -> MonthCalendarGrid(
-                        cells = uiState.monthCells,
-                        selectedDate = selectedDate,
-                        onDateClick = viewModel::onDateClick,
-                        // Phase 8 Sub-step 9 Step 5：农历角标 map（key = cell.date）
-                        lunarLabels = uiState.monthLunarLabels,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    CalendarViewType.WEEK -> TimetableWeekView(
+                    CalendarViewType.MONTH -> Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        MonthCalendarGrid(
+                            cells = uiState.monthCells,
+                            selectedDate = selectedDate,
+                            onDateClick = viewModel::onDateClick,
+                            // Phase 8 Sub-step 9 Step 5：农历角标 map（key = cell.date）
+                            lunarLabels = uiState.monthLunarLabels,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        // Phase 14：网格下面用标签列出这一天的日程 / 任务 / 课程
+                        Spacer(Modifier.height(AppSpacing.md))
+                        MonthTagList(
+                            dayDetail = selectedDayDetail,
+                            modifier = Modifier.padding(horizontal = AppSpacing.md),
+                            onEventClick = { event -> viewModel.startEditEvent(event) },
+                        )
+                        Spacer(Modifier.height(AppSpacing.xl))
+                    }
+                    CalendarViewType.WEEK -> WeekCalendarView(
                         timeline = weekTimeline,
+                        dayDetail = selectedDayDetail,
                         selectedDate = selectedDate,
                         onDateClick = viewModel::onDateClick,
+                        onToggleTask = { task, done -> viewModel.toggleTask(task, done) },
                         modifier = Modifier.fillMaxSize(),
                     )
                     CalendarViewType.DAY -> {
@@ -180,21 +202,8 @@ fun CalendarScreen(
             }
         }
 
-        // BottomSheet：MONTH/WEEK 视图点击日期时弹出
-        if (selectedDate != null && viewType != CalendarViewType.DAY) {
-            DayDetailSheet(
-                date = selectedDate!!,
-                dayDetail = selectedDayDetail,
-                // Phase 8 Sub-step 9 Step 4.2：把 viewModel 的冲突 map 透传到 Sheet
-                conflictsByEventId = uiState.savedConflictsByEventId,
-                onDismiss = { viewModel.dismissDayDetail() },
-                onEventClick = { event ->
-                    viewModel.dismissDayDetail()
-                    viewModel.startEditEvent(event)
-                },
-            )
-        }
-
+        // Phase 14：月视图改成「网格 + 标签列表」后，不再弹 DayDetailSheet ——
+        // 标签就在网格下面，多一层弹窗反而挡住视线。
         // Sub-step 5：EditEventSheet（事件编辑器）
         editingState?.let { state ->
             EditEventSheet(
