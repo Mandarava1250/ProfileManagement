@@ -78,8 +78,11 @@ class TaskViewModel @Inject constructor(
      * - tag != null 时用 And(ByTag(id), filter)
      */
     private val effectiveFilter = combine(_filter, _selectedTagId) { f, tid ->
-        if (tid == null) f
-        else FilterExpression.And(FilterExpression.ByTag(tid), f)
+        // Phase 14：ActiveOnly 不再在数据层过滤已完成 ——
+        // 底部「已完成」折叠区要靠这些任务才有内容（分组那一步本来就会把 active / completed 分开）。
+        val base = if (f is FilterExpression.ActiveOnly) FilterExpression.All else f
+        if (tid == null) base
+        else FilterExpression.And(FilterExpression.ByTag(tid), base)
     }
 
     /**

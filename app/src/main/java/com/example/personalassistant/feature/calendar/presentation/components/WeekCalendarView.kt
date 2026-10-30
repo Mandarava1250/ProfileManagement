@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -214,10 +215,11 @@ private fun AllDayTag(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(4.dp))
-            .background(item.color.copy(alpha = 0.18f))
+            .background(item.color.copy(alpha = if (item.isCompleted) 0.10f else 0.18f))
             .then(
                 if (item.task != null) {
-                    Modifier.clickable { onToggleTask(item.task, true) }
+                    // 已完成的点一下是「取消完成」，不是「再完成一次」
+                    Modifier.clickable { onToggleTask(item.task, !item.task.isCompleted) }
                 } else {
                     Modifier
                 }
@@ -230,7 +232,13 @@ private fun AllDayTag(
             lineHeight = 10.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onSurface,
+            // Phase 14：已完成的任务继续留在日历里，但划线 + 淡化，一眼分得清
+            textDecoration = if (item.isCompleted) TextDecoration.LineThrough else null,
+            color = if (item.isCompleted) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
         )
     }
 }
@@ -240,6 +248,7 @@ private data class AllDayItem(
     val color: Color,
     /** 是任务的话，点一下就能勾完成 */
     val task: Task?,
+    val isCompleted: Boolean = false,
 )
 
 /**
@@ -254,7 +263,12 @@ private fun WeekDayColumn.allDayItems(primary: Color): List<AllDayItem> {
     tasks.forEach { task ->
         val minute = task.dueDate?.let { minuteOfDay(it) }
         if (minute == null) {
-            result += AllDayItem(text = task.title, color = primary, task = task)
+            result += AllDayItem(
+                text = task.title,
+                color = primary,
+                task = task,
+                isCompleted = task.isCompleted,
+            )
         }
     }
     events.filter { it.isEffectivelyAllDay }.forEach { event ->
@@ -431,10 +445,11 @@ private fun TimelineBlockChip(
             .offset(y = top)
             .height(height - 1.dp)
             .clip(RoundedCornerShape(4.dp))
-            .background(block.color.copy(alpha = 0.18f))
+            .background(block.color.copy(alpha = if (block.isCompleted) 0.10f else 0.18f))
             .then(
                 if (block.task != null) {
-                    Modifier.clickable { onToggleTask(block.task, true) }
+                    // 已完成的点一下是「取消完成」
+                    Modifier.clickable { onToggleTask(block.task, !block.task.isCompleted) }
                 } else {
                     Modifier
                 }
@@ -453,7 +468,13 @@ private fun TimelineBlockChip(
             lineHeight = 11.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            color = MaterialTheme.colorScheme.onSurface,
+            // Phase 14：已完成的任务留在日历里，但划线 + 淡化，一眼分得清
+            textDecoration = if (block.isCompleted) TextDecoration.LineThrough else null,
+            color = if (block.isCompleted) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
             modifier = Modifier.padding(start = 5.dp, top = 2.dp, end = 2.dp),
         )
     }
@@ -493,6 +514,7 @@ private fun WeekDayColumn.buildWeekBlocks(primary: Color): List<WeekBlock> {
             endMinute = minute + 60,
             color = primary,
             task = task,
+            isCompleted = task.isCompleted,
         )
     }
     return (courseBlocks + eventBlocks + taskBlocks).sortedBy { it.startMinute }
@@ -532,6 +554,8 @@ private data class WeekBlock(
     val color: Color,
     /** 是任务的话，点一下就能勾完成 */
     val task: Task?,
+    /** 已完成：划线 + 淡化 */
+    val isCompleted: Boolean = false,
 )
 
 // =====================================================================

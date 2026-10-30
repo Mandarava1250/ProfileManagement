@@ -49,6 +49,18 @@ interface TaskDao {
     fun observeBetween(start: Long, end: Long): Flow<List<TaskEntity>>
 
     /**
+     * Phase 14：区间内的全部任务，**含已完成**。
+     *
+     * 日历里勾完的任务要继续留着 —— 除非用户手动删除。
+     *
+     * 区间是**闭区间** `[start, end]`。要表达「某一天」时调用方得传
+     * `end = 当天结束 - 1ms`，否则次日 00:00 的任务会被相邻两天同时收录
+     * （同一条任务在周视图里横跨两列）。
+     */
+    @Query("SELECT * FROM tasks WHERE dueDate BETWEEN :start AND :end ORDER BY priority DESC, dueDate ASC")
+    fun observeBetweenIncludingCompleted(start: Long, end: Long): Flow<List<TaskEntity>>
+
+    /**
      * Phase 8 Sub-step 3：全局搜索 — 在 tasks 表 title / description / category 任一字段 LIKE 匹配。
      *
      * - :keyword 为原始关键字，调用方负责 prepend/append `%`

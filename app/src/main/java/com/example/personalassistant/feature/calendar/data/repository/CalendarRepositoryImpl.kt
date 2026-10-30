@@ -89,8 +89,11 @@ class CalendarRepositoryImpl @Inject constructor(
 
         val eventsFlow = eventDao.observeByDate(date).map { list -> list.map { it.toDomain() } }
 
-        // observeBetween(start, end) 已过滤 isCompleted = false + 按 priority DESC, dueDate ASC
-        val tasksFlow = taskDao.observeBetween(date, dayEnd)
+        // Phase 14：
+        // - 用含已完成的查询 —— 日历里勾完的任务要留着，用户手动删除才消失
+        // - 区间是闭区间，end 减 1ms 等于半开 [date, 次日 00:00)，
+        //   否则次日 00:00 的任务会被相邻两天同时收录（同一条任务横跨两列）
+        val tasksFlow = taskDao.observeBetweenIncludingCompleted(date, dayEnd - 1)
             .map { list -> list.map { it.toDomain() } }
 
         val semesterFlow = semesterDao.observeCurrent()
