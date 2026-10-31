@@ -23,6 +23,8 @@ import org.junit.Test
  * - 二级页面（任务详情 / 任务编辑 / 日程编辑 / 课程编辑 / 全局搜索 / 备份预览 /
  *   课表设置 / GPA 规则 / 外观 / 记账子页）**不是**底栏 route
  * - null / 空串 / 未知 route 一律返回 false
+ * - Phase 15 P0-1.1：跨 Tab 跳转（navigateToTab）的起点 / 终点（记账 / 日历）
+ *   仍然留在底栏里 —— 跳过去之后底栏不能消失
  */
 class BottomBarRoutesTest {
 
@@ -101,5 +103,25 @@ class BottomBarRoutesTest {
         assertFalse("空白 route 不应显示底栏", isBottomBarRoute("   "))
         assertFalse("未知 route 不应显示底栏", isBottomBarRoute("admin/dashboard"))
         assertFalse("带参数的主 route 不应命中", isBottomBarRoute("tasks?filter=1"))
+    }
+
+    // ===== Phase 15 P0-1.1：跨 Tab 跳转的目标页也得留在底栏里 =====
+
+    @Test
+    fun `cross tab navigation targets stay bottom bar routes`() {
+        // 日历页「今日剩余」的预算横条会跳去记账（统一走 navigateToTab），
+        // 全局搜索命中「记账」也会跳过去 —— 跳过去之后底栏必须还在，
+        // 否则用户在记账页就找不到回日历的出口了。
+        assertTrue(
+            "从日历跳去记账后，记账页仍应显示底栏：${Screen.Finance.route}",
+            isBottomBarRoute(Screen.Finance.route),
+        )
+        // 反过来：跳去记账后想用底栏点回「日历」，日历也得在白名单里
+        assertTrue(
+            "用底栏回到日历时，日历必须在白名单里：${Screen.Calendar.route}",
+            isBottomBarRoute(Screen.Calendar.route),
+        )
+        // 4 个 BottomTab 全是底栏 route 这件事，
+        // 已由 `every bottom tab screen is a bottom bar route` 覆盖，这里不重复断言。
     }
 }

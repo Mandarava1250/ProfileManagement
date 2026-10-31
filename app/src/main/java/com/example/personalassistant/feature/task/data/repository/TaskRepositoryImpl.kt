@@ -158,12 +158,22 @@ class TaskRepositoryImpl @Inject constructor(
             dao.setSubTaskCompleted(id, completed)
         }
 
+    /**
+     * Phase 15：新增独立清单项，order **追加到末尾**（max + 1）。
+     *
+     * 旧实现 order 恒为 0 → 所有独立清单项的 order 都是 0，
+     * 新加的项会跟老项挤在一起（排序只能靠 createdAt 兜底，列表看着乱）。
+     * 现在跟 [addSubTaskToTask] 同款做法：取当前最大 order + 1。
+     */
     override suspend fun addStandaloneSubTask(title: String): Long =
         withContext(dispatcher) {
+            val maxOrder = dao.getMaxTopLevelSubTaskOrder() ?: -1
             dao.insertSubTask(
                 SubTaskEntity(
                     parentTaskId = null,
+                    parentSubTaskId = null,
                     title = title,
+                    order = maxOrder + 1,
                 )
             )
         }

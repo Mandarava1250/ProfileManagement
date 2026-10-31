@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -89,9 +90,10 @@ fun DayCalendarView(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState()),
-        // Phase 14：模块之间留白 —— 预算横条 / 今日待办 / 时间轴三段
+        // Phase 15 P1-2.1：模块之间留白 —— 预算横条 / 今日待办 / 时间轴三段
         // 挤在一起会糊成一片，分不清哪段是哪段。
-        verticalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+        // 留白加大到 md，并在段与段之间加一条分隔线。
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.md),
     ) {
         // ===== 标题 =====
         Column(
@@ -117,6 +119,9 @@ fun DayCalendarView(
         // ===== 1. 预算横条 =====
         BudgetStrip(overview = overview, onClick = onBudgetClick)
 
+        // Phase 15 P1-2.1：分段线 —— 光靠留白还不够明显
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
         // ===== 2. 今日待办 =====
         DayTodoSection(tasks = tasks, onToggleTask = onToggleTask)
 
@@ -124,6 +129,9 @@ fun DayCalendarView(
         if (allDayEvents.isNotEmpty()) {
             AllDayRow(events = allDayEvents)
         }
+
+        // Phase 15 P1-2.1：时间轴之前也来一条线
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         // ===== 3. 1 小时时间轴 =====
         DayTimelineView(

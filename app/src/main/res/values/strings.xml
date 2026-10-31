@@ -132,4 +132,63 @@
     <string name="task_filter_button">筛选</string>
     <string name="task_filter_unlimited">不限</string>
     <string name="task_quadrant_rename_hint">长按象限可重命名</string>
+    <!-- Phase 15：清单页（任务 → 清单）UI -->
+    <string name="checklist_input_hint">添加清单项…</string>
+    <string name="checklist_detail_add">详细添加清单项</string>
+    <string name="checklist_filter_button">筛选</string>
+    <string name="checklist_filter_category">分类</string>
+    <string name="checklist_filter_tag">标签</string>
+    <string name="checklist_filter_group">分组</string>
+    <string name="checklist_filter_sort">排序</string>
+    <string name="checklist_filter_reset">重置筛选</string>
+    <string name="checklist_filter_unlimited">不限</string>
+
+    <!-- Phase 15：清单分组 / 排序文案 -->
+    <string name="checklist_group_none">不分组</string>
+    <string name="checklist_group_all">全部</string>
+    <string name="checklist_group_uncompleted">未完成</string>
+    <string name="checklist_group_completed">已完成</string>
+    <string name="checklist_group_by_category">按分类</string>
+    <string name="checklist_group_by_due_date">按截止时间</string>
+    <string name="checklist_group_overdue">已逾期</string>
+    <string name="checklist_group_today">今天</string>
+    <string name="checklist_group_later">之后</string>
+    <string name="checklist_group_no_due_date">无截止时间</string>
+    <string name="checklist_sort_manual">手动顺序</string>
+    <string name="checklist_sort_priority">优先级</string>
+    <string name="checklist_sort_due_date">截止日期（早 → 晚）</string>
+    <string name="checklist_sort_created_desc">创建时间（新 → 旧）</string>
+    <string name="checklist_sort_title_asc">标题（A → Z）</string>
+
+    <!-- Phase 15：清单项编辑弹窗 -->
+    <string name="checklist_edit_title">编辑清单项</string>
+    <string name="checklist_create_title">新建清单项</string>
+    <string name="checklist_field_title">标题</string>
+    <string name="checklist_field_category">分类</string>
+    <string name="checklist_field_due_date">截止时间</string>
+    <string name="checklist_field_priority">优先级</string>
+    <string name="checklist_field_amount">金额</string>
+    <string name="checklist_field_tags">标签</string>
+    <string name="checklist_no_category">无分类</string>
+    <string name="checklist_no_due_date">未设置</string>
+    <string name="checklist_no_amount">未设置</string>
+    <string name="checklist_no_tags">还没有标签</string>
+    <string name="checklist_set_due_date">设置</string>
+    <string name="checklist_change_due_date">更改</string>
+    <string name="checklist_clear_due_date">清除截止时间</string>
+
+    <!-- Phase 15：清单项展示 -->
+    <string name="checklist_item_edit">编辑清单项</string>
+    <string name="checklist_item_expand">展开子清单</string>
+    <string name="checklist_item_collapse">收起子清单</string>
+    <string name="checklist_add_sub_item_hint">添加子项…</string>
+    <string name="checklist_progress">%1$d/%2$d</string>
+    <string name="checklist_due_today">今天</string>
+    <string name="checklist_due_tomorrow">明天</string>
+    <string name="checklist_due_yesterday">昨天</string>
+    <string name="checklist_amount">¥%1$s</string>
+
+    <!-- Phase 15：清单空态（筛选后为空） -->
+    <string name="empty_checklist_filtered_title">没有符合条件的清单项</string>
+    <string name="empty_checklist_filtered_desc">换个筛选条件试试</string>
 </resources>

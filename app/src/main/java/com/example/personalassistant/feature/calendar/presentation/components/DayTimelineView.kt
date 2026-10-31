@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.core.ui.theme.AppRadii
@@ -47,6 +48,8 @@ import java.time.ZoneId
  * @param endMinute 结束分钟数
  * @param color 块的颜色
  * @param filled true = 实底（课程），false = 淡底（事件 / 任务）
+ * @param isCompleted true = 已完成（划线 + 淡化）。Phase 15 P0-1.3 补的字段 ——
+ *   之前这个块根本没有完成态，于是时间轴上的任务永远不会变灰
  */
 data class TimelineBlock(
     val key: String,
@@ -56,6 +59,7 @@ data class TimelineBlock(
     val endMinute: Int,
     val color: Color,
     val filled: Boolean = false,
+    val isCompleted: Boolean = false,
 )
 
 /**
@@ -194,15 +198,22 @@ internal fun buildTimelineBlocks(
         )
     }
     val eventBlocks = timedEvents.mapNotNull { event ->
-        // Event 的时段是 Long（分钟数），TimeBlockLayout 用 Int —— 这里收窄
-        val start = event.startTime?.toInt() ?: return@mapNotNull null
+        // Phase 15：Event.startTime / endTime 是 **epoch 毫秒时间戳**
+        // （Event.kt:13、EventEntity.kt:48-54、EventTimeMapper.toSlice 三处一致）。
+        // 之前这里写的是 `event.startTime?.toInt()` —— 把毫秒戳直接截断成 Int 当分钟数用，
+        // 2026 年的毫秒戳截断后是个大乱数，事件在时间轴上的位置全是错的。
+        // 现在统一走 minuteOfDay，把毫秒转成当天分钟数。
+        val start = event.startTime?.let { minuteOfDay(it) } ?: return@mapNotNull null
+        // 结束时间：取不到（没填 / 正好落在 00:00）或落在次日导致比开始还早 —— 都按 1 小时算
+        // （零高度的块在屏幕上等于不存在）
+        val rawEnd = event.endTime?.let { minuteOfDay(it) }
+        val end = if (rawEnd == null || rawEnd <= start) start + TimeBlockLayout.MINUTES_PER_ROW else rawEnd
         TimelineBlock(
             key = "event-${event.id}",
             title = event.title,
             subtitle = event.category,
             startMinute = start,
-            // 没有结束时间的事件按 1 小时算 —— 零高度的块在屏幕上等于不存在
-            endMinute = event.endTime?.toInt() ?: (start + TimeBlockLayout.MINUTES_PER_ROW),
+            endMinute = end,
             color = Color(event.color),
         )
     }
@@ -217,12 +228,23 @@ internal fun buildTimelineBlocks(
             // 任务没有时长概念，统一按 1 小时占位
             endMinute = minute + TimeBlockLayout.MINUTES_PER_ROW,
             color = primaryColor,
+            // Phase 15 P0-1.3：完成态透传到卡片 —— 之前这里没带，
+            // 时间轴上的任务块就永远不变灰
+            isCompleted = task.isCompleted,
         )
     }
     return (courseBlocks + eventBlocks + taskBlocks).sortedBy { it.startMinute }
 }
 
-/** 毫秒时间戳 → 当天第几分钟（0..1439），null = 不是当天 */
+/**
+ * 毫秒时间戳 → 当天第几分钟（0..1439）
+ *
+ * 返回 null 只有一种情况：时间戳正好落在**本地时区的 00:00**。
+ * 00:00 多半是「只有日期没有时刻」的默认值 —— 落在轴上没有意义。
+ *
+ * ⚠️ 这里**不判断是不是当天**：日期过滤在上游（按天查事件 / 任务）做完了，
+ * 这个函数只负责把时刻换算成 0..1439 的分钟数。
+ */
 internal fun minuteOfDay(millis: Long): Int? {
     val zone = ZoneId.systemDefault()
     val time = Instant.ofEpochMilli(millis).atZone(zone).toLocalTime()
@@ -252,15 +274,20 @@ private fun TimelineBlockCard(
     timeText: String,
     modifier: Modifier = Modifier,
 ) {
-    val foreground = if (block.filled) onColorFor(block.color) else onColorFor(block.color)
+    val foreground = onColorFor(block.color)
+    // Phase 15 P0-1.3：完成态 —— 划线 + 文字变淡 + 底色更淡，
+    // 与 WeekCalendarView.TimelineBlockChip 的完成态保持同一套语义。
+    val contentAlpha = if (block.isCompleted) 0.55f else 1f
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(AppRadii.chip))
             .then(
-                if (block.filled) {
-                    Modifier.background(block.color.copy(alpha = 0.85f))
-                } else {
-                    Modifier
+                when {
+                    block.isCompleted -> Modifier
+                        .background(block.color.copy(alpha = if (block.filled) 0.5f else 0.08f))
+                        .border(1.dp, block.color.copy(alpha = 0.20f), RoundedCornerShape(AppRadii.chip))
+                    block.filled -> Modifier.background(block.color.copy(alpha = 0.85f))
+                    else -> Modifier
                         .background(block.color.copy(alpha = 0.16f))
                         .border(1.dp, block.color.copy(alpha = 0.32f), RoundedCornerShape(AppRadii.chip))
                 }
@@ -272,21 +299,22 @@ private fun TimelineBlockCard(
                 text = block.title,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = foreground,
+                color = foreground.copy(alpha = contentAlpha),
+                textDecoration = if (block.isCompleted) TextDecoration.LineThrough else null,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = timeText,
                 style = MaterialTheme.typography.labelSmall,
-                color = foreground.copy(alpha = 0.75f),
+                color = foreground.copy(alpha = 0.75f * contentAlpha),
                 maxLines = 1,
             )
             if (block.subtitle != null) {
                 Text(
                     text = block.subtitle,
                     style = MaterialTheme.typography.labelSmall,
-                    color = foreground.copy(alpha = 0.7f),
+                    color = foreground.copy(alpha = 0.7f * contentAlpha),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

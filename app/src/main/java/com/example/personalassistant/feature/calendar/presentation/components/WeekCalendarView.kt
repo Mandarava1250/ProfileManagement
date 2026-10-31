@@ -71,7 +71,12 @@ fun WeekCalendarView(
     onToggleTask: (Task, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        // Phase 15 P1-2.2：三段之间留白 —— 星期头 / 全天标签区 / 时间轴
+        // 挤在一起时看不出哪里是哪里
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.sm),
+    ) {
         // ===== 1. 星期头部 =====
         WeekDayHeader(
             days = timeline.days,
@@ -196,7 +201,8 @@ private fun AllDayRow(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 1.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                // Phase 15 P1-2.2：列间距 2dp -> 4dp，7 列挤在一起看不清哪列是哪列
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 items.forEach { item ->
                     AllDayTag(item = item, onToggleTask = onToggleTask)
@@ -493,12 +499,17 @@ private fun WeekDayColumn.buildWeekBlocks(primary: Color): List<WeekBlock> {
     }
     val eventBlocks = events.mapNotNull { event ->
         if (event.isEffectivelyAllDay) return@mapNotNull null
-        val start = event.startTime?.toInt() ?: return@mapNotNull null
+        // Phase 15：startTime / endTime 是 epoch 毫秒时间戳（Event.kt:13），
+        // 之前 `?.toInt()` 截断当分钟数用 → 事件在周视图上的位置全是错的。
+        // 统一走 minuteOfDay 转成当天分钟数（与日视图同一套）。
+        val start = event.startTime?.let { minuteOfDay(it) } ?: return@mapNotNull null
+        val rawEnd = event.endTime?.let { minuteOfDay(it) }
+        val end = if (rawEnd == null || rawEnd <= start) start + 60 else rawEnd
         WeekBlock(
             title = event.title,
             startMinute = start,
-            // 没有结束时间就按 1 小时算 —— 零高度的块在屏幕上等于不存在
-            endMinute = event.endTime?.toInt() ?: (start + 60),
+            // 没有结束时间（或结束时间落在次日）就按 1 小时算 —— 零高度的块在屏幕上等于不存在
+            endMinute = end,
             color = Color(event.color),
             task = null,
         )

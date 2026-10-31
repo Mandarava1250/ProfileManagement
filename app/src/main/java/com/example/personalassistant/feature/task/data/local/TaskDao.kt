@@ -103,9 +103,28 @@ interface TaskDao {
     @Query("UPDATE sub_tasks SET isCompleted = :completed WHERE id = :id")
     suspend fun setSubTaskCompleted(id: Long, completed: Boolean)
 
-    /** 观察独立清单项（parentTaskId IS NULL） */
+    /**
+     * 观察独立清单项（parentTaskId IS NULL）。
+     *
+     * ⚠️ Phase 15：这里**包含嵌套子清单项**（parentSubTaskId 非空的行）——
+     * 仓库层靠 parentSubTaskId 组树，所以这里要一次拿全。
+     * 只要顶层项请用 [observeTopLevelSubTasks]。
+     */
     @Query("SELECT * FROM sub_tasks WHERE parentTaskId IS NULL ORDER BY `order`, createdAt")
     fun observeStandaloneSubTasks(): Flow<List<SubTaskEntity>>
+
+    /**
+     * Phase 15：观察**顶层**独立清单项（既不属于任务，也不是别人的子清单）。
+     */
+    @Query(
+        "SELECT * FROM sub_tasks WHERE parentTaskId IS NULL AND parentSubTaskId IS NULL " +
+            "ORDER BY `order`, createdAt",
+    )
+    fun observeTopLevelSubTasks(): Flow<List<SubTaskEntity>>
+
+    /** Phase 15：观察某个清单项下的嵌套子清单。 */
+    @Query("SELECT * FROM sub_tasks WHERE parentSubTaskId = :parentSubTaskId ORDER BY `order`, createdAt")
+    fun observeNestedSubTasks(parentSubTaskId: Long): Flow<List<SubTaskEntity>>
 
     /** 观察任务的所有子清单 */
     @Query("SELECT * FROM sub_tasks WHERE parentTaskId = :parentId ORDER BY `order`, createdAt")
@@ -124,6 +143,82 @@ interface TaskDao {
 
     @Query("DELETE FROM sub_tasks WHERE parentTaskId = :parentId")
     suspend fun deleteSubTasksByParent(parentId: Long)
+
+    // ===== Phase 15：清单项扩展（分类 / 截止 / 优先级 / 金额 / 嵌套 / 标签） =====
+
+    /** 按 id 取单个清单项。 */
+    @Query("SELECT * FROM sub_tasks WHERE id = :id")
+    suspend fun getSubTaskById(id: Long): SubTaskEntity?
+
+    /**
+     * Phase 15：顶层独立清单项的当前最大 order（null = 一个都没有）。
+     *
+     * 用于新增清单项时**追加到末尾**（max + 1），
+     * 修掉「独立清单新增时 order 恒为 0、新项全挤在最前面」的旧问题。
+     */
+    @Query("SELECT MAX(`order`) FROM sub_tasks WHERE parentTaskId IS NULL AND parentSubTaskId IS NULL")
+    suspend fun getMaxTopLevelSubTaskOrder(): Int?
+
+    /** Phase 15：某个父清单项下嵌套子项的当前最大 order（null = 一个都没有）。 */
+    @Query("SELECT MAX(`order`) FROM sub_tasks WHERE parentSubTaskId = :parentSubTaskId")
+    suspend fun getMaxNestedSubTaskOrder(parentSubTaskId: Long): Int?
+
+    /** Phase 15：按分类筛顶层清单项。 */
+    @Query(
+        "SELECT * FROM sub_tasks WHERE parentTaskId IS NULL AND parentSubTaskId IS NULL " +
+            "AND category = :category ORDER BY `order`, createdAt",
+    )
+    fun observeTopLevelSubTasksByCategory(category: String): Flow<List<SubTaskEntity>>
+
+    /** Phase 15：按优先级筛顶层清单项（priority 存 TaskPriority.dbValue）。 */
+    @Query(
+        "SELECT * FROM sub_tasks WHERE parentTaskId IS NULL AND parentSubTaskId IS NULL " +
+            "AND priority = :priority ORDER BY `order`, createdAt",
+    )
+    fun observeTopLevelSubTasksByPriority(priority: Int): Flow<List<SubTaskEntity>>
+
+    // ===== Phase 15：清单项 ↔ 标签 =====
+
+    /** 挂标签（重复挂载由联合主键 + IGNORE 静默忽略）。 */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun attachSubTaskTag(ref: SubTaskTagCrossRef)
+
+    /** 解绑单个标签。 */
+    @Query("DELETE FROM sub_task_tag_cross_ref WHERE subTaskId = :subTaskId AND tagId = :tagId")
+    suspend fun detachSubTaskTag(subTaskId: Long, tagId: Long)
+
+    /** 清空某清单项下的全部标签。 */
+    @Query("DELETE FROM sub_task_tag_cross_ref WHERE subTaskId = :subTaskId")
+    suspend fun detachAllSubTaskTags(subTaskId: Long)
+
+    /**
+     * 观察某清单项关联的全部标签。
+     * INNER JOIN 保证只返回标签实体仍存在的关联（孤儿行由 FK CASCADE 清掉）。
+     */
+    @Query(
+        """
+        SELECT t.id AS id, t.nameNormalized AS nameNormalized,
+               t.displayName AS displayName, t.colorHex AS colorHex,
+               t.colorSource AS colorSource, t.createdAt AS createdAt
+        FROM sub_task_tag_cross_ref r
+        INNER JOIN tags t ON r.tagId = t.id
+        WHERE r.subTaskId = :subTaskId
+        ORDER BY t.createdAt ASC
+        """,
+    )
+    fun observeTagsForSubTask(subTaskId: Long): Flow<List<TagEntity>>
+
+    /** 观察全部清单项 ↔ 标签关联行（仓库层据此给每个清单项装配标签）。 */
+    @Query("SELECT subTaskId, tagId FROM sub_task_tag_cross_ref")
+    fun observeAllSubTaskTagPairs(): Flow<List<SubTaskTagCrossRef>>
+
+    /** 观察某标签关联的全部清单项 id。 */
+    @Query("SELECT subTaskId FROM sub_task_tag_cross_ref WHERE tagId = :tagId")
+    fun observeSubTaskIdsByTag(tagId: Long): Flow<List<Long>>
+
+    /** Phase 8 Sub-step 4 同款：备份导出快照用的全量关联行。 */
+    @Query("SELECT subTaskId, tagId FROM sub_task_tag_cross_ref")
+    suspend fun getAllSubTaskTagCrossRefs(): List<SubTaskTagCrossRef>
 
     // ===== Phase 8 Sub-step 4：备份导出快照 =====
 

@@ -136,6 +136,38 @@ fun TaskScreen(
                     onToggleComplete = checklistViewModel::toggleComplete,
                     onDelete = checklistViewModel::deleteItem,
                     onAdd = checklistViewModel::addItem,
+                    // Phase 15：新建（id == null）/ 更新（id != null）走同一个入口
+                    onSaveItem = { edit ->
+                        val id = edit.id
+                        if (id == null) {
+                            checklistViewModel.addItemWithDetails(
+                                title = edit.title,
+                                category = edit.category,
+                                dueDate = edit.dueDate,
+                                priority = edit.priority,
+                                amount = edit.amount,
+                            )
+                        } else {
+                            checklistViewModel.updateItem(
+                                id = id,
+                                title = edit.title,
+                                category = edit.category,
+                                dueDate = edit.dueDate,
+                                priority = edit.priority,
+                                amount = edit.amount,
+                            )
+                        }
+                    },
+                    // 清空可空字段（分类 / 截止时间 / 金额）必须走这条 —— updateItem 的 null 是「不改」
+                    onClearItemFields = checklistViewModel::clearItemFields,
+                    onAttachTag = checklistViewModel::attachTag,
+                    onDetachTag = checklistViewModel::detachTag,
+                    onAddSubTask = checklistViewModel::addSubTask,
+                    onCategoryFilterChange = checklistViewModel::setCategoryFilter,
+                    onTagFilterChange = checklistViewModel::setTagFilter,
+                    onGroupChange = checklistViewModel::setGroup,
+                    onSortChange = checklistViewModel::setSort,
+                    onResetFilter = checklistViewModel::resetFilter,
                     modifier = Modifier.fillMaxSize(),
                 )
             }

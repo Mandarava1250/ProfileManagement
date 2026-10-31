@@ -326,6 +326,18 @@ class CalendarViewModel @Inject constructor(
         _currentYearMonth.value = DateUtils.currentYearMonth()
     }
 
+    /**
+     * Phase 15 P1-2.4：直接跳到指定年月（月份选择器用）
+     *
+     * 原来只能靠 [goToPrevious] / [goToNext] 一格格挪月份，
+     * 跨几个月要按好几次 —— 月份选择器一次点中。
+     *
+     * @param month 1..12
+     */
+    fun goToYearMonth(year: Int, month: Int) {
+        _currentYearMonth.value = "%04d-%02d".format(year, month)
+    }
+
     fun onDateClick(date: Long) {
         _selectedDate.value = date
     }

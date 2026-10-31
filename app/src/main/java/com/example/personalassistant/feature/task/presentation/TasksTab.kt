@@ -17,11 +17,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -43,6 +41,7 @@ import com.example.personalassistant.feature.task.domain.model.TaskDisplayPrefer
 import com.example.personalassistant.feature.task.domain.model.TaskQuadrant
 import com.example.personalassistant.feature.task.domain.model.TaskSort
 import com.example.personalassistant.feature.task.domain.model.TaskViewMode
+import com.example.personalassistant.feature.task.presentation.components.FilterEntryButton
 import com.example.personalassistant.feature.task.presentation.components.MatrixViewToggle
 import com.example.personalassistant.feature.task.presentation.components.PriorityTabRow
 import com.example.personalassistant.feature.task.presentation.components.QuadrantSection
@@ -127,6 +126,7 @@ fun TasksTab(
             )
             FilterEntryButton(
                 activeCount = activeFilterCount,
+                contentDescription = stringResource(R.string.task_filter_button),
                 onClick = { showFilterSheet = true },
             )
         }
@@ -401,37 +401,5 @@ private fun TaskListSkeleton() {
     }
 }
 
-/**
- * 首屏的筛选入口按钮 —— 有生效条件时右上角带计数徽标。
- *
- * Phase 14：分类 / 标签 / 排序 / 视图都收进面板后，首屏只剩这一个入口，
- * 徽标告诉用户「现在有条件生效着」，免得以为筛选丢了。
- */
-@Composable
-private fun FilterEntryButton(activeCount: Int, onClick: () -> Unit) {
-    Box {
-        IconButton(onClick = onClick) {
-            Icon(
-                imageVector = Icons.Rounded.Tune,
-                contentDescription = stringResource(R.string.task_filter_button),
-                tint = if (activeCount > 0) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-        }
-        if (activeCount > 0) {
-            Badge(
-                modifier = Modifier.align(Alignment.TopEnd),
-                containerColor = MaterialTheme.colorScheme.primary,
-            ) {
-                Text(
-                    text = "$activeCount",
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
-        }
-    }
-}
+// Phase 15：筛选入口按钮抽到 `components/FilterEntryButton.kt` ——
+// 清单页（ChecklistTab）要用同一套，留在本文件当私有函数就得抄一遍。

@@ -19,6 +19,7 @@ import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileDao
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import com.example.personalassistant.feature.task.data.local.SubTaskEntity
+import com.example.personalassistant.feature.task.data.local.SubTaskTagCrossRef
 import com.example.personalassistant.feature.task.data.local.TagDao
 import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskDao
@@ -42,18 +43,19 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
  *
  * ⚠️ 升版时必须同步：本常量 + 新 Migration + `BackupFormatVersion.DB_VERSION`。
  */
-const val APP_DATABASE_VERSION = 12
+const val APP_DATABASE_VERSION = 13
 
 /**
  * App 主数据库
  *
- * 14 张表：
+ * 15 张表：
  * 1. courses          - 课程
  * 2. semesters        - 学期
  * 3. tasks            - 任务
- * 4. sub_tasks        - 子任务
+ * 4. sub_tasks        - 子任务（Phase 15：加分类/截止/优先级/金额/嵌套父指针 5 列）
  * 5. tags             - 标签（Phase 6c 新增）
  * 6. task_tag_cross_ref - 任务↔标签关联（Phase 6c 新增）
+ * 7. sub_task_tag_cross_ref - 清单项↔标签关联（Phase 15 新增）
  * 7. events           - 日历事件
  * 8. event_categories - 日历事件分类（Phase 8 Sub-step 9 新增）
  * 9. transactions     - 记账流水
@@ -62,6 +64,7 @@ const val APP_DATABASE_VERSION = 12
  * 12. daily_pools      - 每日零钱池
  * 13. holidays        - 节假日（Phase 8 Sub-step 7 新增）
  * 14. user_profiles    - 账户（Phase 3 多账户新增，记账域 4 表靠 accountId 指向它）
+ * 15. sub_task_tag_cross_ref - 清单项↔标签关联（Phase 15 新增）
  *
  * ⚠️ schema 变更必须按以下流程：
  *   1. 修改对应 Entity
@@ -79,6 +82,8 @@ const val APP_DATABASE_VERSION = 12
         SubTaskEntity::class,
         TagEntity::class,
         TaskTagCrossRef::class,
+        // 清单项↔标签关联（Phase 15）
+        SubTaskTagCrossRef::class,
         // 日历（Phase 8 Sub-step 9 加 event_categories）
         EventEntity::class,
         EventCategoryEntity::class,
@@ -97,6 +102,7 @@ const val APP_DATABASE_VERSION = 12
     // v10（Phase 5）：transactions.transferAccountId + user_profiles.initialBalance
     // v11（Phase 12）：courses.credit + courses.gradePoint + student_profile 表
     // v12（Phase 12 GPA 规则）：student_profile.gpaRuleJson
+    // v13（Phase 15 清单扩展）：sub_tasks 加 5 列 + sub_task_tag_cross_ref 新表
     version = APP_DATABASE_VERSION,
     exportSchema = true
 )
@@ -135,6 +141,7 @@ abstract class AppDatabase : RoomDatabase() {
                 Migration_9_10,
                 Migration_10_11,
                 Migration_11_12,
+                Migration_12_13,
             )
     }
 }

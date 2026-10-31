@@ -103,9 +103,14 @@ fun TaskFilterSheet(
     }
 }
 
-/** 面板里的小节标题。 */
+/**
+ * 面板里的小节标题。
+ *
+ * Phase 15：清单页的筛选面板（`ChecklistFilterSheet`）复用同一套视觉语言，
+ * 所以这里从 private 放开成 internal —— 两个面板的标题长得一模一样。
+ */
 @Composable
-private fun SheetSection(title: String) {
+internal fun SheetSection(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.titleSmall,

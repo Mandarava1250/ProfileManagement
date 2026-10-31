@@ -199,15 +199,9 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
                     eventId = eventId,
                     onBack = { navController.popBackStack() },
                     onOpenInCalendar = {
-                        // 跳到 Calendar 主屏（popBackStack + navigate 重置 BottomBar 选中态）
-                        navController.popBackStack()
-                        navController.navigate(Screen.Calendar.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = false
-                                inclusive = false
-                            }
-                            launchSingleTop = true
-                        }
+                        // Phase 15 P0-1.1：统一走 navigateToTab —— 顺带把二级页一并弹掉，
+                        // 栈里只剩「起点 + 日历」，底栏选中态也跟着回到日历
+                        navController.navigateToTab(Screen.Calendar.route)
                     },
                 )
             }
@@ -227,8 +221,8 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
                                 navController.navigate(Screen.EditCourse.build(hit.entityId))
                             GlobalSearchHitType.TRANSACTION -> {
                                 // 流水没有专门详情页，先回到 Finance Tab（占位）
-                                navController.popBackStack()
-                                navController.navigate(Screen.Finance.route)
+                                // Phase 15 P0-1.1：走 navigateToTab，栈行为与底栏点击一致
+                                navController.navigateToTab(Screen.Finance.route)
                             }
                         }
                     },
@@ -373,13 +367,8 @@ internal fun AppBottomBar(
                 selected = selected,
                 onClick = {
                     if (currentRoute != tab.screen.route) {
-                        navController.navigate(tab.screen.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
+                        // Phase 15 P0-1.1：统一走 navigateToTab —— 栈行为与页面内跨 Tab 跳转一致
+                        navController.navigateToTab(tab.screen.route)
                     }
                 },
                 // 文字标签已经承担了语义，图标 contentDescription 设 null 避免读屏重复朗读

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Today
+import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -28,8 +29,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,12 +46,14 @@ import com.example.personalassistant.feature.calendar.domain.model.CalendarViewT
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.presentation.CalendarViewModel
 import com.example.personalassistant.navigation.Screen
+import com.example.personalassistant.navigation.navigateToTab
 import com.example.personalassistant.feature.calendar.presentation.EventEditState
 import com.example.personalassistant.feature.calendar.presentation.components.DayCalendarView
 import com.example.personalassistant.feature.calendar.presentation.components.DayDetailSheet
 import com.example.personalassistant.feature.calendar.presentation.components.EditEventSheet
 import com.example.personalassistant.feature.calendar.presentation.components.MonthCalendarGrid
 import com.example.personalassistant.feature.calendar.presentation.components.MonthTagList
+import com.example.personalassistant.feature.calendar.presentation.components.MonthPickerSheet
 import com.example.personalassistant.feature.calendar.presentation.components.WeekCalendarView
 import java.time.Instant
 import java.time.LocalDate
@@ -97,6 +102,21 @@ fun CalendarScreen(
         }
     }
 
+    // Phase 15 P1-2.3：月份选择器的开关
+    var showMonthPicker by remember { mutableStateOf(false) }
+
+    // Phase 15 P1-2.3：月份选择器（ModalBottomSheet 走独立 dialog 窗口，放在 Scaffold 前后都行）
+    if (showMonthPicker) {
+        MonthPickerSheet(
+            currentYearMonth = uiState.yearMonth,
+            onPick = { year, month ->
+                viewModel.goToYearMonth(year, month)
+                showMonthPicker = false
+            },
+            onDismiss = { showMonthPicker = false },
+        )
+    }
+
     Scaffold(
         topBar = {
             AppTopBar(
@@ -107,7 +127,14 @@ fun CalendarScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.goToCurrent() }) {
+
+                    // Phase 15 P1-2.3：月视图右上角加「选择月份」—— 原来只能一格格挪
+                    if (viewType == CalendarViewType.MONTH) {
+                        IconButton(onClick = { showMonthPicker = true }) {
+                            Icon(Icons.Rounded.DateRange, contentDescription = "选择月份")
+                        }
+                    }
+IconButton(onClick = { viewModel.goToCurrent() }) {
                         Icon(Icons.Rounded.Today, contentDescription = "回到今天")
                     }
                     IconButton(onClick = { viewModel.goToNext() }) {
@@ -189,7 +216,9 @@ fun CalendarScreen(
                                 // Phase 14：预算横条 + 可直接勾选的今日待办
                                 overview = todayOverview,
                                 onToggleTask = { task, done -> viewModel.toggleTask(task, done) },
-                                onBudgetClick = { navController.navigate(Screen.Finance.route) },
+                                // Phase 15 P0-1.1：走 navigateToTab —— 之前是裸 navigate，
+                                // 会把记账页压在日历之上，导致用户点底栏「日历」回不来
+                                onBudgetClick = { navController.navigateToTab(Screen.Finance.route) },
                             )
                         } else {
                             EmptyViewPlaceholder(text = "请回到今天")
