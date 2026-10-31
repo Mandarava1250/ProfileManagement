@@ -2614,7 +2614,7 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 - `gradlew :app:testDebugUnitTest` → **921 tests, 0 failures**（基线 865 → 921）
 - 模拟器目测（`emulator-5554`，`pm_ui36` 镜像，2026/10/31）→ 逐项记录见 `docs/manual-verification/phase14-visual-checklist.md`
   - ✅ 通过：日历（除下列一项）/ 任务 / 课表 / 记账 / 设置 / 深色模式各项
-  - ⚠️ **未确认**：周视图「已完成任务有划线 + 淡化」—— 恰是本轮 P0-1.3 的修复点
+  - ⚠️ **未确认**：周视图「已完成任务有划线 + 淡化」—— 代码侧已核实渲染齐备（`WeekCalendarView`：`WeekBlock.isCompleted` 透传 → `TextDecoration.LineThrough` + 背景 alpha 0.18→0.10 + 文字转 `onSurfaceVariant`；全天项走 `AllDayItem` 同一套）。目测时未确认，可能与「任务没带 `dueDate` 就不进时间轴，只进全天区」这条规则有关
   - ⚠️ **未测**：全局搜索三项（空态 / 无结果 / contentDescription）
   - 清单结论那一栏勾的是「有问题」而非「全部通过」，问题条目待补
 - commit：`bd62b35`（54 files changed, 6349 insertions）
