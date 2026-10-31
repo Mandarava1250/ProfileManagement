@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -63,7 +63,7 @@ fun TaskSection(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ModuleHeader(
-            icon = Icons.Filled.Checklist,
+            icon = Icons.Rounded.Checklist,
             title = "任务",
             subtitle = "四象限的显示名称",
         )

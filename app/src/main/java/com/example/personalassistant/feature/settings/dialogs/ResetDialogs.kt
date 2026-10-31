@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,11 +56,18 @@ fun SuggestBackupBeforeResetDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = onBackupThenReset) { Text("先备份") }
+            // Phase 14：破坏性操作放主按钮位 —— 「清除全部」才是这弹窗的主要动作，
+            // 「先备份」降为次按钮（原来两者位置是反的）
+            TextButton(
+                onClick = onSkipBackup,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) { Text("清除全部") }
         },
         dismissButton = {
             androidx.compose.foundation.layout.Row {
-                TextButton(onClick = onSkipBackup) { Text("直接清") }
+                TextButton(onClick = onBackupThenReset) { Text("先备份") }
                 TextButton(onClick = onCancel) { Text("取消") }
             }
         },

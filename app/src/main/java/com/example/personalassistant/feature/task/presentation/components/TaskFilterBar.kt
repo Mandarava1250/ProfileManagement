@@ -2,14 +2,16 @@ package com.example.personalassistant.feature.task.presentation.components
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -45,6 +47,10 @@ fun TaskFilterBar(
     onFilterChange: (FilterExpression) -> Unit,
     onSortClick: () -> Unit,
     modifier: Modifier = Modifier,
+    // Phase 14：排序菜单直接长在排序按钮上，所以菜单的显隐与选择下放到组件内部
+    sortMenuExpanded: Boolean = false,
+    onSortSelected: (com.example.personalassistant.feature.task.domain.model.TaskSort) -> Unit = {},
+    onSortDismiss: () -> Unit = {},
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -66,6 +72,8 @@ fun TaskFilterBar(
                 selected = currentFilter is FilterExpression.All,
                 onClick = { onFilterChange(FilterExpression.All) },
                 label = { Text("全部") },
+                // Phase 14：热区补到 48dp
+                modifier = Modifier.heightIn(min = 48.dp),
             )
 
             // 分类 chips
@@ -78,20 +86,32 @@ fun TaskFilterBar(
                         onFilterChange(FilterExpression.ByCategory(category.name))
                     },
                     label = { Text(category.name) },
+                    // Phase 14：热区补到 48dp
+                    modifier = Modifier.heightIn(min = 48.dp),
                 )
             }
         }
 
         Spacer(Modifier.width(4.dp))
 
-        // 排序图标
-        IconButton(onClick = onSortClick) {
-            Icon(
-                imageVector = Icons.Default.Sort,
-                contentDescription = "排序",
-                tint = if (currentSort != com.example.personalassistant.feature.task.domain.model.TaskSort.DEFAULT)
-                    MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+        // Phase 14：排序菜单锚到排序按钮本身
+        // （原来菜单挂在列表上方的一个空 Box 里，弹出来跟按钮对不上号）
+        Box {
+            // 排序图标
+            IconButton(onClick = onSortClick) {
+                Icon(
+                    imageVector = Icons.Rounded.Sort,
+                    contentDescription = "排序",
+                    tint = if (currentSort != com.example.personalassistant.feature.task.domain.model.TaskSort.DEFAULT)
+                        MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            SortMenu(
+                expanded = sortMenuExpanded,
+                currentSort = currentSort,
+                onSortSelected = onSortSelected,
+                onDismiss = onSortDismiss,
             )
         }
     }

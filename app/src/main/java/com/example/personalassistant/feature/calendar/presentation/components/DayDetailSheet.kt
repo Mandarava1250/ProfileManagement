@@ -17,7 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.outlined.Assignment
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -141,7 +141,7 @@ fun DayDetailSheet(
                         item {
                             SheetSectionHeader(
                                 label = "课程 (${dayDetail.courses.size})",
-                                icon = Icons.Filled.School,
+                                icon = Icons.Rounded.School,
                             )
                         }
                         val sortedCourses = dayDetail.courses.sortedBy { it.startTime }

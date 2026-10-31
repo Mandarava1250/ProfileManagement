@@ -1,6 +1,8 @@
 package com.example.personalassistant.feature.globalsearch.presentation
 
 import androidx.compose.foundation.clickable
+import com.example.personalassistant.core.ui.components.EmptyState
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,13 +17,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Today
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,7 +33,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -67,11 +70,11 @@ fun GlobalSearchScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("全局搜索") },
+            AppTopBar(
+                title = { Text(stringResource(R.string.global_search_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.Close, contentDescription = "返回")
+                        Icon(Icons.Rounded.Close, contentDescription = "返回")
                     }
                 },
             )
@@ -91,8 +94,8 @@ fun GlobalSearchScreen(
 
             // 命中分组
             when {
-                !state.hasQuery -> EmptyHint("输入关键字开始搜索…")
-                !state.hasResults -> EmptyHint("未找到匹配结果")
+                !state.hasQuery -> EmptySearchState(isNoResult = false)
+                !state.hasResults -> EmptySearchState(isNoResult = true)
                 else -> HitList(
                     hits = state.flattened(),
                     onHitClick = onHitClick,
@@ -113,11 +116,11 @@ private fun SearchBox(
         value = query,
         onValueChange = onQueryChange,
         placeholder = { Text("搜索任务 / 事件 / 流水 / 课程…") },
-        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
         trailingIcon = {
             if (query.isNotEmpty()) {
                 IconButton(onClick = onClear) {
-                    Icon(Icons.Filled.Clear, contentDescription = "清空")
+                    Icon(Icons.Rounded.Clear, contentDescription = "清空")
                 }
             }
         },
@@ -129,15 +132,21 @@ private fun SearchBox(
 }
 
 @Composable
-private fun EmptyHint(text: String) {
+private fun EmptySearchState(isNoResult: Boolean) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        EmptyState(
+            illustration = R.drawable.ic_empty_search,
+            title = stringResource(
+                if (isNoResult) R.string.empty_search_no_result_title
+                else R.string.empty_search_title
+            ),
+            description = stringResource(
+                if (isNoResult) R.string.empty_search_no_result_desc
+                else R.string.empty_search_desc
+            ),
         )
     }
 }
@@ -245,10 +254,10 @@ private fun HitCard(
 }
 
 private fun GlobalSearchHitType.icon(): ImageVector = when (this) {
-    GlobalSearchHitType.TASK -> Icons.Filled.Checklist
-    GlobalSearchHitType.EVENT -> Icons.Filled.CalendarMonth
-    GlobalSearchHitType.TRANSACTION -> Icons.Filled.AccountBalanceWallet
-    GlobalSearchHitType.COURSE -> Icons.Filled.Today
+    GlobalSearchHitType.TASK -> Icons.Rounded.Checklist
+    GlobalSearchHitType.EVENT -> Icons.Rounded.CalendarMonth
+    GlobalSearchHitType.TRANSACTION -> Icons.Rounded.AccountBalanceWallet
+    GlobalSearchHitType.COURSE -> Icons.Rounded.Today
 }
 
 private fun GlobalSearchHitType.label(): String = when (this) {

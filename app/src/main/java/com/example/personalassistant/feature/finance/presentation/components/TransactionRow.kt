@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -96,7 +96,7 @@ fun TransactionRow(
         ) {
             Icon(
                 imageVector = if (isTransfer) {
-                    Icons.Filled.SwapHoriz
+                    Icons.Rounded.SwapHoriz
                 } else {
                     IconRegistry.resolve(iconName)
                 },

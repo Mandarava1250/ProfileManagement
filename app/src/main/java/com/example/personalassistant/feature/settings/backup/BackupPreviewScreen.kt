@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,11 +19,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.HourglassEmpty
-import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.HourglassEmpty
+import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
@@ -40,7 +41,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -117,8 +119,8 @@ fun BackupPreviewScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("导入预览") },
+            AppTopBar(
+                title = { Text(stringResource(R.string.backup_preview_title)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         viewModel.reset()
@@ -206,7 +208,7 @@ private fun PreviewContent(
                     containerColor = MaterialTheme.colorScheme.primary,
                 ),
             ) {
-                Icon(Icons.Filled.CheckCircle, contentDescription = null)
+                Icon(Icons.Rounded.CheckCircle, contentDescription = null)
                 Spacer(modifier = Modifier.padding(start = 8.dp))
                 Text("确认导入")
             }
@@ -252,7 +254,7 @@ private fun HeaderSummary(preview: BackupPreview) {
                     },
                     leadingIcon = {
                         Icon(
-                            Icons.Filled.LinkOff,
+                            Icons.Rounded.LinkOff,
                             contentDescription = null,
                             modifier = Modifier.size(AssistChipDefaults.IconSize),
                         )
@@ -289,19 +291,19 @@ private fun QuickActions(onAllStrategy: (ImportStrategy) -> Unit) {
             ) {
                 QuickButton(
                     text = "全 ADD",
-                        icon = Icons.Filled.Add,
+                        icon = Icons.Rounded.Add,
                         onClick = { onAllStrategy(ImportStrategy.ADD) },
                         modifier = Modifier.weight(1f),
                     )
                     QuickButton(
                         text = "全 OVERWRITE",
-                        icon = Icons.Filled.Edit,
+                        icon = Icons.Rounded.Edit,
                         onClick = { onAllStrategy(ImportStrategy.OVERWRITE) },
                         modifier = Modifier.weight(1f),
                     )
                     QuickButton(
                         text = "全 SKIP",
-                        icon = Icons.Filled.HourglassEmpty,
+                        icon = Icons.Rounded.HourglassEmpty,
                         onClick = { onAllStrategy(ImportStrategy.SKIP) },
                         modifier = Modifier.weight(1f),
                     )
@@ -358,7 +360,7 @@ private fun TableSection(
                         },
                         leadingIcon = {
                             Icon(
-                                Icons.Filled.LinkOff,
+                                Icons.Rounded.LinkOff,
                                 contentDescription = null,
                                 modifier = Modifier.size(AssistChipDefaults.IconSize),
                             )

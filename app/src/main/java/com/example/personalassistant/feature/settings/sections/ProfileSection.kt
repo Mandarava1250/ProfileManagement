@@ -6,12 +6,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.DeleteForever
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Restore
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.rounded.Backup
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -61,7 +61,7 @@ fun ProfileSection(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ModuleHeader(
-            icon = Icons.Filled.Person,
+            icon = Icons.Rounded.Person,
             title = "我的",
             subtitle = "外观、绩点、数据",
         )
@@ -112,7 +112,7 @@ fun ProfileSection(
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Tune, contentDescription = null)
+                    Icon(Icons.Rounded.Tune, contentDescription = null)
                     Spacer8()
                     Text("GPA 规则", style = MaterialTheme.typography.titleMedium)
                 }
@@ -128,7 +128,7 @@ fun ProfileSection(
                 ) {
                     Text("编辑绩点换算表")
                     Spacer8()
-                    Icon(Icons.Filled.ChevronRight, contentDescription = null)
+                    Icon(Icons.Rounded.ChevronRight, contentDescription = null)
                 }
             }
         }
@@ -142,7 +142,7 @@ fun ProfileSection(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Backup, contentDescription = null)
+                    Icon(Icons.Rounded.Backup, contentDescription = null)
                     Spacer8()
                     Text(
                         "数据备份",
@@ -211,7 +211,7 @@ fun ProfileSection(
                     onClick = onBackupNow,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Icon(Icons.Filled.Backup, contentDescription = null)
+                    Icon(Icons.Rounded.Backup, contentDescription = null)
                     Spacer8()
                     Text("立即备份")
                 }
@@ -236,7 +236,7 @@ fun ProfileSection(
                         onClick = onQuickRestore,
                         modifier = Modifier.weight(1f),
                     ) {
-                        Icon(Icons.Filled.Restore, contentDescription = null)
+                        Icon(Icons.Rounded.Restore, contentDescription = null)
                         Spacer8()
                         Text("快速替换")
                     }
@@ -254,7 +254,7 @@ fun ProfileSection(
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Filled.DeleteForever,
+                        Icons.Rounded.DeleteForever,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onErrorContainer,
                     )
@@ -279,7 +279,7 @@ fun ProfileSection(
                     enabled = !resetRunning,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Icon(Icons.Filled.DeleteForever, contentDescription = null)
+                    Icon(Icons.Rounded.DeleteForever, contentDescription = null)
                     Spacer8()
                     Text("清除全部数据…")
                 }

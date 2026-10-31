@@ -1,6 +1,8 @@
 package com.example.personalassistant.feature.task.presentation
 
 import androidx.compose.foundation.layout.Arrangement
+import com.example.personalassistant.core.ui.components.EmptyState
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,13 +10,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
+import com.example.personalassistant.R
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskDisplayPreferences
 import com.example.personalassistant.feature.task.domain.model.TaskQuadrant
@@ -85,6 +92,9 @@ fun TasksTab(
     // 长按哪个象限就弹哪个的 dialog；null = 不显示
     var renamingQuadrant by remember { mutableStateOf<TaskQuadrant?>(null) }
 
+    // Phase 14：删除是破坏性操作 —— 点删除先进确认弹窗，确认后才真删
+    var pendingDeleteTask by remember { mutableStateOf<Task?>(null) }
+
     Column(modifier = modifier.fillMaxSize()) {
         // 顶部 FilterBar（分类）
         TaskFilterBar(
@@ -92,6 +102,10 @@ fun TasksTab(
             currentSort = state.sort,
             onFilterChange = onFilterChange,
             onSortClick = onSortClick,
+            // Phase 14：排序菜单已经长在排序按钮上了，这里把显隐与选择接回去
+            sortMenuExpanded = state.sortMenuExpanded,
+            onSortSelected = onSortSelected,
+            onSortDismiss = onSortDismiss,
         )
 
         // 顶部 TagFilterBar（Phase 6c：标签云 chip 行；空时自动隐藏）
@@ -111,6 +125,15 @@ fun TasksTab(
             onLongPressQuadrant = { q -> renamingQuadrant = q },
         )
 
+        // Phase 14：长按象限重命名是个隐藏手势 —— 给一行常驻提示，
+        // 不然没人知道还能这么用
+        Text(
+            text = stringResource(R.string.task_quadrant_rename_hint),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+        )
+
         // Phase 8final G2：列表 / 矩阵 布局切换
         MatrixViewToggle(
             isMatrixMode = state.displayPreferences.viewMode == TaskViewMode.MATRIX,
@@ -118,15 +141,7 @@ fun TasksTab(
             onSelectMatrix = onShowMatrix,
         )
 
-        // SortMenu（挂在 FilterBar 的位置之外，由 Box 锚定）
-        Box(modifier = Modifier.fillMaxWidth()) {
-            SortMenu(
-                expanded = state.sortMenuExpanded,
-                currentSort = state.sort,
-                onSortSelected = onSortSelected,
-                onDismiss = onSortDismiss,
-            )
-        }
+        // Phase 14：SortMenu 已经挪进 TaskFilterBar（长在排序按钮上），这里不再单独挂一个空 Box
 
         // Phase 8b'：重命名 dialog
         renamingQuadrant?.let { q ->
@@ -142,8 +157,36 @@ fun TasksTab(
             )
         }
 
+        // Phase 14：破坏性操作确认 —— 删除任务
+        pendingDeleteTask?.let { target ->
+            AlertDialog(
+                onDismissRequest = { pendingDeleteTask = null },
+                title = { Text(stringResource(R.string.task_delete_confirm_title)) },
+                text = { Text(stringResource(R.string.task_delete_confirm_desc)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            onDelete(target)
+                            pendingDeleteTask = null
+                        },
+                    ) {
+                        Text(
+                            text = stringResource(R.string.action_delete),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingDeleteTask = null }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                },
+            )
+        }
+
         if (state.isLoading) {
-            // 极短暂占位；Flow 第一次发射前不会出现
+            // Phase 14：加载中给骨架屏，别让用户对着白屏发呆
+            TaskListSkeleton()
             return@Column
         }
 
@@ -172,7 +215,8 @@ fun TasksTab(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 8.dp),
+            // Phase 14：底部留出 FAB 的位置，末条任务不会被悬浮按钮压住
+            contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp),
         ) {
             // Phase 8b'：根据 viewMode 选择渲染策略
             when (state.displayPreferences.viewMode) {
@@ -189,7 +233,7 @@ fun TasksTab(
                                 )
                             }
                             items(tasks, key = { it.id }) { task ->
-                                TaskRow(task, onToggleComplete, onClickTask, onDelete)
+                                TaskRow(task, onToggleComplete, onClickTask, { pendingDeleteTask = it })
                             }
                         }
                     }
@@ -201,7 +245,7 @@ fun TasksTab(
                     val tasks = state.groups.byQuadrant[target].orEmpty()
                     if (tasks.isNotEmpty()) {
                         items(tasks, key = { it.id }) { task ->
-                            TaskRow(task, onToggleComplete, onClickTask, onDelete)
+                            TaskRow(task, onToggleComplete, onClickTask, { pendingDeleteTask = it })
                         }
                     }
                 }
@@ -218,7 +262,7 @@ fun TasksTab(
                 }
                 if (state.showCompleted) {
                     items(state.groups.completed, key = { "completed-${it.id}" }) { task ->
-                        TaskRow(task, onToggleComplete, onClickTask, onDelete)
+                        TaskRow(task, onToggleComplete, onClickTask, { pendingDeleteTask = it })
                     }
                 }
             }
@@ -270,7 +314,7 @@ private fun CompletedHeader(
         }
         IconButton(onClick = onToggle) {
             Icon(
-                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                 contentDescription = if (expanded) "收起" else "展开",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -282,21 +326,11 @@ private fun CompletedHeader(
 @Composable
 private fun EmptyTasksHint(modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "还没有任务 ♪",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = "点击右下角 + 添加你的第一个任务",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
+        EmptyState(
+            illustration = R.drawable.ic_empty_tasks,
+            title = stringResource(R.string.empty_tasks_title),
+            description = stringResource(R.string.empty_tasks_desc),
+        )
     }
 }
 
@@ -317,4 +351,28 @@ private fun CompletedCountHint(count: Int, modifier: Modifier = Modifier) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
+}
+
+/**
+ * Phase 14：任务列表骨架屏。
+ *
+ * 以前加载中直接什么都不渲染，看起来像页面坏了 —— 现在铺几张占位卡片。
+ */
+@Composable
+private fun TaskListSkeleton() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        repeat(4) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            )
+        }
+    }
 }

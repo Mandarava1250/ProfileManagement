@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 14：空态插画 —— 搜索（放大镜 + 一道光） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="112dp"
+    android:height="112dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+
+    <!-- 镜片 -->
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:fillAlpha="0.14"
+        android:pathData="M54,26 a26,26 0 1 1 0,52 a26,26 0 1 1 0,-52 z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorPrimary"
+        android:strokeWidth="4"
+        android:pathData="M54,26 a26,26 0 1 1 0,52 a26,26 0 1 1 0,-52 z" />
+
+    <!-- 手柄 -->
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:pathData="M73,70 l7,-7 l16,16 l-7,7 z" />
+
+    <!-- 高光 -->
+    <path
+        android:fillColor="?attr/colorOnSurfaceVariant"
+        android:fillAlpha="0.45"
+        android:pathData="M44,36 a6,6 0 1 1 0,12 a6,6 0 1 1 0,-12 z" />
+</vector>

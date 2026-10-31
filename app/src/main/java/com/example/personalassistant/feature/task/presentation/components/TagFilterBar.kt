@@ -5,6 +5,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -84,6 +85,8 @@ private fun ClearChip(
     else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
         modifier = Modifier
+            // Phase 14：热区补到 48dp —— 小 chip 手指不好按
+            .heightIn(min = 48.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(50),
         color = containerColor,
@@ -94,7 +97,8 @@ private fun ClearChip(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "全部",
+                // Phase 14：分类行已经有一个「全部」了 —— 这里改「不限」，两个「全部」会看花眼
+                text = "不限",
                 style = MaterialTheme.typography.labelMedium,
             )
         }

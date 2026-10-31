@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.timetable.presentation.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,11 +17,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -38,7 +39,8 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -95,8 +97,8 @@ fun TimetableSettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("课表设置") },
+            AppTopBar(
+                title = { Text(stringResource(R.string.timetable_settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -190,7 +192,7 @@ private fun SemesterTabContent(
         ) {
             Text("共 ${state.semesters.size} 个学期", style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = onAddSemester) {
-                Icon(Icons.Filled.Add, contentDescription = null)
+                Icon(Icons.Rounded.Add, contentDescription = null)
                 Spacer(Modifier.width(4.dp))
                 Text("新建学期")
             }
@@ -291,13 +293,13 @@ private fun SemesterRow(
             }
             IconButton(onClick = onEdit) {
                 Icon(
-                    Icons.Filled.Edit,
+                    Icons.Rounded.Edit,
                     contentDescription = "编辑学期",
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error)
+                Icon(Icons.Rounded.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -329,13 +331,13 @@ private fun ScheduleTabContent(
             )
             Row {
                 TextButton(onClick = { showResetConfirm = true }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("重置默认")
                 }
                 Spacer(Modifier.width(4.dp))
                 TextButton(onClick = onSave) {
-                    Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("保存")
                 }
@@ -361,7 +363,7 @@ private fun ScheduleTabContent(
             horizontalArrangement = Arrangement.Center,
         ) {
             TextButton(onClick = onAddRow) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
                 Text("添加一节")
             }
@@ -481,7 +483,7 @@ private fun ScheduleRow(
         )
         IconButton(onClick = onRemove) {
             Icon(
-                Icons.Filled.Delete,
+                Icons.Rounded.Delete,
                 contentDescription = "删除这一节",
                 tint = MaterialTheme.colorScheme.error,
             )

@@ -1,6 +1,8 @@
 package com.example.personalassistant.feature.task.presentation
 
 import androidx.compose.foundation.layout.Arrangement
+import com.example.personalassistant.core.ui.components.EmptyState
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,7 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.R
 import com.example.personalassistant.feature.task.presentation.components.ChecklistItem
 
 /**
@@ -95,7 +98,7 @@ fun ChecklistTab(
                 enabled = canSubmit,
             ) {
                 Icon(
-                    imageVector = Icons.Default.Add,
+                    imageVector = Icons.Rounded.Add,
                     contentDescription = "添加",
                     tint = if (canSubmit) {
                         LocalContentColor.current
@@ -110,21 +113,11 @@ fun ChecklistTab(
 
         if (state.items.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        text = "清单是空的 ♪",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = "在上方输入文字后点击 + 添加",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline,
-                    )
-                }
+                EmptyState(
+                    illustration = R.drawable.ic_empty_checklist,
+                    title = stringResource(R.string.empty_checklist_title),
+                    description = stringResource(R.string.empty_checklist_desc),
+                )
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {

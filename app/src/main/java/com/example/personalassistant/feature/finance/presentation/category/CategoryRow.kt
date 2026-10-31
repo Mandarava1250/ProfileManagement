@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -83,14 +83,14 @@ internal fun CategoryRow(
 
         // 改图标
         IconButton(onClick = onEditIcon) {
-            Icon(Icons.Filled.Edit, contentDescription = "更换图标")
+            Icon(Icons.Rounded.Edit, contentDescription = "更换图标")
         }
 
         // 非默认：删 / 默认：文字标识
         if (!category.isDefault) {
             IconButton(onClick = onDelete) {
                 Icon(
-                    Icons.Filled.Delete,
+                    Icons.Rounded.Delete,
                     contentDescription = "删除",
                     tint = MaterialTheme.colorScheme.error,
                 )

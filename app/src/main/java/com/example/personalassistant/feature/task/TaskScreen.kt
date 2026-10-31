@@ -5,7 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -14,7 +15,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -69,7 +70,7 @@ fun TaskScreen(
     Scaffold(
         topBar = {
             Column {
-                TopAppBar(
+                AppTopBar(
                     title = { Text(stringResource(id = com.example.personalassistant.R.string.tab_tasks)) },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -85,6 +86,24 @@ fun TaskScreen(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
                         text = { Text("清单") },
+                    )
+                }
+            }
+        },
+        floatingActionButton = {
+            // Phase 14：FAB 归位到 Scaffold slot。
+            // 外层 AppNavHost 已把 BottomBar 的 padding 真正下传给 NavHost（Phase 10 修复），
+            // 所以这里的 slot 天然落在底栏之上，不会再被盖住 ——
+            // 而列表末条则由 TasksTab 的 contentPadding 让出位置。
+            if (selectedTab == 0) {
+                FloatingActionButton(
+                    onClick = {
+                        navController.navigate(Screen.EditTask.build())
+                    },
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = "新建任务",
                     )
                 }
             }
@@ -119,27 +138,6 @@ fun TaskScreen(
                     onAdd = checklistViewModel::addItem,
                     modifier = Modifier.fillMaxSize(),
                 )
-            }
-
-            // Phase 10 修复：FAB 不再放进 Scaffold 的 floatingActionButton slot，
-            // 而是放到 content Box 里手动 BottomEnd 对齐。这样:
-            // 1. FAB 永远位于 BottomBar 上方 16dp，不会被外层 BottomBar 盖住
-            // 2. 清单 Tab 上不显示（保持原有行为：清单 Tab 用顶部输入框）
-            // 3. 桌面宽屏 / 手机窄屏都用相同偏移，无需额外响应式处理
-            if (selectedTab == 0) {
-                FloatingActionButton(
-                    onClick = {
-                        navController.navigate(Screen.EditTask.build())
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "新建任务",
-                    )
-                }
             }
         }
     }

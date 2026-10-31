@@ -185,7 +185,7 @@ private fun MatrixCellCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    contentPadding = PaddingValues(bottom = 8.dp),
+                    contentPadding = PaddingValues(bottom = 96.dp),
                 ) {
                     items(tasks, key = { "cell${cell.position}-${it.id}" }) { task ->
                         MatrixTaskRow(
@@ -215,7 +215,7 @@ private fun MatrixStackedLayout(
     // 单一滚动容器：区域内任务直接铺开，不再嵌套 LazyColumn
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 8.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp),
     ) {
         MatrixRegion.VERTICAL_ORDER.forEach { region ->
             val tasks = matrix.tasksOf(region)

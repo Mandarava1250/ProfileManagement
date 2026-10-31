@@ -16,9 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.Place
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -86,7 +86,7 @@ fun CourseCard(
             if (course.teacher.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Filled.Person,
+                        imageVector = Icons.Rounded.Person,
                         contentDescription = null,
                         modifier = Modifier.size(11.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -104,7 +104,7 @@ fun CourseCard(
             if (course.location.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Filled.Place,
+                        imageVector = Icons.Rounded.Place,
                         contentDescription = null,
                         modifier = Modifier.size(11.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,

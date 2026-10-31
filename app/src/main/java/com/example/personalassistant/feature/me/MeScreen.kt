@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.me
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,7 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,7 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,8 +71,8 @@ fun MeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("我") },
+            AppTopBar(
+                title = { Text(stringResource(R.string.tab_me)) },
                 // Phase 14：「我」不再是底部 Tab，而是从「更多」面板进入的二级页。
                 // 既然是二级页，返回箭头是合理的（也能用系统返回键）——
                 // 底栏一直都在，不需要靠顶栏箭头当唯一出口。
@@ -85,7 +87,7 @@ fun MeScreen(
                     // Phase 13：原来的 ⚙️ 设置入口已移除 —— 设置现在从底栏「更多」进入，
                     // 「我」页再放一个入口只会让人以为两处设置的东西不一样。
                     IconButton(onClick = { navController.navigate(Screen.EditGpaRule.route) }) {
-                        Icon(Icons.Filled.Tune, contentDescription = "GPA 规则")
+                        Icon(Icons.Rounded.Tune, contentDescription = "GPA 规则")
                     }
                 },
             )

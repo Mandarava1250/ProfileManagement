@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -101,16 +101,26 @@ fun TaskItem(
                     )
                 }
             }
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(priorityColor),
-            )
+            // Phase 14：优先级不只靠色点 —— 单靠颜色分不出高/中/低，
+            // 补一个文字标签（与编辑页共用同一套 TaskPriority.label）
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(priorityColor),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = task.priority.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = priorityColor,
+                )
+            }
             Spacer(Modifier.width(4.dp))
             IconButton(onClick = onDelete) {
                 Icon(
-                    imageVector = Icons.Default.Delete,
+                    imageVector = Icons.Rounded.Delete,
                     contentDescription = "删除",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

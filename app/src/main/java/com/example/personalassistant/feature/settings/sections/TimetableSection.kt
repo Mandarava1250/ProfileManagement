@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Today
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,7 +39,7 @@ fun TimetableSection(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ModuleHeader(
-            icon = Icons.Filled.Today,
+            icon = Icons.Rounded.Today,
             title = "课表",
             subtitle = "学期与课时表",
         )
@@ -60,7 +60,7 @@ fun TimetableSection(
                     Text("打开课表设置")
                     Spacer8()
                     Icon(
-                        Icons.Filled.ChevronRight,
+                        Icons.Rounded.ChevronRight,
                         contentDescription = null,
                     )
                 }

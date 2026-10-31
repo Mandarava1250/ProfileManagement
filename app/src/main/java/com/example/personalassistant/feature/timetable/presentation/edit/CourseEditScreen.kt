@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.timetable.presentation.edit
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,9 +25,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Done
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -45,7 +46,8 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -96,8 +98,8 @@ fun CourseEditScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(if (state.isEdit) "编辑课程" else "新增课程") },
+            AppTopBar(
+                title = { Text(if (state.isEdit) stringResource(R.string.course_edit_title) else stringResource(R.string.course_new_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -106,11 +108,11 @@ fun CourseEditScreen(
                 actions = {
                     if (state.isEdit) {
                         IconButton(onClick = viewModel::delete) {
-                            Icon(Icons.Filled.Delete, contentDescription = "删除")
+                            Icon(Icons.Rounded.Delete, contentDescription = "删除")
                         }
                     }
                     IconButton(onClick = { viewModel.save() }, enabled = state.isValid && !state.isSaving) {
-                        Icon(Icons.Filled.Done, contentDescription = "保存")
+                        Icon(Icons.Rounded.Done, contentDescription = "保存")
                     }
                 },
             )
@@ -208,7 +210,7 @@ fun CourseEditScreen(
                         onClick = { viewModel.updateDayOfWeek(idx + 1) },
                         label = { Text(label) },
                         leadingIcon = if (active) {
-                            { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                            { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                         } else null,
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primary,
@@ -245,7 +247,7 @@ fun CourseEditScreen(
                             onClick = { viewModel.updateSemester(name) },
                             label = { Text(name) },
                             leadingIcon = if (active) {
-                                { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                             } else null,
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
@@ -419,7 +421,7 @@ private fun PeriodRow(
                         )
                     },
                     leadingIcon = if (active) {
-                        { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
+                        { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(14.dp)) }
                     } else null,
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,

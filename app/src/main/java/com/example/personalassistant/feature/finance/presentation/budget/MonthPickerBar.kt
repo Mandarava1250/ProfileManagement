@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,7 +40,7 @@ internal fun MonthPickerBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onPrev) {
-            Icon(Icons.Filled.ChevronLeft, contentDescription = "上个月")
+            Icon(Icons.Rounded.ChevronLeft, contentDescription = "上个月")
         }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -61,7 +61,7 @@ internal fun MonthPickerBar(
             }
         }
         IconButton(onClick = onNext) {
-            Icon(Icons.Filled.ChevronRight, contentDescription = "下个月")
+            Icon(Icons.Rounded.ChevronRight, contentDescription = "下个月")
         }
     }
 }

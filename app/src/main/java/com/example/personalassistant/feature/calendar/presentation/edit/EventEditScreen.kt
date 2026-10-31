@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.calendar.presentation.edit
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +17,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.Notes
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.Error
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Notes
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,7 +31,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -78,8 +80,8 @@ fun EventEditScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("事件详情") },
+            AppTopBar(
+                title = { Text(stringResource(R.string.event_detail_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -159,7 +161,7 @@ private fun EventDetailContent(
 
         // 日期
         InfoRow(
-            icon = Icons.Filled.CalendarMonth,
+            icon = Icons.Rounded.CalendarMonth,
             label = "日期",
             value = DateUtils.formatDate(event.date),
         )
@@ -167,13 +169,13 @@ private fun EventDetailContent(
         // 时间
         if (event.hasTimeRange && event.startTime != null && event.endTime != null) {
             InfoRow(
-                icon = Icons.Filled.NotificationsActive,
+                icon = Icons.Rounded.NotificationsActive,
                 label = "时间",
                 value = "${DateUtils.formatTime(event.startTime)} - ${DateUtils.formatTime(event.endTime)}",
             )
         } else {
             InfoRow(
-                icon = Icons.Filled.CalendarMonth,
+                icon = Icons.Rounded.CalendarMonth,
                 label = "时间",
                 value = "全天",
             )
@@ -182,7 +184,7 @@ private fun EventDetailContent(
         // 分类
         if (!categoryName.isNullOrBlank()) {
             InfoRow(
-                icon = Icons.Filled.Category,
+                icon = Icons.Rounded.Category,
                 label = "分类",
                 value = categoryName,
             )
@@ -191,7 +193,7 @@ private fun EventDetailContent(
         // 备注
         event.note?.takeIf { it.isNotBlank() }?.let { note ->
             InfoRow(
-                icon = Icons.Filled.Notes,
+                icon = Icons.Rounded.Notes,
                 label = "备注",
                 value = note,
             )
@@ -200,7 +202,7 @@ private fun EventDetailContent(
         // 提醒
         event.reminder?.let { minutes ->
             InfoRow(
-                icon = Icons.Filled.NotificationsActive,
+                icon = Icons.Rounded.NotificationsActive,
                 label = "提醒",
                 value = when {
                     minutes == 0 -> "准时提醒"
@@ -218,7 +220,7 @@ private fun EventDetailContent(
             onClick = onOpenInCalendar,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Icon(Icons.Filled.CalendarMonth, contentDescription = null)
+            Icon(Icons.Rounded.CalendarMonth, contentDescription = null)
             Spacer(modifier = Modifier.size(8.dp))
             Text("在日历中打开")
         }
@@ -266,7 +268,7 @@ private fun NotFoundView(message: String, onBack: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
-            imageVector = Icons.Filled.Error,
+            imageVector = Icons.Rounded.Error,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(48.dp),

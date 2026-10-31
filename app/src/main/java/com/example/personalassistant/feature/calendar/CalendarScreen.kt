@@ -10,10 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Today
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -26,7 +26,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -99,7 +99,7 @@ fun CalendarScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            AppTopBar(
                 title = { Text(text = headerTitle(viewType, uiState.yearMonth, selectedDate)) },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.goToPrevious() }) {
@@ -108,7 +108,7 @@ fun CalendarScreen(
                 },
                 actions = {
                     IconButton(onClick = { viewModel.goToCurrent() }) {
-                        Icon(Icons.Filled.Today, contentDescription = "回到今天")
+                        Icon(Icons.Rounded.Today, contentDescription = "回到今天")
                     }
                     IconButton(onClick = { viewModel.goToNext() }) {
                         Icon(nextIcon(viewType), contentDescription = "下一个")
@@ -119,7 +119,7 @@ fun CalendarScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { viewModel.startAddEvent() }) {
-                Icon(Icons.Filled.Add, contentDescription = "新建事件")
+                Icon(Icons.Rounded.Add, contentDescription = "新建事件")
             }
         },
     ) { padding ->
@@ -303,15 +303,15 @@ private fun weekRangeLabel(date: Long): String {
 }
 
 private fun prevIcon(viewType: CalendarViewType) = when (viewType) {
-    CalendarViewType.MONTH -> Icons.Filled.ChevronLeft
-    CalendarViewType.WEEK -> Icons.Filled.ChevronLeft
-    CalendarViewType.DAY -> Icons.Filled.ChevronLeft
+    CalendarViewType.MONTH -> Icons.Rounded.ChevronLeft
+    CalendarViewType.WEEK -> Icons.Rounded.ChevronLeft
+    CalendarViewType.DAY -> Icons.Rounded.ChevronLeft
 }
 
 private fun nextIcon(viewType: CalendarViewType) = when (viewType) {
-    CalendarViewType.MONTH -> Icons.Filled.ChevronRight
-    CalendarViewType.WEEK -> Icons.Filled.ChevronRight
-    CalendarViewType.DAY -> Icons.Filled.ChevronRight
+    CalendarViewType.MONTH -> Icons.Rounded.ChevronRight
+    CalendarViewType.WEEK -> Icons.Rounded.ChevronRight
+    CalendarViewType.DAY -> Icons.Rounded.ChevronRight
 }
 
 @Composable
