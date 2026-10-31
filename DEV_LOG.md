@@ -2612,7 +2612,11 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 
 - `gradlew :app:assembleDebug` → **BUILD SUCCESSFUL**
 - `gradlew :app:testDebugUnitTest` → **921 tests, 0 failures**（基线 865 → 921）
-- 模拟器目测（`emulator-5554`）→ 通过
+- 模拟器目测（`emulator-5554`，`pm_ui36` 镜像，2026/10/31）→ 逐项记录见 `docs/manual-verification/phase14-visual-checklist.md`
+  - ✅ 通过：日历（除下列一项）/ 任务 / 课表 / 记账 / 设置 / 深色模式各项
+  - ⚠️ **未确认**：周视图「已完成任务有划线 + 淡化」—— 恰是本轮 P0-1.3 的修复点
+  - ⚠️ **未测**：全局搜索三项（空态 / 无结果 / contentDescription）
+  - 清单结论那一栏勾的是「有问题」而非「全部通过」，问题条目待补
 - commit：`bd62b35`（54 files changed, 6349 insertions）
 
 ### 踩坑笔记
