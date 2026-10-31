@@ -17,9 +17,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -47,6 +49,7 @@ import com.example.personalassistant.feature.task.presentation.components.Quadra
 import com.example.personalassistant.feature.task.presentation.components.RenameQuadrantAliasDialog
 import com.example.personalassistant.feature.task.presentation.components.SortMenu
 import com.example.personalassistant.feature.task.presentation.components.TagFilterBar
+import com.example.personalassistant.feature.task.presentation.components.TaskFilterSheet
 import com.example.personalassistant.feature.task.presentation.components.TaskFilterBar
 import com.example.personalassistant.feature.task.presentation.components.TaskItem
 import com.example.personalassistant.feature.task.presentation.components.TaskMatrixView
@@ -95,35 +98,38 @@ fun TasksTab(
     // Phase 14：删除是破坏性操作 —— 点删除先进确认弹窗，确认后才真删
     var pendingDeleteTask by remember { mutableStateOf<Task?>(null) }
 
+    // Phase 14：筛选与排序底部面板的开关
+    var showFilterSheet by remember { mutableStateOf(false) }
+
+    // Phase 14：筛选按钮上的条件计数 —— 分类 / 标签 / 排序 / 视图各算一条
+    val activeFilterCount = listOf(
+        state.filter !is FilterExpression.All,
+        state.selectedTagId != null,
+        state.sort != TaskSort.DEFAULT,
+        state.displayPreferences.viewMode != TaskViewMode.ALL,
+    ).count { it }
+
     Column(modifier = modifier.fillMaxSize()) {
-        // 顶部 FilterBar（分类）
-        TaskFilterBar(
-            currentFilter = state.filter,
-            currentSort = state.sort,
-            onFilterChange = onFilterChange,
-            onSortClick = onSortClick,
-            // Phase 14：排序菜单已经长在排序按钮上了，这里把显隐与选择接回去
-            sortMenuExpanded = state.sortMenuExpanded,
-            onSortSelected = onSortSelected,
-            onSortDismiss = onSortDismiss,
-        )
-
-        // 顶部 TagFilterBar（Phase 6c：标签云 chip 行；空时自动隐藏）
-        TagFilterBar(
-            tags = state.tagsWithCount,
-            selectedTagId = state.selectedTagId,
-            onTagToggle = onTagToggle,
-            onClear = onClearTag,
-        )
-
-        // Phase 8b'：5 Tab 切换 + 任务计数
-        PriorityTabRow(
-            displayPreferences = state.displayPreferences,
-            activeQuadrantCount = state.groups.byQuadrant.mapValues { it.value.size },
-            onSelectAll = onShowAll,
-            onSelectQuadrant = onSelectQuadrant,
-            onLongPressQuadrant = { q -> renamingQuadrant = q },
-        )
+        // Phase 14：首屏收敛 —— 只留「象限 Tab + 筛选按钮」。
+        // 分类 / 标签 / 排序 / 视图四段折叠进底部筛选面板（见 [TaskFilterSheet]），
+        // 首屏从 5 层控件降到 2 层，列表能往上露出来。
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PriorityTabRow(
+                displayPreferences = state.displayPreferences,
+                activeQuadrantCount = state.groups.byQuadrant.mapValues { it.value.size },
+                onSelectAll = onShowAll,
+                onSelectQuadrant = onSelectQuadrant,
+                onLongPressQuadrant = { q -> renamingQuadrant = q },
+                modifier = Modifier.weight(1f),
+            )
+            FilterEntryButton(
+                activeCount = activeFilterCount,
+                onClick = { showFilterSheet = true },
+            )
+        }
 
         // Phase 14：长按象限重命名是个隐藏手势 —— 给一行常驻提示，
         // 不然没人知道还能这么用
@@ -134,15 +140,33 @@ fun TasksTab(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
         )
 
-        // Phase 8final G2：列表 / 矩阵 布局切换
-        MatrixViewToggle(
-            isMatrixMode = state.displayPreferences.viewMode == TaskViewMode.MATRIX,
-            onSelectList = onShowAll,
-            onSelectMatrix = onShowMatrix,
-        )
-
         // Phase 14：SortMenu 已经挪进 TaskFilterBar（长在排序按钮上），这里不再单独挂一个空 Box
 
+        // Phase 14：筛选与排序底部面板（分类 / 标签 / 排序 / 视图 四段）
+        if (showFilterSheet) {
+            TaskFilterSheet(
+                filter = state.filter,
+                sort = state.sort,
+                onFilterChange = onFilterChange,
+                onSortSelected = onSortSelected,
+                onDismiss = { showFilterSheet = false },
+                tagContent = {
+                    TagFilterBar(
+                        tags = state.tagsWithCount,
+                        selectedTagId = state.selectedTagId,
+                        onTagToggle = onTagToggle,
+                        onClear = onClearTag,
+                    )
+                },
+                viewContent = {
+                    MatrixViewToggle(
+                        isMatrixMode = state.displayPreferences.viewMode == TaskViewMode.MATRIX,
+                        onSelectList = onShowAll,
+                        onSelectMatrix = onShowMatrix,
+                    )
+                },
+            )
+        }
         // Phase 8b'：重命名 dialog
         renamingQuadrant?.let { q ->
             val alias = TaskDisplayPreferences.aliasOf(state.displayPreferences, q)
@@ -373,6 +397,41 @@ private fun TaskListSkeleton() {
                     .height(72.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
             )
+        }
+    }
+}
+
+/**
+ * 首屏的筛选入口按钮 —— 有生效条件时右上角带计数徽标。
+ *
+ * Phase 14：分类 / 标签 / 排序 / 视图都收进面板后，首屏只剩这一个入口，
+ * 徽标告诉用户「现在有条件生效着」，免得以为筛选丢了。
+ */
+@Composable
+private fun FilterEntryButton(activeCount: Int, onClick: () -> Unit) {
+    Box {
+        IconButton(onClick = onClick) {
+            Icon(
+                imageVector = Icons.Rounded.Tune,
+                contentDescription = stringResource(R.string.task_filter_button),
+                tint = if (activeCount > 0) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+        if (activeCount > 0) {
+            Badge(
+                modifier = Modifier.align(Alignment.TopEnd),
+                containerColor = MaterialTheme.colorScheme.primary,
+            ) {
+                Text(
+                    text = "$activeCount",
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
         }
     }
 }

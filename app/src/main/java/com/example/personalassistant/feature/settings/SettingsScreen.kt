@@ -9,10 +9,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import java.io.InputStream
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
@@ -363,11 +367,17 @@ fun SettingsScreen(
             )
         }
         is SettingsViewModel.ResetUiState.Running -> {
-            // 用一个简易的不可关闭进度 dialog
+            // Phase 14：加进度指示 —— 清除要跑一会儿，只有一句「正在清除…」用户不知道卡到哪了
             AlertDialog(
                 onDismissRequest = {},
-                title = { Text("正在清除…") },
-                text = { Text("正在清空 14 张表与全部偏好，请稍候。") },
+                title = { Text(stringResource(R.string.reset_clearing_progress)) },
+                text = {
+                    Column {
+                        Text("正在清空 14 张表与全部偏好，请稍候。")
+                        Spacer(Modifier.height(12.dp))
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                },
                 confirmButton = {},
             )
         }

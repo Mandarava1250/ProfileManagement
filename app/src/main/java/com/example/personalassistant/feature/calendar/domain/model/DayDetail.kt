@@ -12,13 +12,14 @@ import com.example.personalassistant.feature.timetable.domain.model.Course
  * @param dayOfWeek 1=周一, 7=周日（派生自 date）
  * @param events 当日 [com.example.personalassistant.feature.calendar.domain.model.Event] 列表
  *               （已按 isAllDay DESC, startTime ASC 排序）
- * @param tasks 当日未完成 [Task] 列表（按 priority DESC, dueDate ASC）
+ * @param tasks 当日 [Task] 列表（按 priority DESC, dueDate ASC）
+ *               **含已完成任务** —— 日历里勾完的任务要留着，用户手动删除才消失
  * @param courses 当日 [Course] 列表（按 startTime ASC，已过滤周次规则）
  * @param weekNumber 当前学期内的周次（null 表示无学期信息）
  *
  * 涟宝解读：
  * - events 来源：CalendarRepository.observeEventsByDate(date)
- * - tasks 来源：TaskDao.observeBetween(dayStart, dayEnd+1) 过滤 isCompleted = false
+ * - tasks 来源：TaskDao.observeBetweenIncludingCompleted(dayStart, dayEnd-1)（含已完成；区间为半开 [dayStart, 次日 00:00)）
  * - courses 来源：CourseDao.observeByDayOfWeek(dayOfWeek) + 客户端过滤 appliesToWeek(weekNumber)
  * - 三个流在 Repository 里 combine 成 [DayDetail] 后再发出去
  */

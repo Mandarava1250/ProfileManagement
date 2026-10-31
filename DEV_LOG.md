@@ -2533,3 +2533,52 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 - 阶段七收尾：7.1 三个 JVM 单测 + 7.2 Compose UI 测试（需设备在线）+ 7.4 README 全文修订
 - 阶段六剩余：6.3b 任务页筛选底部面板
 - 真机目测：按 `docs/manual-verification/phase14-visual-checklist.md` 逐屏打勾，浅色 / 深色各一轮
+
+## 🧩 2026-10-31 21:30 —— Phase 14 收官：任务页筛选面板 + 阶段七单测
+
+### 状态
+
+- 阶段六 6.3b ✅ 任务页首屏收敛为「象限 Tab + 筛选按钮」，四段条件折叠进底部面板
+- 阶段七 7.1 ✅ 三个 JVM 单测（语义色 token / 底栏 route 白名单 / 周视图时间线），挂在 `3f58211` 之后
+- 阶段七 7.4 ✅ README 修正（开发分支 / Room 版本 / 测试数 / 底部 Tab 表述 / docs 结构树）
+- 阶段七 7.2 ⏳ Compose UI 测试 —— 需要设备在线
+- 阶段五 / 六 验收 ⏳ 真机目测（清单见 `docs/manual-verification/phase14-visual-checklist.md`）
+
+### 已完成的步骤
+
+- 新增 `TaskFilterSheet`：`ModalBottomSheet` 内含分类 / 标签 / 排序 / 视图四段；标签区与视图切换用槽位传入，复用 `TagFilterBar` / `MatrixViewToggle` 原组件
+- 任务页首屏由 5 层控件降到 2 层（象限 Tab + 筛选按钮），筛选按钮带生效条件计数徽标
+- `SortMenu` 的排序文案抽成 `TaskSort.displayLabel()` —— 菜单与面板共用同一套文案，避免两处不同步
+- 「正在清除…」弹窗补 `LinearProgressIndicator` 进度指示
+- `DayDetail` 的 KDoc 更新：tasks 口径改为「含已完成」（实现早已改，注释没跟上）
+- 新增 3 个 JVM 单测；`AppNavHost` 的 `BOTTOM_BAR_ROUTES` 提成 `internal` 并加 `isBottomBarRoute()` 供测试
+
+### 关键变更文件
+
+| 文件 | 改动类型 | 说明 |
+|---|---|---|
+| `feature/task/presentation/components/TaskFilterSheet.kt` | 新建 | 筛选与排序底部面板 |
+| `feature/task/presentation/components/SortOptions.kt` | 新建 | 排序选项文案（菜单与面板共用） |
+| `feature/task/presentation/TasksTab.kt` | 改 | 首屏收敛 + 筛选入口按钮 + 面板接线 |
+| `feature/task/presentation/components/SortMenu.kt` | 改 | 改用 `displayLabel()` |
+| `feature/settings/SettingsScreen.kt` | 改 | 清除进度指示 |
+| `feature/calendar/domain/model/DayDetail.kt` | 改 | KDoc 口径修正 |
+| `navigation/AppNavHost.kt` | 改 | 底栏白名单提成可测 |
+| `core/ui/theme/SemanticColorsTest.kt` | 新建 | 语义色 token 单测 |
+| `navigation/BottomBarRoutesTest.kt` | 新建 | 底栏 route 白名单单测 |
+| `feature/calendar/presentation/WeekTimelineTest.kt` | 新建 | 周视图时间线归属单测 |
+
+### 验证结果
+
+- `./gradlew :app:assembleDebug` ✅ 通过
+- `./gradlew :app:testDebugUnitTest`（全量）：**865 通过 / 0 失败**
+
+### 踩坑笔记
+
+1. **浅色主题下 ink == onContainer 是有意的**（同一个深色既画在普通底也画在浅 container 上）—— 「三值互不相同」的断言在浅色下不成立。改成断言 `container ≠ ink` 与 `container ≠ onContainer`（深浅两套都成立），`ink ≠ onContainer` 只在深色主题断言。
+2. **注释比代码慢一步会误导人** —— `DayDetail` 的 KDoc 一直写着「当日未完成任务」，而数据层早已改成含已完成；写测试的伙伴据此以为「已完成任务在 VM 层拿不到」，白绕了一圈。改代码时记得同步改 KDoc。
+
+### 下一个入口
+
+- 阶段七 7.2：Compose UI 测试（底栏 4+更多、更多面板跳转、日视图三段顺序、周视图列对齐）—— 需设备在线
+- 真机目测：按 `docs/manual-verification/phase14-visual-checklist.md` 逐屏打勾（浅色 / 深色各一轮）

@@ -92,7 +92,7 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
-    val showBottomBar = currentRoute in BOTTOM_BAR_ROUTES
+    val showBottomBar = isBottomBarRoute(currentRoute)
 
     // 「更多」面板的开关状态。放这里而不是底栏组件内部，
     // 是因为 ModalBottomSheet 要渲染在 Scaffold 内容层之上，不能塞进 bottomBar slot。
@@ -307,8 +307,12 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
  *
  * 4 个主 Tab + 「我」+ 「设置」。后两者虽然不再是 Tab，但进入后底栏要留着，
  * 否则用户点进「我」就找不到返回主界面的路（系统返回键能退，但视觉上没有出口）。
+ *
+ * Phase 14 阶段七：改成 internal 并配一个 [isBottomBarRoute]，
+ * 让 JVM 单测（BottomBarRoutesTest）能直接断言这张白名单，
+ * 而不是把实现复制到测试里（复制出来的版本迟早会漂移）。
  */
-private val BOTTOM_BAR_ROUTES = setOf(
+internal val BOTTOM_BAR_ROUTES = setOf(
     Screen.Calendar.route,
     Screen.Tasks.route,
     Screen.Timetable.route,
@@ -316,6 +320,15 @@ private val BOTTOM_BAR_ROUTES = setOf(
     Screen.Me.route,
     Screen.Settings.route,
 )
+
+/**
+ * 某个 route 要不要显示底栏。
+ *
+ * - null（还没有 back stack entry）/ 空串 → false
+ * - 命中 [BOTTOM_BAR_ROUTES] → true
+ */
+internal fun isBottomBarRoute(route: String?): Boolean =
+    route != null && route in BOTTOM_BAR_ROUTES
 
 /**
  * 通知 deeplink 路由白名单（plan 8final §2.1 v2 要求）

@@ -24,6 +24,7 @@
     <string name="action_add">添加</string>
     <string name="action_refresh">刷新</string>
     <string name="action_confirm">确认</string>
+    <string name="action_all">全部</string>
 
     <!-- Settings -->
     <string name="settings_title">设置</string>

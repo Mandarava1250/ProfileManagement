@@ -8,8 +8,8 @@
 ![Language](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin)
 ![Min SDK](https://img.shields.io/badge/minSdk-26-blue)
 ![Target SDK](https://img.shields.io/badge/targetSdk-34-blue)
-![Room](https://img.shields.io/badge/Room%20schema-v10-2ea44f)
-![Tests](https://img.shields.io/badge/tests-598%20JVM%20%2B%206%20instrumented-brightgreen)
+![Room](https://img.shields.io/badge/Room%20schema-v12-2ea44f)
+![Tests](https://img.shields.io/badge/tests-865%20JVM%20%2B%206%20instrumented-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 ---
@@ -22,8 +22,8 @@
 | 包名 / 命名空间 | `com.example.personalassistant` |
 | 版本 | `versionCode 1` / `versionName 0.1.0`（未发 release） |
 | 开发分支 | `feature/phase-14-ui-refresh`（主分支 `Develop`，尚未回合） |
-| 累计 commit | 61 |
-| Room 数据库 | **v10**（14 张表，schema 快照 `app/schemas/…/1.json ~ 10.json` 全量保留） |
+| 累计 commit | 153 |
+| Room 数据库 | **v12**（14 张表，schema 快照 `app/schemas/…/1.json ~ 12.json` 全量保留） |
 | 测试 | **598 JVM 单测** 全绿 + **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ 两个数字都是台账最后一次实测（阶段 Phase 4 / 5 轮）的记录，**本轮未重跑**；Phase 5 的迁移不在那 6 条里 |
 | 台账 | 见 [`DEV_LOG.md`](DEV_LOG.md) —— 全部 Phase 的完成项 / 验证结果 / 踩坑笔记 |
 
@@ -37,7 +37,7 @@
 ### 基础设施
 - Gradle 工程（Kotlin DSL + Version Catalog + KSP），wrapper 已随仓库提供
 - AndroidManifest：**纯离线，无 `INTERNET` 权限**
-- 单 Activity + Navigation Compose + 4 个底部 Tab + 设置入口
+- 单 Activity + Navigation Compose + 底部 4 个 Tab + 第 5 位「更多」面板（我 / 设置）
 - Material 3 主题系统（樱花粉 + 浅色/深色/跟随系统 + Android 12+ 动态色）
 - Room 数据库 + DataStore 偏好设置 + WorkManager 后台调度
 - 通知渠道 4 类（课程 / 任务 / 事件 / 记账）+ Android 13 通知权限引导 UI
@@ -98,7 +98,7 @@
 | 🔜 | 记账页顶部**账户切换快捷入口**（当前只能进设置页换） | 阶段 Phase 3 |
 | 🔜 | 图片 EXIF 旋转处理（附件与头像均未做） | 阶段 Phase 2 |
 | 🔜 | **设置页「清除数据」入口**：旧 README 列为 Phase 6 计划项，本轮已落地（设置页底部红色 Card + 备份建议 + 长按 3 秒确认 + 完成反馈） | 阶段 Phase 6 ✅ |
-| ⏳ | `feature/phase-14-ui-refresh` → `Develop` 回合合并 | 模块 Phase 8h |
+| ⏳ | `feature/phase-14-ui-refresh` → `Develop` 回合合并（Phase 14 UI 收口后） | Phase 14 |
 
 ---
 
@@ -405,6 +405,8 @@ ProfileManagement/
 | [`DEV_LOG.md`](DEV_LOG.md) | **权威进度来源**：逐 Phase 的完成项、验证结果、踩坑笔记、下一步入口 |
 | [`docs/specs/「昔涟个人助手APP」项目需求说明书.md`](docs/specs/) | 需求与功能约束（含零钱池 6.7 等专项规则） |
 | [`docs/plans/`](docs/plans) | 分阶段计划文档（`phase-8-plan.md`、`calendar-7c-plan.md`） |
+| [`docs/verified/`](docs/verified) | 真机 / 模拟器验证留档（每份产物对应一次实测） |
+| [`docs/manual-verification/`](docs/manual-verification) | 人工目测清单（Phase 10 视觉、Phase 14 视觉回归） |
 | `app/schemas/` | Room 各版本 schema 快照，迁移正确性的机械真相 |
 
 ---
