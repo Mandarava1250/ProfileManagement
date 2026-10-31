@@ -361,7 +361,7 @@ private fun isKnownDeepLinkRoute(route: String): Boolean {
  * 4 项每格 90dp，11sp 的两个汉字（20dp）绰绰有余，不用再靠猜图标区分。
  */
 @Composable
-private fun AppBottomBar(
+internal fun AppBottomBar(
     navController: NavHostController,
     currentRoute: String?,
     onMoreClick: () -> Unit,
@@ -415,7 +415,7 @@ private fun AppBottomBar(
  * 「更多」面板的内容：我 / 设置
  */
 @Composable
-private fun MoreMenu(onNavigate: (String) -> Unit) {
+internal fun MoreMenu(onNavigate: (String) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
