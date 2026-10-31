@@ -22,9 +22,9 @@
 | 包名 / 命名空间 | `com.example.personalassistant` |
 | 版本 | `versionCode 1` / `versionName 0.1.0`（未发 release） |
 | 开发分支 | `feature/phase-14-ui-refresh`（主分支 `Develop`，尚未回合） |
-| 累计 commit | 153 |
-| Room 数据库 | **v12**（14 张表，schema 快照 `app/schemas/…/1.json ~ 12.json` 全量保留） |
-| 测试 | **598 JVM 单测** 全绿 + **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ 两个数字都是台账最后一次实测（阶段 Phase 4 / 5 轮）的记录，**本轮未重跑**；Phase 5 的迁移不在那 6 条里 |
+| 累计 commit | 156 |
+| Room 数据库 | **v13**（15 张表，schema 快照 `app/schemas/…/1.json ~ 13.json` 全量保留） |
+| 测试 | **921 JVM 单测** 全绿（99 个测试类，0 失败 / 0 错误）+ **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ JVM 数字是 Phase 15 收尾实测（`app/build/test-results/testDebugUnitTest` 下全量 XML 求和）；instrumented 数字仍是上一轮实测 |
 | 台账 | 见 [`DEV_LOG.md`](DEV_LOG.md) —— 全部 Phase 的完成项 / 验证结果 / 踩坑笔记 |
 
 > ⚠️ 阶段 Phase 5（跨账户转账 + 账户余额 + 预算汇总）当前是 **🟨 进行中**：代码已 push、JVM 全绿，
@@ -52,6 +52,7 @@
 - 优先级 5 档 + 四象限分组（Eisenhower），6 Tab 切换 + 长按自定义档名（DataStore 持久化）
 - 筛选 / 排序 / 拖拽手动排序（`tasks.manualOrder`）/ 重复任务（repeatType + repeatDays）
 - 提醒调度：WorkManager 预排 + AlarmManager 精确触发，节假日感知策略（提前 / 当天 / 跳过）
+- **清单能力**（Phase 15）：分类 / 截止时间 / 优先级 / 金额 / 标签 / 分组筛选排序 / 子任务嵌套（最深 3 层），独立 `ChecklistRepository` + `ChecklistViewModel`
 
 ### 记账（finance）
 - 流水 CRUD + 分类管理（含自定义图标）+ 月度预算 + 每日零钱池（跨天刷新）
@@ -291,15 +292,16 @@ ProfileManagement/
 
 ---
 
-## 🗃 数据库 Schema（Room v12，14 张表）
+## 🗃 数据库 Schema（Room v13，15 张表）
 
 | 表 | 说明 | 引入版本 |
 |----|------|---------|
 | `courses` | 课程（dayOfWeek、startTime/endTime 当天分钟数、weeks） | v1 |
 | `semesters` | 学期（name unique、startDate、endDate、isCurrent） | v1 |
 | `tasks` | 任务（priority、category、repeatType/repeatDays、reminderTime、manualOrder、holidayStrategy） | v1 → v6 |
-| `sub_tasks` | 子任务（parentTaskId、order） | v1 |
+| `sub_tasks` | 子任务（parentTaskId、order、**category / dueDate / priority / amount / parentSubTaskId**） | v1 → **v13** |
 | `tags` / `task_tag_cross_ref` | 标签与任务↔标签关联 | v5（Phase 6c） |
+| `sub_task_tag_cross_ref` | 标签与清单项↔标签关联 | **v13**（Phase 15） |
 | `events` | 日历事件（date、startTime、isAllDay、reminder、categoryId、rrule） | v1 → v8 |
 | `event_categories` | 事件分类（name、color、iconKey、orderIndex） | v7（Phase 8 Sub-step 9） |
 | `transactions` | 记账流水（amount、type、categoryId、date、attachmentUri、accountId、**transferAccountId / transferPairId**） | v1 → **v10** |
@@ -321,6 +323,9 @@ ProfileManagement/
 | v8 | `events.rrule`（RRULE 重复事件） |
 | v9 | `user_profiles` + `transactions.accountId`（记账域按账户隔离，**单列 FK 升复合 FK 需重建表**） |
 | v10 | `transactions.transferAccountId` / `transferPairId` + `user_profiles.initialBalance` + `index_transactions_accountId_type`（纯增量 ADD COLUMN / 索引 / 幂等 INSERT…SELECT） |
+| v11 | `student_profile` 补 `gpaTarget` / `resumeText` 的 DEFAULT，`gpaRuleJson` 落库 |
+| v12 | `student_profile` **重建表**：`gpaRuleJson` 由 NOT NULL 变 nullable + 带 DEFAULT（`ADD COLUMN` 改不了已有列的 NOT NULL / DEFAULT） |
+| v13 | `sub_tasks` 加 `category` / `dueDate` / `priority` / `amount` / `parentSubTaskId` + 新建 `sub_task_tag_cross_ref`（纯增量 ADD COLUMN / 建表 / 索引） |
 
 > ⚠️ `DEV_LOG.md` 早期段落里的部分字段名与快照有出入，**精确列名以 `app/schemas/` 为准**：
 > 快照显示 `tasks.priority` / `tasks.category` 在 **v1 就已存在**（日志写的是「v2→v3 新增」）；

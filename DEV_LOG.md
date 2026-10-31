@@ -2582,3 +2582,45 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 
 - 阶段七 7.2：Compose UI 测试（底栏 4+更多、更多面板跳转、日视图三段顺序、周视图列对齐）—— 需设备在线
 - 真机目测：按 `docs/manual-verification/phase14-visual-checklist.md` 逐屏打勾（浅色 / 深色各一轮）
+
+---
+
+## ✅ Phase 15（2026-11-01 02:32 完成） —— 用户反馈五项 + 清单能力扩展
+
+### 计划来源
+`.cyrene/docs/plan-20261031-223154.md`
+
+### 完成清单
+
+| 组 | 内容 | 关键文件 | 状态 |
+|---|---|---|---|
+| P0-1.1 | 底栏 / 预算横条 / 全局搜索跳流水 / 事件页回日历 —— 四处统一走 `navigateToTab` | `navigation/TabNavigation.kt` | ✅ |
+| P0-1.3 | `TimelineBlock` 补 `isCompleted`，任务块在日 / 周时间轴上变灰 + 划线 | `components/DayTimelineView.kt` | ✅ |
+| P0-1.6 | `Migration_11_12` 改「重建表搬数据」（v11 已有 `gpaRuleJson`，ADD COLUMN 会撞重名） | `core/database/Migration_11_12.kt` | ✅ |
+| P1-2.1/2.2 | 日视图三段之间加分隔线 + 留白；周视图段间留白 + 列间距 2→4dp | `DayCalendarView.kt` / `WeekCalendarView.kt` | ✅ |
+| P1-2.3/2.4 | 月视图右上角「选择月份」→ `MonthPickerSheet`；新增 `CalendarViewModel.goToYearMonth` | `components/MonthPickerSheet.kt` | ✅ |
+| P2-3.x | 清单模块：分类 / 截止 / 优先级 / 金额 / 标签 / 分组 / 子任务嵌套（Room v12 → **v13**） | `Migration_12_13.kt` / `ChecklistRepository` / `ChecklistViewModel` | ✅ |
+
+### 额外挖出并修掉的真 bug
+
+1. **`Migration_11_12` 的 SQL 全部没插值**：Kotlin 里写成 `"\${STUDENT_PROFILE_TABLE}"`（转义了 `$`），运行时 SQL 变成 `ALTER TABLE `${STUDENT_PROFILE_TEMP_TABLE}` RENAME TO ...` —— 引用的是字面表名，一跑就 `no such table`。断言没抓到它，是因为断言在比对整句 SQL 的**字面内容**，而那份字面内容恰好与代码里写的一字不差。教训：迁移断言要比对**结构**（表名 / 列名 / 顺序），不能比对整句字符串。
+2. **事件在时间轴上的位置全是错的**：`Event.startTime` 是 epoch 毫秒（Entity / domain / `EventTimeMapper` 三处一致），但 `DayTimelineView` 与 `WeekCalendarView` 写的是 `event.startTime?.toInt()` —— 毫秒戳截断成 Int 当分钟数用，2026 年的毫秒戳截断后是大乱数。改走 `minuteOfDay()`。
+3. **`minuteOfDay` 注释与实现不符**：注释写「null = 不是当天」，实现只判 00:00（日期过滤在上游）。已对齐。
+4. **`Color(String)` 这个 Compose 重载不存在**：清单分类色点那版用了它。`javap` 打 `ui-graphics 1.6.8` 的 AAR 字节码确认只有 `Color(Int / Long / Float / RGB / RGBA)`，改成自己把 `#RRGGBB` 解析成 ARGB Int。
+
+### 验证结果
+
+- `gradlew :app:assembleDebug` → **BUILD SUCCESSFUL**
+- `gradlew :app:testDebugUnitTest` → **921 tests, 0 failures**（基线 865 → 921）
+- 模拟器目测（`emulator-5554`）→ 通过
+- commit：`bd62b35`（54 files changed, 6349 insertions）
+
+### 踩坑笔记
+
+1. **`single {}` 会因「列名在两条语句里都出现」而炸**：迁移断言用 `statements.single { it.contains("parentSubTaskId") }` 找 `ADD COLUMN`，可索引语句里也带这个列名 → `IllegalArgumentException: Collection contains more than one matching element`。改成按「语句类型 + ADD COLUMN 后的第一个 token」精确定位。
+2. **别把整句 SQL 写进断言**：反引号转义差一个字符就误报（`Migration_11_12StatementsTest` 在 `DROP TABLE` 那句上栽过）。要锁顺序就锁**关键字序列**（DROP / CREATE / INSERT / UPDATE / DROP / ALTER）。
+3. **`Color(String)` 不存在** —— 涉及第三方 API 的重载集合，先 `javap` 再说，别拿记忆当事实。
+4. **`Int * Dp` 没有重载**：`Dp` 只有 `Dp.times(Float / Int)`，`(depth + 1) * 16.dp` 编不过 → 写成 `16.dp * (depth + 1)`。
+5. **Kotlin 字符串模板里的 `\${}` 是字面量**：`"\${TABLE}"` 不会插值，要插值就写 `"${TABLE}"`。迁移 SQL 里手写这个特别危险 —— 编译期无感，运行时才炸。
+6. **批量改文件用 node，别用 PowerShell `-replace`**（默认忽略大小写，容易误伤）。
+7. **文件行尾不统一**：`CalendarScreen.kt` 用 LF，脚本按 CRLF 硬匹配会 MISS —— 批量脚本改用正则。
