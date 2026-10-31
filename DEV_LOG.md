@@ -2462,3 +2462,74 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 
 - **10b / 10c 仍是 🟨**，需要 AVD `google_apis` 镜像（README 顶层已注明）或真机做 instrumented 真跑 + 真人目测（详见 Phase 11 起点候选）。
 - 本轮清除数据功能本身仍需在真机走"新建账户 → 加几条数据 → 清空 → 重新登录"冒烟——AVD `aosp_atd` 镜像全黑屏，真机可用再补。
+
+## 🎨 2026-10-31 20:55 —— Phase 14 阶段五 / 六收口：视觉统一 + 确定性缺陷
+
+### 状态
+
+- 阶段五（视觉统一收口）：✅ 完成并提交 `3f58211`
+- 阶段六（确定性缺陷修复）：✅ 完成并提交（与阶段五同 commit）
+- 阶段七（验证与收口）：7.3 ✅；7.1 / 7.2 / 7.4 部分 ⏳
+
+### 已完成的步骤
+
+**阶段五**
+
+- 新增 `core/ui/components/AppTopBar.kt`：M3 `TopAppBar` + 品牌色渐变，渐变跟随当前主题 `primary`（换主题色时顶栏同步变化），容器色透明化避免盖住渐变
+- 17 处顶栏统一改用 `AppTopBar`；14 处硬编码中文标题改走 `strings.xml`
+- 图标统一到 `Icons.Rounded`（133 处 `Icons.Filled` + 12 处 `Icons.Default`）
+- 新增 `core/ui/components/EmptyState.kt`（插画 + 标题 + 说明 + 主行动按钮）与 4 张矢量插画 `ic_empty_tasks / ic_empty_checklist / ic_empty_timetable / ic_empty_search`，替换任务 / 清单 / 课表 / 搜索四处空态
+- **5.4 状态栏无需改动**：`Theme.kt:73-88` 已是 edge-to-edge 写法（`isAppearanceLightStatusBars = !darkTheme`），由前序 commit 完成
+
+**阶段六**
+
+- FAB 归位到 `Scaffold` 的 `floatingActionButton` slot；任务列表 / 矩阵视图 / 记账列表 `contentPadding` 补 96dp，末条不再被悬浮按钮压住
+- 破坏性操作补确认：任务删除点击后弹确认弹窗；快速替换（整表导入）前弹确认；清除数据弹窗主次按钮对调（「清除全部」为主按钮且用 error 色，「先备份」降为次按钮）
+- 任务页补骨架屏（`TaskListSkeleton`），加载中不再白屏
+- 排序菜单锚到排序按钮本身（原先挂在列表上方一个空 Box 里，弹出来跟按钮对不上号）
+- 标签行第一个 chip 由「全部」改为「不限」，与分类行的「全部」消歧；象限长按重命名加常驻提示文案
+- 优先级不再只靠色点：色点旁补文字标签；分类 / 标签 chip 热区补到 48dp
+
+### 关键变更文件
+
+| 文件 | 改动类型 | 说明 |
+|---|---|---|
+| `core/ui/components/AppTopBar.kt` | 新建 | 统一顶栏（品牌色渐变，跟随主题色） |
+| `core/ui/components/EmptyState.kt` | 新建 | 统一空态组件 |
+| `res/drawable/ic_empty_*.xml`（4 个） | 新建 | 空态矢量插画（用 `?attr/colorPrimary`，深浅色通用） |
+| `res/values/strings.xml` | 改 | 顶栏标题 / 空态文案 / 确认弹窗文案资源化 |
+| `feature/task/TaskScreen.kt` | 改 | FAB 归位 Scaffold slot |
+| `feature/task/presentation/TasksTab.kt` | 改 | 删除确认弹窗、骨架屏、象限提示、contentPadding |
+| `feature/task/presentation/components/TaskFilterBar.kt` | 改 | 排序菜单锚定 + chip 热区 48dp |
+| `feature/task/presentation/components/TagFilterBar.kt` | 改 | 「全部」→「不限」+ 热区 48dp |
+| `feature/task/presentation/components/TaskItem.kt` | 改 | 优先级补文字标签 |
+| `feature/settings/SettingsScreen.kt` | 改 | 快速替换前确认 |
+| `feature/settings/dialogs/ResetDialogs.kt` | 改 | 清除数据弹窗主次按钮对调 |
+| `feature/finance/FinanceScreen.kt` | 改 | 列表 contentPadding 补底部 |
+| `docs/manual-verification/phase14-visual-checklist.md` | 新建 | 视觉回归清单（浅/深 × 6 屏） |
+
+### 验证结果
+
+- `./gradlew :app:assembleDebug` ✅ 通过（4m 36s）
+- `./gradlew :app:testDebugUnitTest`（全量）：见提交输出
+- 真机目测：**未做**（需 `google_apis` 镜像或真机，见 `docs/manual-verification/phase14-visual-checklist.md`）
+
+### 踩坑笔记
+
+1. **PowerShell 的 `-replace` 运算符默认忽略大小写** —— 把 `import androidx.compose.material.icons.filled.Add` 里的 `icons.filled.` 也匹配上，替换成了 `androidx.compose.material.Icons.Rounded.Add`，48 个文件的图标 import 全废（`Unresolved reference Icons`）。`.NET Regex` 构造（`[regex]::new(...)`）与 `String.Replace()` 是区分大小写的，理论上没问题，但在本机 PowerShell 里同样空转；**最后改用 node 脚本做批量替换，一行搞定 48 个文件**。以后在本项目批量改文件一律走 node。
+2. **行号区间替换会留下重复的 `@Composable`** —— 空态替换区间没包含函数上一行的注解，插进去的块又带一个注解 → `This annotation is not repeatable`。改成正则折叠连续重复行。
+3. **material3 的 `TopAppBar` 签名**：`navigationIcon` 在本项目版本里是非空、`actions` 是 `RowScope` lambda —— 封装组件时按 M3 签名写，别想当然。
+4. **`PaddingValues` 的重载互斥**：`horizontal` 不能与 `top` / `bottom` 同时出现，要写 `start` / `end`。
+5. **local state 必须声明在使用之前** —— 快速替换确认弹窗的 state 插在 launcher 之后 → `Unresolved reference`。
+
+### 已知约束
+
+- 阶段六 6.3b「首屏 5 层控件折叠进筛选底部面板」**本轮未做** —— 属于交互结构调整，需要单独一轮并配真机确认。
+- 阶段七 7.1（语义色 token / 底栏白名单 / 周视图时间线单测）、7.2（Compose UI 测试）、7.4（README 全文修订）尚未完成。
+- 图标统一后有 7 处 deprecation warning（`ArrowBack` / `Notes` / `MenuBook` / `Sort` 等建议用 AutoMirrored 版本），本轮未动（改 AutoMirrored 会影响 RTL 表现，需要单独验证）。
+
+### 下一个入口
+
+- 阶段七收尾：7.1 三个 JVM 单测 + 7.2 Compose UI 测试（需设备在线）+ 7.4 README 全文修订
+- 阶段六剩余：6.3b 任务页筛选底部面板
+- 真机目测：按 `docs/manual-verification/phase14-visual-checklist.md` 逐屏打勾，浅色 / 深色各一轮

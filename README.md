@@ -21,7 +21,7 @@
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用（纯离线） |
 | 包名 / 命名空间 | `com.example.personalassistant` |
 | 版本 | `versionCode 1` / `versionName 0.1.0`（未发 release） |
-| 开发分支 | `feature/phase-8-reminder`（主分支 `Develop`，尚未回合） |
+| 开发分支 | `feature/phase-14-ui-refresh`（主分支 `Develop`，尚未回合） |
 | 累计 commit | 61 |
 | Room 数据库 | **v10**（14 张表，schema 快照 `app/schemas/…/1.json ~ 10.json` 全量保留） |
 | 测试 | **598 JVM 单测** 全绿 + **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ 两个数字都是台账最后一次实测（阶段 Phase 4 / 5 轮）的记录，**本轮未重跑**；Phase 5 的迁移不在那 6 条里 |
@@ -98,7 +98,7 @@
 | 🔜 | 记账页顶部**账户切换快捷入口**（当前只能进设置页换） | 阶段 Phase 3 |
 | 🔜 | 图片 EXIF 旋转处理（附件与头像均未做） | 阶段 Phase 2 |
 | 🔜 | **设置页「清除数据」入口**：旧 README 列为 Phase 6 计划项，本轮已落地（设置页底部红色 Card + 备份建议 + 长按 3 秒确认 + 完成反馈） | 阶段 Phase 6 ✅ |
-| ⏳ | `feature/phase-8-reminder` → `Develop` 回合合并 | 模块 Phase 8h |
+| ⏳ | `feature/phase-14-ui-refresh` → `Develop` 回合合并 | 模块 Phase 8h |
 
 ---
 
@@ -291,7 +291,7 @@ ProfileManagement/
 
 ---
 
-## 🗃 数据库 Schema（Room v10，14 张表）
+## 🗃 数据库 Schema（Room v12，14 张表）
 
 | 表 | 说明 | 引入版本 |
 |----|------|---------|
