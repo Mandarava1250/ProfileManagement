@@ -24,6 +24,7 @@ import com.example.personalassistant.feature.task.domain.usecase.ObserveTasksByQ
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -116,6 +117,11 @@ class TaskRepositoryImpl @Inject constructor(
                 .toList()
                 .sortedWith(sort.toComparator())
         }
+            // 性能优化：上面这坨「建 tag 索引 + 全量过滤 + 全量排序」是 O(n log n) 的重活，
+            // 原来跑在收集者的上下文里（UI 侧 = 主线程）→ 任务一多就会掉帧。
+            // flowOn 把整条上游（含 combine 的 transform）挪到 IO 线程，
+            // Room 自己的查询仍走 Room 内部 executor，不受影响；产出的数据逐字相同。
+            .flowOn(dispatcher)
     }
 
     // ===== 单点查询 =====
@@ -158,12 +164,22 @@ class TaskRepositoryImpl @Inject constructor(
             dao.setSubTaskCompleted(id, completed)
         }
 
+    /**
+     * Phase 15：新增独立清单项，order **追加到末尾**（max + 1）。
+     *
+     * 旧实现 order 恒为 0 → 所有独立清单项的 order 都是 0，
+     * 新加的项会跟老项挤在一起（排序只能靠 createdAt 兜底，列表看着乱）。
+     * 现在跟 [addSubTaskToTask] 同款做法：取当前最大 order + 1。
+     */
     override suspend fun addStandaloneSubTask(title: String): Long =
         withContext(dispatcher) {
+            val maxOrder = dao.getMaxTopLevelSubTaskOrder() ?: -1
             dao.insertSubTask(
                 SubTaskEntity(
                     parentTaskId = null,
+                    parentSubTaskId = null,
                     title = title,
+                    order = maxOrder + 1,
                 )
             )
         }

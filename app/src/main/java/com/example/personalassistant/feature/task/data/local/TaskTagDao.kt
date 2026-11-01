@@ -74,4 +74,16 @@ interface TaskTagDao {
 
     @Query("SELECT taskId, tagId FROM task_tag_cross_ref")
     suspend fun getAllCrossRefs(): List<TaskTagCrossRef>
+
+    // ==================== 备份导入批量操作 ====================
+    //
+    // ⚠️ 冲突策略必须与 [attach] **逐字一致**（IGNORE ↔ IGNORE）。
+
+    /** 批量挂载标签关联（IGNORE，与 [attach] 一致）。 */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun attachAll(refs: List<TaskTagCrossRef>): List<Long>
+
+    /** 清空任务↔标签关联表（备份导入用）。 */
+    @Query("DELETE FROM task_tag_cross_ref")
+    suspend fun clearCrossRefs(): Int
 }

@@ -2,14 +2,19 @@ package com.example.personalassistant.feature.calendar
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Today
+import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -22,10 +27,12 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,15 +40,20 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.presentation.CalendarViewModel
+import com.example.personalassistant.navigation.Screen
+import com.example.personalassistant.navigation.navigateToTab
 import com.example.personalassistant.feature.calendar.presentation.EventEditState
 import com.example.personalassistant.feature.calendar.presentation.components.DayCalendarView
 import com.example.personalassistant.feature.calendar.presentation.components.DayDetailSheet
 import com.example.personalassistant.feature.calendar.presentation.components.EditEventSheet
 import com.example.personalassistant.feature.calendar.presentation.components.MonthCalendarGrid
+import com.example.personalassistant.feature.calendar.presentation.components.MonthTagList
+import com.example.personalassistant.feature.calendar.presentation.components.MonthPickerSheet
 import com.example.personalassistant.feature.calendar.presentation.components.WeekCalendarView
 import java.time.Instant
 import java.time.LocalDate
@@ -70,12 +82,18 @@ fun CalendarScreen(
     val viewType by viewModel.viewType.collectAsStateWithLifecycle()
     val selectedDate by viewModel.selectedDate.collectAsStateWithLifecycle()
     val selectedDayDetail by viewModel.selectedDayDetail.collectAsStateWithLifecycle()
-    val weekCells by viewModel.weekCells.collectAsStateWithLifecycle()
-    val editingState by viewModel.editingState.collectAsStateWithLifecycle()
+        // 性能优化：原先这里还订阅了 viewModel.weekCells，但全工程无人使用它 ——
+        // 周视图用的是 weekTimeline（课表风格）。留着这条订阅会白白挂起一条
+        // observeMonthSummary(weekStart, weekEndExclusive) 的数据库查询链，故删除。
+        val editingState by viewModel.editingState.collectAsStateWithLifecycle()
     val editorError by viewModel.editorError.collectAsStateWithLifecycle()
     val eventCategories by viewModel.eventCategories.collectAsStateWithLifecycle()
     val showCategoryManager by viewModel.showCategoryManager.collectAsStateWithLifecycle()
     val categoryManagerError by viewModel.categoryManagerError.collectAsStateWithLifecycle()
+    // Phase 14：日视图顶部的预算横条数据
+    val todayOverview by viewModel.todayOverview.collectAsStateWithLifecycle()
+    // Phase 14：周视图（课表风格）数据
+    val weekTimeline by viewModel.weekTimeline.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -86,9 +104,24 @@ fun CalendarScreen(
         }
     }
 
+    // Phase 15 P1-2.3：月份选择器的开关
+    var showMonthPicker by remember { mutableStateOf(false) }
+
+    // Phase 15 P1-2.3：月份选择器（ModalBottomSheet 走独立 dialog 窗口，放在 Scaffold 前后都行）
+    if (showMonthPicker) {
+        MonthPickerSheet(
+            currentYearMonth = uiState.yearMonth,
+            onPick = { year, month ->
+                viewModel.goToYearMonth(year, month)
+                showMonthPicker = false
+            },
+            onDismiss = { showMonthPicker = false },
+        )
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
+            AppTopBar(
                 title = { Text(text = headerTitle(viewType, uiState.yearMonth, selectedDate)) },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.goToPrevious() }) {
@@ -96,8 +129,15 @@ fun CalendarScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.goToCurrent() }) {
-                        Icon(Icons.Filled.Today, contentDescription = "回到今天")
+
+                    // Phase 15 P1-2.3：月视图右上角加「选择月份」—— 原来只能一格格挪
+                    if (viewType == CalendarViewType.MONTH) {
+                        IconButton(onClick = { showMonthPicker = true }) {
+                            Icon(Icons.Rounded.DateRange, contentDescription = "选择月份")
+                        }
+                    }
+IconButton(onClick = { viewModel.goToCurrent() }) {
+                        Icon(Icons.Rounded.Today, contentDescription = "回到今天")
                     }
                     IconButton(onClick = { viewModel.goToNext() }) {
                         Icon(nextIcon(viewType), contentDescription = "下一个")
@@ -108,7 +148,7 @@ fun CalendarScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { viewModel.startAddEvent() }) {
-                Icon(Icons.Filled.Add, contentDescription = "新建事件")
+                Icon(Icons.Rounded.Add, contentDescription = "新建事件")
             }
         },
     ) { padding ->
@@ -140,19 +180,32 @@ fun CalendarScreen(
             // 主视图
             Box(modifier = Modifier.fillMaxSize()) {
                 when (viewType) {
-                    CalendarViewType.MONTH -> MonthCalendarGrid(
-                        cells = uiState.monthCells,
-                        selectedDate = selectedDate,
-                        onDateClick = viewModel::onDateClick,
-                        // Phase 8 Sub-step 9 Step 5：农历角标 map（key = cell.date）
-                        lunarLabels = uiState.monthLunarLabels,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    CalendarViewType.MONTH -> Column(
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        MonthCalendarGrid(
+                            cells = uiState.monthCells,
+                            selectedDate = selectedDate,
+                            onDateClick = viewModel::onDateClick,
+                            // Phase 8 Sub-step 9 Step 5：农历角标 map（key = cell.date）
+                            lunarLabels = uiState.monthLunarLabels,
+                            // Phase 14：网格拿剩余空间（有界高度），不能套 verticalScroll ——
+                            // LazyVerticalGrid 在无限高度约束下会直接崩。
+                            modifier = Modifier.weight(1f),
+                        )
+                        // Phase 14：网格下面用标签列出这一天的日程 / 任务 / 课程
+                        MonthTagList(
+                            dayDetail = selectedDayDetail,
+                            modifier = Modifier.padding(horizontal = AppSpacing.md),
+                            onEventClick = { event -> viewModel.startEditEvent(event) },
+                        )
+                    }
                     CalendarViewType.WEEK -> WeekCalendarView(
-                        cells = weekCells,
+                        timeline = weekTimeline,
                         selectedDate = selectedDate,
                         onDateClick = viewModel::onDateClick,
-                        modifier = Modifier.fillMaxWidth(),
+                        onToggleTask = { task, done -> viewModel.toggleTask(task, done) },
+                        modifier = Modifier.fillMaxSize(),
                     )
                     CalendarViewType.DAY -> {
                         val anchor = selectedDate
@@ -162,6 +215,12 @@ fun CalendarScreen(
                                 date = anchor,
                                 dayDetail = selectedDayDetail,
                                 modifier = Modifier.fillMaxSize(),
+                                // Phase 14：预算横条 + 可直接勾选的今日待办
+                                overview = todayOverview,
+                                onToggleTask = { task, done -> viewModel.toggleTask(task, done) },
+                                // Phase 15 P0-1.1：走 navigateToTab —— 之前是裸 navigate，
+                                // 会把记账页压在日历之上，导致用户点底栏「日历」回不来
+                                onBudgetClick = { navController.navigateToTab(Screen.Finance.route) },
                             )
                         } else {
                             EmptyViewPlaceholder(text = "请回到今天")
@@ -171,21 +230,8 @@ fun CalendarScreen(
             }
         }
 
-        // BottomSheet：MONTH/WEEK 视图点击日期时弹出
-        if (selectedDate != null && viewType != CalendarViewType.DAY) {
-            DayDetailSheet(
-                date = selectedDate!!,
-                dayDetail = selectedDayDetail,
-                // Phase 8 Sub-step 9 Step 4.2：把 viewModel 的冲突 map 透传到 Sheet
-                conflictsByEventId = uiState.savedConflictsByEventId,
-                onDismiss = { viewModel.dismissDayDetail() },
-                onEventClick = { event ->
-                    viewModel.dismissDayDetail()
-                    viewModel.startEditEvent(event)
-                },
-            )
-        }
-
+        // Phase 14：月视图改成「网格 + 标签列表」后，不再弹 DayDetailSheet ——
+        // 标签就在网格下面，多一层弹窗反而挡住视线。
         // Sub-step 5：EditEventSheet（事件编辑器）
         editingState?.let { state ->
             EditEventSheet(
@@ -258,6 +304,8 @@ private fun headerTitle(
         if (parts.size == 2) "${parts[0]} 年 ${parts[1].toInt()} 月" else yearMonth
     }
     CalendarViewType.WEEK -> {
+        // Phase 14：周视图标题显示选中日的完整日期 + 星期几，
+        // 让「今天在哪一天」一眼就有答案，不用去数日期栏。
         if (selectedDate == null) "本周"
         else weekRangeLabel(selectedDate)
     }
@@ -267,30 +315,34 @@ private fun headerTitle(
     }
 }
 
+/**
+ * 周范围标题（周视图用）
+ *
+ * 整周视图下，标题说「这一周是几号到几号」比说某一天更有用 ——
+ * 哪一天是星期几，星期头部那一行已经写得清清楚楚了。
+ */
 private fun weekRangeLabel(date: Long): String {
     val zone = ZoneId.systemDefault()
     val (weekStart, weekEndExclusive) = CalendarViewModel.computeWeekRange(date)
     val start = Instant.ofEpochMilli(weekStart).atZone(zone).toLocalDate()
     val end = Instant.ofEpochMilli(weekEndExclusive - 1).atZone(zone).toLocalDate()
-    val sMonth = start.monthValue
-    val eMonth = end.monthValue
-    return if (sMonth == eMonth) {
-        "${sMonth}月${start.dayOfMonth}日 - ${end.dayOfMonth}日"
+    return if (start.monthValue == end.monthValue) {
+        "${start.monthValue}月${start.dayOfMonth}日 - ${end.dayOfMonth}日"
     } else {
-        "${sMonth}月${start.dayOfMonth}日 - ${eMonth}月${end.dayOfMonth}日"
+        "${start.monthValue}月${start.dayOfMonth}日 - ${end.monthValue}月${end.dayOfMonth}日"
     }
 }
 
 private fun prevIcon(viewType: CalendarViewType) = when (viewType) {
-    CalendarViewType.MONTH -> Icons.Filled.ChevronLeft
-    CalendarViewType.WEEK -> Icons.Filled.ChevronLeft
-    CalendarViewType.DAY -> Icons.Filled.ChevronLeft
+    CalendarViewType.MONTH -> Icons.Rounded.ChevronLeft
+    CalendarViewType.WEEK -> Icons.Rounded.ChevronLeft
+    CalendarViewType.DAY -> Icons.Rounded.ChevronLeft
 }
 
 private fun nextIcon(viewType: CalendarViewType) = when (viewType) {
-    CalendarViewType.MONTH -> Icons.Filled.ChevronRight
-    CalendarViewType.WEEK -> Icons.Filled.ChevronRight
-    CalendarViewType.DAY -> Icons.Filled.ChevronRight
+    CalendarViewType.MONTH -> Icons.Rounded.ChevronRight
+    CalendarViewType.WEEK -> Icons.Rounded.ChevronRight
+    CalendarViewType.DAY -> Icons.Rounded.ChevronRight
 }
 
 @Composable

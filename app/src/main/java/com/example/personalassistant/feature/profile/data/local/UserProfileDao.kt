@@ -47,6 +47,16 @@ interface UserProfileDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(profile: UserProfileEntity): Long
 
+    /**
+     * 批量插入账户（REPLACE，与 [insert] 一致）。
+     *
+     * 备份导入时账户数量很少（个位数），这里的收益主要来自**少一层循环**，
+     * 但接口留着是为了让「逐行插」与「批量插」两条路径的冲突策略写在同一处，
+     * 以后改策略不会只改一边。
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(profiles: List<UserProfileEntity>): List<Long>
+
     @Update
     suspend fun update(profile: UserProfileEntity)
 

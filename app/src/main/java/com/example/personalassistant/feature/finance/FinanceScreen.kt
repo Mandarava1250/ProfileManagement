@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.finance
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,12 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -32,7 +33,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -141,25 +143,25 @@ fun FinanceScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("记账") },
+            AppTopBar(
+                title = { Text(stringResource(R.string.finance_title)) },
                 actions = {
                     IconButton(onClick = { showImportDialog = true }) {
-                        Icon(Icons.Filled.FileUpload, contentDescription = "导入 CSV")
+                        Icon(Icons.Rounded.FileUpload, contentDescription = "导入 CSV")
                     }
                     IconButton(onClick = { viewModel.exportTransactions() }) {
-                        Icon(Icons.Filled.FileDownload, contentDescription = "导出 CSV")
+                        Icon(Icons.Rounded.FileDownload, contentDescription = "导出 CSV")
                     }
                     IconButton(onClick = { showBudgetSheet = true }) {
-                        Icon(Icons.Filled.Settings, contentDescription = "预算设置")
+                        Icon(Icons.Rounded.Settings, contentDescription = "预算设置")
                     }
                     IconButton(onClick = { showCategoryScreen = true }) {
-                        Icon(Icons.Filled.Category, contentDescription = "分类管理")
+                        Icon(Icons.Rounded.Category, contentDescription = "分类管理")
                     }
                     // Phase 5：转账入口。放顶栏而不是 FAB：FAB 是「记一笔收支」，
                     // 转账不是记账而是调拨，两者语义不同不该挤同一个按钮
                     IconButton(onClick = { showTransferSheet = true }) {
-                        Icon(Icons.Filled.SwapHoriz, contentDescription = "账户间转账")
+                        Icon(Icons.Rounded.SwapHoriz, contentDescription = "账户间转账")
                     }
                 },
             )
@@ -169,7 +171,7 @@ fun FinanceScreen(
                 editingTx = null
                 showSheet = true
             }) {
-                Icon(Icons.Filled.Add, contentDescription = "记一笔")
+                Icon(Icons.Rounded.Add, contentDescription = "记一笔")
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) { data -> Snackbar(snackbarData = data) } },
@@ -291,7 +293,7 @@ private fun FinanceContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(contentPadding),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // Phase 9b B2：账户切换条（单账户 / 加载中时组件内部自动不渲染）

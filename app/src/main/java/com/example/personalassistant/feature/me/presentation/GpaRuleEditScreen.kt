@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.me.presentation
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,8 +16,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -28,7 +29,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,8 +64,8 @@ fun GpaRuleEditScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("GPA 规则") },
+            AppTopBar(
+                title = { Text(stringResource(R.string.gpa_rule_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -158,7 +160,7 @@ fun GpaRuleEditScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
+                Icon(Icons.Rounded.Add, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
                 Text("新增一段")
             }
@@ -203,7 +205,7 @@ private fun GradeMappingRow(
                 modifier = Modifier.weight(1f).padding(end = 4.dp),
             )
             IconButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = "删除")
+                Icon(Icons.Rounded.Delete, contentDescription = "删除")
             }
         }
     }

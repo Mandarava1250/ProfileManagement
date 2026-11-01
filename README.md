@@ -8,8 +8,8 @@
 ![Language](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin)
 ![Min SDK](https://img.shields.io/badge/minSdk-26-blue)
 ![Target SDK](https://img.shields.io/badge/targetSdk-34-blue)
-![Room](https://img.shields.io/badge/Room%20schema-v10-2ea44f)
-![Tests](https://img.shields.io/badge/tests-598%20JVM%20%2B%206%20instrumented-brightgreen)
+![Room](https://img.shields.io/badge/Room%20schema-v14-2ea44f)
+![Tests](https://img.shields.io/badge/tests-865%20JVM%20%2B%206%20instrumented-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 ---
@@ -20,11 +20,12 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用（纯离线） |
 | 包名 / 命名空间 | `com.example.personalassistant` |
-| 版本 | `versionCode 1` / `versionName 0.1.0`（未发 release） |
-| 开发分支 | `feature/phase-8-reminder`（主分支 `Develop`，尚未回合） |
-| 累计 commit | 61 |
-| Room 数据库 | **v10**（14 张表，schema 快照 `app/schemas/…/1.json ~ 10.json` 全量保留） |
-| 测试 | **598 JVM 单测** 全绿 + **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ 两个数字都是台账最后一次实测（阶段 Phase 4 / 5 轮）的记录，**本轮未重跑**；Phase 5 的迁移不在那 6 条里 |
+| 版本 | `versionCode 1` / `versionName 0.1.0`（首个 release：`v0.1.0`） |
+| 开发分支 | `Develop`（`feature/phase-14-ui-refresh` 已回合；`main` 为 release 分支） |
+| 累计 commit | 176 |
+| Room 数据库 | **v14**（15 张表，schema 快照 `app/schemas/…/1.json ~ 14.json` 全量保留） |
+| 性能优化 | 五批（索引补全 / 备份批量化 / 重组收敛 / 调度器归位 / WAL + baseline profile）—— 详见 [`DEV_LOG.md`](DEV_LOG.md) 末尾段 |
+| 测试 | **921 JVM 单测** 全绿（99 个测试类，0 失败 / 0 错误）+ **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ JVM 数字是 Phase 15 收尾实测（`app/build/test-results/testDebugUnitTest` 下全量 XML 求和）；instrumented 数字仍是上一轮实测 |
 | 台账 | 见 [`DEV_LOG.md`](DEV_LOG.md) —— 全部 Phase 的完成项 / 验证结果 / 踩坑笔记 |
 
 > ⚠️ 阶段 Phase 5（跨账户转账 + 账户余额 + 预算汇总）当前是 **🟨 进行中**：代码已 push、JVM 全绿，
@@ -37,7 +38,7 @@
 ### 基础设施
 - Gradle 工程（Kotlin DSL + Version Catalog + KSP），wrapper 已随仓库提供
 - AndroidManifest：**纯离线，无 `INTERNET` 权限**
-- 单 Activity + Navigation Compose + 4 个底部 Tab + 设置入口
+- 单 Activity + Navigation Compose + 底部 4 个 Tab + 第 5 位「更多」面板（我 / 设置）
 - Material 3 主题系统（樱花粉 + 浅色/深色/跟随系统 + Android 12+ 动态色）
 - Room 数据库 + DataStore 偏好设置 + WorkManager 后台调度
 - 通知渠道 4 类（课程 / 任务 / 事件 / 记账）+ Android 13 通知权限引导 UI
@@ -52,6 +53,7 @@
 - 优先级 5 档 + 四象限分组（Eisenhower），6 Tab 切换 + 长按自定义档名（DataStore 持久化）
 - 筛选 / 排序 / 拖拽手动排序（`tasks.manualOrder`）/ 重复任务（repeatType + repeatDays）
 - 提醒调度：WorkManager 预排 + AlarmManager 精确触发，节假日感知策略（提前 / 当天 / 跳过）
+- **清单能力**（Phase 15）：分类 / 截止时间 / 优先级 / 金额 / 标签 / 分组筛选排序 / 子任务嵌套（最深 3 层），独立 `ChecklistRepository` + `ChecklistViewModel`
 
 ### 记账（finance）
 - 流水 CRUD + 分类管理（含自定义图标）+ 月度预算 + 每日零钱池（跨天刷新）
@@ -98,7 +100,7 @@
 | 🔜 | 记账页顶部**账户切换快捷入口**（当前只能进设置页换） | 阶段 Phase 3 |
 | 🔜 | 图片 EXIF 旋转处理（附件与头像均未做） | 阶段 Phase 2 |
 | 🔜 | **设置页「清除数据」入口**：旧 README 列为 Phase 6 计划项，本轮已落地（设置页底部红色 Card + 备份建议 + 长按 3 秒确认 + 完成反馈） | 阶段 Phase 6 ✅ |
-| ⏳ | `feature/phase-8-reminder` → `Develop` 回合合并 | 模块 Phase 8h |
+| ⏳ | `feature/phase-14-ui-refresh` → `Develop` 回合合并（Phase 14 UI 收口后） | Phase 14 |
 
 ---
 
@@ -291,15 +293,16 @@ ProfileManagement/
 
 ---
 
-## 🗃 数据库 Schema（Room v10，14 张表）
+## 🗃 数据库 Schema（Room v14，15 张表）
 
 | 表 | 说明 | 引入版本 |
 |----|------|---------|
 | `courses` | 课程（dayOfWeek、startTime/endTime 当天分钟数、weeks） | v1 |
 | `semesters` | 学期（name unique、startDate、endDate、isCurrent） | v1 |
 | `tasks` | 任务（priority、category、repeatType/repeatDays、reminderTime、manualOrder、holidayStrategy） | v1 → v6 |
-| `sub_tasks` | 子任务（parentTaskId、order） | v1 |
+| `sub_tasks` | 子任务（parentTaskId、order、**category / dueDate / priority / amount / parentSubTaskId**） | v1 → **v13** |
 | `tags` / `task_tag_cross_ref` | 标签与任务↔标签关联 | v5（Phase 6c） |
+| `sub_task_tag_cross_ref` | 标签与清单项↔标签关联 | **v13**（Phase 15） |
 | `events` | 日历事件（date、startTime、isAllDay、reminder、categoryId、rrule） | v1 → v8 |
 | `event_categories` | 事件分类（name、color、iconKey、orderIndex） | v7（Phase 8 Sub-step 9） |
 | `transactions` | 记账流水（amount、type、categoryId、date、attachmentUri、accountId、**transferAccountId / transferPairId**） | v1 → **v10** |
@@ -321,6 +324,10 @@ ProfileManagement/
 | v8 | `events.rrule`（RRULE 重复事件） |
 | v9 | `user_profiles` + `transactions.accountId`（记账域按账户隔离，**单列 FK 升复合 FK 需重建表**） |
 | v10 | `transactions.transferAccountId` / `transferPairId` + `user_profiles.initialBalance` + `index_transactions_accountId_type`（纯增量 ADD COLUMN / 索引 / 幂等 INSERT…SELECT） |
+| v11 | `student_profile` 补 `gpaTarget` / `resumeText` 的 DEFAULT，`gpaRuleJson` 落库 |
+| v12 | `student_profile` **重建表**：`gpaRuleJson` 由 NOT NULL 变 nullable + 带 DEFAULT（`ADD COLUMN` 改不了已有列的 NOT NULL / DEFAULT） |
+| v13 | `sub_tasks` 加 `category` / `dueDate` / `priority` / `amount` / `parentSubTaskId` + 新建 `sub_task_tag_cross_ref`（纯增量 ADD COLUMN / 建表 / 索引） |
+| v14 | 纯性能索引补全，**不动表结构 / 列 / 数据 / 外键**：`transactions` 加 `transferPairId` 与 `(accountId, categoryId)` 索引；`tasks` 加 `(isCompleted, priority, dueDate)` 索引；`sub_tasks` 加 `category` 索引 |
 
 > ⚠️ `DEV_LOG.md` 早期段落里的部分字段名与快照有出入，**精确列名以 `app/schemas/` 为准**：
 > 快照显示 `tasks.priority` / `tasks.category` 在 **v1 就已存在**（日志写的是「v2→v3 新增」）；
@@ -405,6 +412,8 @@ ProfileManagement/
 | [`DEV_LOG.md`](DEV_LOG.md) | **权威进度来源**：逐 Phase 的完成项、验证结果、踩坑笔记、下一步入口 |
 | [`docs/specs/「昔涟个人助手APP」项目需求说明书.md`](docs/specs/) | 需求与功能约束（含零钱池 6.7 等专项规则） |
 | [`docs/plans/`](docs/plans) | 分阶段计划文档（`phase-8-plan.md`、`calendar-7c-plan.md`） |
+| [`docs/verified/`](docs/verified) | 真机 / 模拟器验证留档（每份产物对应一次实测） |
+| [`docs/manual-verification/`](docs/manual-verification) | 人工目测清单（Phase 10 视觉、Phase 14 视觉回归） |
 | `app/schemas/` | Room 各版本 schema 快照，迁移正确性的机械真相 |
 
 ---

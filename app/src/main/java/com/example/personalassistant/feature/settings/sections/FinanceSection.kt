@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -62,7 +62,7 @@ fun FinanceSection(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ModuleHeader(
-            icon = Icons.Filled.AccountBalanceWallet,
+            icon = Icons.Rounded.AccountBalanceWallet,
             title = "记账",
             subtitle = "账户、账期与分类",
         )
@@ -159,7 +159,7 @@ fun FinanceSection(
                     ) {
                         Text("分类管理")
                         Spacer8()
-                        Icon(Icons.Filled.ChevronRight, contentDescription = null)
+                        Icon(Icons.Rounded.ChevronRight, contentDescription = null)
                     }
                     OutlinedButton(
                         onClick = onOpenBudget,
@@ -167,7 +167,7 @@ fun FinanceSection(
                     ) {
                         Text("预算设置")
                         Spacer8()
-                        Icon(Icons.Filled.ChevronRight, contentDescription = null)
+                        Icon(Icons.Rounded.ChevronRight, contentDescription = null)
                     }
                 }
             }

@@ -319,8 +319,12 @@ class AppDatabaseMigrationsTest {
      * `gpaTarget`  REAL NOT NULL DEFAULT 4.0,
      * `resumeText` TEXT NOT NULL DEFAULT '',
      * ```
-     * 而 `gpaRuleJson` 是 [Migration_11_12] 用 `ALTER TABLE ADD COLUMN` 加的
-     * （SQLite 的 ADD COLUMN 不附带 NOT NULL → 该列天生 nullable）。
+     * 而 `gpaRuleJson` 在 v12 里是 **nullable + DEFAULT ''**（[Migration_11_12] 重建表时定型）。
+     *
+     * ⚠️ 注意 v11 的两种来源形状完全不同：
+     * - v11 由 Room 自己建的库（= 11.json）：`gpaRuleJson` **已经存在**，且是 `NOT NULL` 无 DEFAULT；
+     * - v10→v11 升级上来的库（[Migration_10_11] 手写建表）：**根本没有** `gpaRuleJson` 这一列。
+     * [Migration_11_12] 用 `PRAGMA table_info` 判源表有没有这一列，两种来源都能收敛到同一张 v12 表。
      *
      * 如果只从 v11 起跑（`createDatabase(TEST_DB, 11)` 用 11.json 建表），
      * 11.json 里的 student_profile 是**Room 自己生成的形状**（无 DEFAULT），
@@ -372,10 +376,10 @@ class AppDatabaseMigrationsTest {
         assertEquals("resumeText 应为 NOT NULL", 1, columns.getValue("resumeText").first)
         assertEquals("resumeText defaultValue 必须为 ''", "''", columns.getValue("resumeText").second)
 
-        // gpaRuleJson：ADD COLUMN 出来的，**nullable** + DEFAULT ''
+        // gpaRuleJson：v12 要求 **nullable** + DEFAULT ''
         assertTrue("gpaRuleJson 列必须存在", columns.containsKey("gpaRuleJson"))
         assertEquals(
-            "gpaRuleJson 是 ADD COLUMN 加的，物理列必然 nullable（notNull=0）",
+            "gpaRuleJson 在 v12 里必须是 nullable（notNull=0）",
             0,
             columns.getValue("gpaRuleJson").first,
         )
@@ -384,11 +388,14 @@ class AppDatabaseMigrationsTest {
         db12.close()
     }
 
-    /** 11→12 单独跑：只加 gpaRuleJson 一列 */
+    /** 11→12 单独跑：把 student_profile 重建成 v12 形状 */
     @Test
     fun migrate11To12ValidatesSchemaAndAddsGpaRuleJson() {
-        // v11 的 student_profile（实测 11.json）：(accountId, gpaTarget, resumeText, updatedAt)
-        // —— 没有 gpaRuleJson
+        // v11 的 student_profile（**实测 11.json**）：
+        // (accountId, gpaTarget, resumeText, gpaRuleJson, updatedAt)
+        // —— gpaRuleJson **已经存在**，且是 `NOT NULL` 无 DEFAULT。
+        //    所以老迁移里那句 `ALTER TABLE ... ADD COLUMN gpaRuleJson` 必然撞
+        //    `duplicate column name: gpaRuleJson`（这正是本轮修的 bug）。
         val db11 = helper.createDatabase(TEST_DB, 11)
         db11.close()
 
@@ -401,9 +408,9 @@ class AppDatabaseMigrationsTest {
             while (c.moveToNext()) {
                 if (c.getString(1) == "gpaRuleJson") {
                     found = true
-                    // notnull: 0 —— ADD COLUMN 出来的列天生 nullable
+                    // notnull: 0 —— v12 要求 nullable（v11 的 NOT NULL 形状必须被改掉）
                     assertEquals(
-                        "gpaRuleJson 由 ADD COLUMN 加出，物理列必然 nullable",
+                        "gpaRuleJson 在 v12 里必须是 nullable",
                         0,
                         c.getInt(3),
                     )

@@ -267,6 +267,47 @@ interface FinanceDao {
     @Query("DELETE FROM daily_pools WHERE id = :id")
     suspend fun deleteDailyPoolById(id: Long)
 
+    // ==================== 备份导入批量操作（Phase 8 Sub-step 4 同款口径） ====================
+    //
+    // 导入一个备份 = 清空 N 张表 + 灌入 N 张表。原来是「先把整表读回内存，再逐行删 / 逐行插」，
+    // 10 万行流水就是 10 万次读 + 10 万次 DELETE + 10 万次 bind+execute。
+    // 下面的批量接口把 IO 往返从 O(N) 压到 O(1)：一次 DELETE FROM、一次批量 INSERT。
+    //
+    // ⚠️ 冲突策略必须与对应的单条方法**逐字一致**（REPLACE ↔ REPLACE），
+    //    否则同一份备份在「逐行」与「批量」两条路径下会得到不同的落库结果。
+
+    /** 批量插入流水（REPLACE，与 [insertTransaction] 一致）。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTransactions(txs: List<TransactionEntity>): List<Long>
+
+    /** 批量插入分类（REPLACE，与 [insertCategory] 一致）。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCategories(categories: List<CategoryEntity>): List<Long>
+
+    /** 批量写入月度预算（REPLACE，与 [setMonthlyBudget] 一致）。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMonthlyBudgets(budgets: List<MonthlyBudgetEntity>): List<Long>
+
+    /** 批量写入每日零钱池（REPLACE，与 [insertDailyPool] 一致）。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDailyPools(pools: List<DailyPoolEntity>): List<Long>
+
+    /** 清空流水表（备份导入用；语义等价于「读回全表再逐行删」，但只有 1 次 IO）。 */
+    @Query("DELETE FROM transactions")
+    suspend fun clearTransactions(): Int
+
+    /** 清空分类表。 */
+    @Query("DELETE FROM categories")
+    suspend fun clearCategories(): Int
+
+    /** 清空月度预算表。 */
+    @Query("DELETE FROM monthly_budgets")
+    suspend fun clearMonthlyBudgets(): Int
+
+    /** 清空每日零钱池表。 */
+    @Query("DELETE FROM daily_pools")
+    suspend fun clearDailyPools(): Int
+
     // ==================== Phase 3：删账户用的整账户清理 ====================
     // 仅由 AccountRepository 在「确认删除账户」时使用；4 条必须带 accountId，
     // 否则会把别的账户数据一起清掉。

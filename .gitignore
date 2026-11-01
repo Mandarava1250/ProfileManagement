@@ -16,6 +16,8 @@ captures/
 # Keystore
 *.jks
 *.keystore
+# 签名口令（含明文密码，绝不入库）
+keystore.properties
 
 # Backup
 *.bak

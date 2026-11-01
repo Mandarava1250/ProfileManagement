@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -123,7 +123,7 @@ private fun AccountChipAvatar(account: AccountSwitcherItem) {
         )
     } else {
         Icon(
-            imageVector = Icons.Filled.Person,
+            imageVector = Icons.Rounded.Person,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
         )

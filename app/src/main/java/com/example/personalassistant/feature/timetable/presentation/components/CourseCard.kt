@@ -16,9 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.Place
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.timetable.domain.model.Course
 
@@ -52,7 +53,7 @@ fun CourseCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 2.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(AppRadii.chip))
             .background(cardColor.copy(alpha = 0.18f))
             .clickable(onClick = onClick)
             .padding(6.dp),
@@ -85,7 +86,7 @@ fun CourseCard(
             if (course.teacher.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Filled.Person,
+                        imageVector = Icons.Rounded.Person,
                         contentDescription = null,
                         modifier = Modifier.size(11.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -103,7 +104,7 @@ fun CourseCard(
             if (course.location.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Filled.Place,
+                        imageVector = Icons.Rounded.Place,
                         contentDescription = null,
                         modifier = Modifier.size(11.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,

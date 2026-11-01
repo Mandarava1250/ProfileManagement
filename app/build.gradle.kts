@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +8,17 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.compose)
 }
+
+// ===== Release 签名 =====
+// keystore.properties 与 *.jks 都不进版本库（见 .gitignore）。
+// 没配签名时 release 依然能构建，只是产物未签名 —— 手机装不上（这是有意的失败，不是静默降级）。
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+val hasReleaseSigning = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.example.personalassistant"
@@ -22,6 +35,19 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -34,6 +60,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 有 keystore 才签名；没有则保持未签名（不静默换 debug key —— 那样会让正式包无法覆盖安装）
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
@@ -140,6 +168,10 @@ dependencies {
 
     // ---- Image loading (Coil — Phase 2 附件缩略图) ----
     implementation(libs.coil.compose)
+
+    // ---- Baseline Profile（AndroidX ProfileInstaller 运行时）----
+    // 接收并安装系统/Play 下发的 ART baseline profile，让 AOT 编译器提前编译启动热路径。
+    implementation(libs.androidx.profileinstaller)
 
     // ---- Test ----
     testImplementation(libs.junit)

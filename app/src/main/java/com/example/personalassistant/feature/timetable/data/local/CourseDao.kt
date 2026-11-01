@@ -103,6 +103,24 @@ interface CourseDao {
     suspend fun getAllCourses(): List<CourseEntity>
 
     /**
+     * 一次拿多个 dayOfWeek 的课程（性能优化）。
+     *
+     * 月汇总原本要对 1..7 各 observe 一次（共 7 条独立 Room 查询），
+     * 这里改成单条 `IN` 查询 —— 查询次数 7 → 1，结果等价。
+     *
+     * ⚠️ 排序与 [observeByDayOfWeek] 保持一致：两者都不加 ORDER BY，
+     * 走 SQLite 自然序（rowid），所以同一个 dayOfWeek 内部的相对顺序前后完全相同。
+     */
+    @Query("SELECT * FROM courses WHERE dayOfWeek IN (:days)")
+    fun observeByDayOfWeekIn(days: List<Int>): Flow<List<CourseEntity>>
+
+    /**
+     * 清空课程表（备份导入用；等价于「读回全表再逐行删」，但只有 1 次 IO）。
+     */
+    @Query("DELETE FROM courses")
+    suspend fun clearAll(): Int
+
+    /**
      * 把 semester 列中等于 [oldName] 的引用替换为 [newName]。
      * 用 @Query 直接做批量更新，避免一条条 update 的 N 次事务。
      */
@@ -118,6 +136,18 @@ interface SemesterDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(semester: SemesterEntity): Long
+
+    /**
+     * 批量插入学期（REPLACE，与 [insert] 一致）。
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(semesters: List<SemesterEntity>): List<Long>
+
+    /**
+     * 清空学期表（备份导入用；等价于「读回全表再逐行删」，但只有 1 次 IO）。
+     */
+    @Query("DELETE FROM semesters")
+    suspend fun clearAll(): Int
 
     @Update
     suspend fun update(semester: SemesterEntity)

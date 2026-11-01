@@ -185,59 +185,68 @@ class BackupImporter @Inject constructor(
                     val userProfileDao: UserProfileDao = database.userProfileDao()
 
                     // ===== 清空所有表（按 manifest.DEFAULT_TABLES 反序）=====
+                    //
+                    // 每张表一次 `DELETE FROM <table>`。
+                    // 原来是「先把整表读回内存，再逐行 delete」—— 10 万行流水就是
+                    // 10 万次读 + 10 万次 DELETE。整表删除与「读回全表再逐行删」语义完全一致
+                    // （都是把该表清空），但 IO 往返从 O(N) 降到 O(1)。
                     clearTable { holidayDao.clearAll() }
-                    clearTable { financeDao.getAllTransactions().forEach { financeDao.deleteTransactionById(it.id) } }
-                    clearTable { financeDao.getAllDailyPools().forEach { financeDao.deleteDailyPoolById(it.id) } }
-                    clearTable { financeDao.getAllMonthlyBudgets().forEach { financeDao.deleteMonthlyBudgetById(it.id) } }
-                    clearTable { financeDao.getAllCategories().forEach { financeDao.deleteCategoryById(it.id) } }
-                    clearTable { eventDao.getAllEvents().forEach { eventDao.deleteById(it.id) } }
-                    clearTable { taskTagDao.getAllCrossRefs().forEach { taskTagDao.detach(it.taskId, it.tagId) } }
-                    clearTable { tagDao.getAllTags().forEach { tagDao.deleteById(it.id) } }
-                    clearTable { taskDao.getAllSubTasks().forEach { taskDao.deleteById(it.id) } }
-                    clearTable { taskDao.getAllTasks().forEach { taskDao.deleteById(it.id) } }
-                    clearTable { courseDao.getAllCourses().forEach { courseDao.deleteById(it.id) } }
-                    clearTable { semesterDao.getAll().forEach { semesterDao.deleteById(it.id) } }
+                    clearTable { financeDao.clearTransactions() }
+                    clearTable { financeDao.clearDailyPools() }
+                    clearTable { financeDao.clearMonthlyBudgets() }
+                    clearTable { financeDao.clearCategories() }
+                    clearTable { eventDao.clearAll() }
+                    clearTable { taskTagDao.clearCrossRefs() }
+                    clearTable { tagDao.clearTags() }
+                    clearTable { taskDao.clearSubTasks() }
+                    clearTable { taskDao.clearTasks() }
+                    clearTable { courseDao.clearAll() }
+                    clearTable { semesterDao.clearAll() }
                     // 账户表只在备份里确实有内容时才清空（否则会把现有账户连默认账户一起删光）
                     if (payload.userProfiles.isNotEmpty()) {
                         clearTable { userProfileDao.clearAll() }
                     }
 
                     // ===== 按 manifest.DEFAULT_TABLES 顺序插入新数据 =====
+                    //
+                    // 每张表一次批量 INSERT（Room 生成的批量接口内部逐行 bind，
+                    // 冲突策略与对应的单条方法逐字一致 → 落库结果与逐行插完全相同），
+                    // 但省掉了 Kotlin 侧的 N 次往返与 N 次方法调用。
                     if (payload.userProfiles.isNotEmpty()) {
-                        payload.userProfiles.forEach { userProfileDao.insert(it) }
+                        userProfileDao.insertAll(payload.userProfiles)
                     }
                     if (payload.semesters.isNotEmpty()) {
-                        payload.semesters.forEach { semesterDao.insert(it) }
+                        semesterDao.insertAll(payload.semesters)
                     }
                     if (payload.courses.isNotEmpty()) {
                         courseDao.insertAll(payload.courses)
                     }
                     if (payload.tags.isNotEmpty()) {
-                        payload.tags.forEach { tagDao.insert(it) }
+                        tagDao.insertTags(payload.tags)
                     }
                     if (payload.tasks.isNotEmpty()) {
-                        payload.tasks.forEach { taskDao.insert(it) }
+                        taskDao.insertTasks(payload.tasks)
                     }
                     if (payload.subTasks.isNotEmpty()) {
-                        payload.subTasks.forEach { taskDao.insertSubTask(it) }
+                        taskDao.insertSubTasks(payload.subTasks)
                     }
                     if (payload.taskTagCrossRefs.isNotEmpty()) {
-                        payload.taskTagCrossRefs.forEach { taskTagDao.attach(it) }
+                        taskTagDao.attachAll(payload.taskTagCrossRefs)
                     }
                     if (payload.events.isNotEmpty()) {
                         eventDao.insertAll(payload.events)
                     }
                     if (payload.categories.isNotEmpty()) {
-                        payload.categories.forEach { financeDao.insertCategory(it) }
+                        financeDao.insertCategories(payload.categories)
                     }
                     if (payload.monthlyBudgets.isNotEmpty()) {
-                        payload.monthlyBudgets.forEach { financeDao.setMonthlyBudget(it) }
+                        financeDao.insertMonthlyBudgets(payload.monthlyBudgets)
                     }
                     if (payload.dailyPools.isNotEmpty()) {
-                        payload.dailyPools.forEach { financeDao.insertDailyPool(it) }
+                        financeDao.insertDailyPools(payload.dailyPools)
                     }
                     if (payload.transactions.isNotEmpty()) {
-                        payload.transactions.forEach { financeDao.insertTransaction(it) }
+                        financeDao.insertTransactions(payload.transactions)
                     }
                     if (payload.holidays.isNotEmpty()) {
                         holidayDao.insertAll(payload.holidays)
@@ -456,9 +465,9 @@ class BackupImporter @Inject constructor(
         diff: TableDiff<UserProfileEntity>,
     ) {
         when (diff.strategy) {
-            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insert(it) }
+            ImportStrategy.ADD -> dao.insertAll(diff.toAdd)
             ImportStrategy.OVERWRITE -> {
-                diff.toAdd.forEach { dao.insert(it) }
+                dao.insertAll(diff.toAdd)
                 diff.toOverwrite.forEach { existing -> dao.update(existing) }
             }
             ImportStrategy.SKIP -> Unit
@@ -467,9 +476,9 @@ class BackupImporter @Inject constructor(
 
     private suspend fun mergeSemesters(dao: SemesterDao, diff: TableDiff<SemesterEntity>) {
         when (diff.strategy) {
-            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insert(it) }
+            ImportStrategy.ADD -> dao.insertAll(diff.toAdd)
             ImportStrategy.OVERWRITE -> {
-                diff.toAdd.forEach { dao.insert(it) }
+                dao.insertAll(diff.toAdd)
                 diff.toOverwrite.forEach { dao.update(it) }
             }
             ImportStrategy.SKIP -> Unit
@@ -489,13 +498,14 @@ class BackupImporter @Inject constructor(
 
     private suspend fun mergeTags(dao: TagDao, diff: TableDiff<TagEntity>) {
         when (diff.strategy) {
-            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insert(it) }
+            ImportStrategy.ADD -> dao.insertTags(diff.toAdd)
             ImportStrategy.OVERWRITE -> {
                 // TagDao.insert 是 IGNORE 语义（同 normalized name 视为重复）；
                 // OVERWRITE 需要“重建”，所以先按 id 删除旧行再插新行
+                // （删除仍是逐行：标签数量很小，而批量删除要另开一个 IN 查询接口，收益不抵复杂度）
                 diff.toOverwrite.forEach { dao.deleteById(it.id) }
-                diff.toAdd.forEach { dao.insert(it) }
-                diff.toOverwrite.forEach { dao.insert(it) }
+                dao.insertTags(diff.toAdd)
+                dao.insertTags(diff.toOverwrite)
             }
             ImportStrategy.SKIP -> Unit
         }
@@ -503,9 +513,9 @@ class BackupImporter @Inject constructor(
 
     private suspend fun mergeTasks(dao: TaskDao, diff: TableDiff<TaskEntity>) {
         when (diff.strategy) {
-            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insert(it) }
+            ImportStrategy.ADD -> dao.insertTasks(diff.toAdd)
             ImportStrategy.OVERWRITE -> {
-                diff.toAdd.forEach { dao.insert(it) }
+                dao.insertTasks(diff.toAdd)
                 diff.toOverwrite.forEach { dao.update(it) }
             }
             ImportStrategy.SKIP -> Unit
@@ -514,10 +524,10 @@ class BackupImporter @Inject constructor(
 
     private suspend fun mergeSubTasks(dao: TaskDao, diff: TableDiff<SubTaskEntity>) {
         when (diff.strategy) {
-            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insertSubTask(it) }
+            ImportStrategy.ADD -> dao.insertSubTasks(diff.toAdd)
             ImportStrategy.OVERWRITE -> {
-                diff.toAdd.forEach { dao.insertSubTask(it) }
-                diff.toOverwrite.forEach { dao.insertSubTask(it) }
+                dao.insertSubTasks(diff.toAdd)
+                dao.insertSubTasks(diff.toOverwrite)
             }
             ImportStrategy.SKIP -> Unit
         }
@@ -525,9 +535,9 @@ class BackupImporter @Inject constructor(
 
     private suspend fun mergeCrossRefs(dao: TaskTagDao, diff: TableDiff<TaskTagCrossRef>) {
         when (diff.strategy) {
-            ImportStrategy.ADD -> diff.toAdd.forEach { dao.attach(it) }
+            ImportStrategy.ADD -> dao.attachAll(diff.toAdd)
             ImportStrategy.OVERWRITE -> {
-                (diff.toAdd + diff.toOverwrite).forEach { dao.attach(it) }
+                dao.attachAll(diff.toAdd + diff.toOverwrite)
             }
             ImportStrategy.SKIP -> Unit
         }
@@ -546,9 +556,9 @@ class BackupImporter @Inject constructor(
 
     private suspend fun mergeCategories(dao: FinanceDao, diff: TableDiff<CategoryEntity>) {
         when (diff.strategy) {
-            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insertCategory(it) }
+            ImportStrategy.ADD -> dao.insertCategories(diff.toAdd)
             ImportStrategy.OVERWRITE -> {
-                diff.toAdd.forEach { dao.insertCategory(it) }
+                dao.insertCategories(diff.toAdd)
                 diff.toOverwrite.forEach { dao.updateCategory(it) }
             }
             ImportStrategy.SKIP -> Unit
@@ -557,10 +567,10 @@ class BackupImporter @Inject constructor(
 
     private suspend fun mergeMonthlyBudgets(dao: FinanceDao, diff: TableDiff<MonthlyBudgetEntity>) {
         when (diff.strategy) {
-            ImportStrategy.ADD -> diff.toAdd.forEach { dao.setMonthlyBudget(it) }
+            ImportStrategy.ADD -> dao.insertMonthlyBudgets(diff.toAdd)
             ImportStrategy.OVERWRITE -> {
-                diff.toAdd.forEach { dao.setMonthlyBudget(it) }
-                diff.toOverwrite.forEach { dao.setMonthlyBudget(it) }
+                dao.insertMonthlyBudgets(diff.toAdd)
+                dao.insertMonthlyBudgets(diff.toOverwrite)
             }
             ImportStrategy.SKIP -> Unit
         }
@@ -568,10 +578,10 @@ class BackupImporter @Inject constructor(
 
     private suspend fun mergeDailyPools(dao: FinanceDao, diff: TableDiff<DailyPoolEntity>) {
         when (diff.strategy) {
-            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insertDailyPool(it) }
+            ImportStrategy.ADD -> dao.insertDailyPools(diff.toAdd)
             ImportStrategy.OVERWRITE -> {
-                diff.toAdd.forEach { dao.insertDailyPool(it) }
-                diff.toOverwrite.forEach { dao.insertDailyPool(it) }
+                dao.insertDailyPools(diff.toAdd)
+                dao.insertDailyPools(diff.toOverwrite)
             }
             ImportStrategy.SKIP -> Unit
         }
@@ -579,9 +589,9 @@ class BackupImporter @Inject constructor(
 
     private suspend fun mergeTransactions(dao: FinanceDao, diff: TableDiff<TransactionEntity>) {
         when (diff.strategy) {
-            ImportStrategy.ADD -> diff.toAdd.forEach { dao.insertTransaction(it) }
+            ImportStrategy.ADD -> dao.insertTransactions(diff.toAdd)
             ImportStrategy.OVERWRITE -> {
-                diff.toAdd.forEach { dao.insertTransaction(it) }
+                dao.insertTransactions(diff.toAdd)
                 diff.toOverwrite.forEach { dao.updateTransaction(it) }
             }
             ImportStrategy.SKIP -> Unit

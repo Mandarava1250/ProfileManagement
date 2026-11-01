@@ -33,4 +33,16 @@ interface ThemeRepository {
      * 设置 Android 12+ Material You 动态色开关（持久化）
      */
     suspend fun setDynamicColor(enabled: Boolean)
+
+    /**
+     * 设置用户自选主色（持久化）
+     *
+     * @param color ARGB int；传 null 恢复品牌默认蓝
+     */
+    suspend fun setPrimaryColor(color: Int?)
+
+    /**
+     * 设置背景风格（持久化）
+     */
+    suspend fun setBackgroundStyle(style: BackgroundStyle)
 }

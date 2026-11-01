@@ -14,9 +14,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -129,7 +129,7 @@ fun CategoryManagementDialog(
         },
         confirmButton = {
             Button(onClick = { isCreating = true }) {
-                Icon(Icons.Filled.Add, contentDescription = null)
+                Icon(Icons.Rounded.Add, contentDescription = null)
                 Spacer(Modifier.size(4.dp))
                 Text("新建")
             }
@@ -218,7 +218,7 @@ private fun CategoryRow(
         // 编辑按钮
         IconButton(onClick = onEdit) {
             Icon(
-                imageVector = Icons.Filled.ArrowBack, // 任意图标；项目里 ArrowBack 一定有
+                imageVector = Icons.Rounded.ArrowBack, // 任意图标；项目里 ArrowBack 一定有
                 contentDescription = "编辑 ${category.name}",
                 tint = MaterialTheme.colorScheme.primary,
             )
@@ -227,7 +227,7 @@ private fun CategoryRow(
         if (!category.isDefault) {
             IconButton(onClick = onDelete) {
                 Icon(
-                    imageVector = Icons.Filled.Delete,
+                    imageVector = Icons.Rounded.Delete,
                     contentDescription = "删除 ${category.name}",
                     tint = MaterialTheme.colorScheme.error,
                 )

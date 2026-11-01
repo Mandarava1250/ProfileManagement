@@ -13,9 +13,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Today
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,7 +49,7 @@ fun WeekHeaderRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onPrevWeek) {
-            Icon(Icons.Filled.ChevronLeft, contentDescription = "上一周")
+            Icon(Icons.Rounded.ChevronLeft, contentDescription = "上一周")
         }
 
         Spacer(Modifier.width(4.dp))
@@ -63,13 +63,13 @@ fun WeekHeaderRow(
         )
 
         IconButton(onClick = onNextWeek) {
-            Icon(Icons.Filled.ChevronRight, contentDescription = "下一周")
+            Icon(Icons.Rounded.ChevronRight, contentDescription = "下一周")
         }
 
         if (!isCurrentWeek) {
             Spacer(Modifier.width(4.dp))
             IconButton(onClick = onJumpToCurrent) {
-                Icon(Icons.Filled.Today, contentDescription = "回到本周")
+                Icon(Icons.Rounded.Today, contentDescription = "回到本周")
             }
         }
     }

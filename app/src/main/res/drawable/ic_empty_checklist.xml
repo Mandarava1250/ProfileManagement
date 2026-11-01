@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 14：空态插画 —— 清单（勾选框 + 对勾） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="112dp"
+    android:height="112dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+
+    <!-- 三个勾选框 -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorOnSurfaceVariant"
+        android:strokeWidth="3"
+        android:pathData="M20,32 h12 v12 h-12 z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorOnSurfaceVariant"
+        android:strokeWidth="3"
+        android:pathData="M20,54 h12 v12 h-12 z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorOnSurfaceVariant"
+        android:strokeWidth="3"
+        android:pathData="M20,76 h12 v12 h-12 z" />
+
+    <!-- 两个对勾 -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorPrimary"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M22,37 l4,4 l7,-8" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorPrimary"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M22,59 l4,4 l7,-8" />
+
+    <!-- 两条横线 -->
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:pathData="M42,36 h46 a3,3 0 0 1 0,6 h-46 a3,3 0 0 1 0,-6 z" />
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:pathData="M42,58 h46 a3,3 0 0 1 0,6 h-46 a3,3 0 0 1 0,-6 z" />
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:fillAlpha="0.28"
+        android:pathData="M42,80 h28 a3,3 0 0 1 0,6 h-28 a3,3 0 0 1 0,-6 z" />
+</vector>

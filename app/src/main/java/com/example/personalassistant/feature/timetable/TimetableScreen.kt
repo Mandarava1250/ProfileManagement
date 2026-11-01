@@ -1,6 +1,8 @@
 package com.example.personalassistant.feature.timetable
 
 import androidx.compose.foundation.layout.Arrangement
+import com.example.personalassistant.core.ui.components.EmptyState
+import androidx.compose.material3.Button
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,9 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -26,7 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -66,7 +68,7 @@ import java.time.LocalDate
  * Phase 10：TopAppBar 加 actions slot 放导入按钮
  *
  * 之前 AppBar 只有 title，没有 actions 槽，用户找不到怎么批量导入课表（从教务系统 /
- * ICS 文件 / Excel 等导入）。补一个 `Icons.Filled.FileUpload` 图标按钮作为入口，
+ * ICS 文件 / Excel 等导入）。补一个 `Icons.Rounded.FileUpload` 图标按钮作为入口，
  * 后续接解析逻辑；现在点这条接入。点击后通过已有 SnackbarHost 给个友好提示，
  * 这样 UI 占位和后续实现可以分开演进。
  */
@@ -96,7 +98,7 @@ fun TimetableScreen(
     Scaffold(
         topBar = {
             Column {
-                TopAppBar(
+                AppTopBar(
                     title = { Text(stringResource(R.string.tab_timetable)) },
                     actions = {
                         // Phase 10：右上角导入入口 —— 之前 AppBar 只有左侧 title，actions 槽空着。
@@ -115,7 +117,7 @@ fun TimetableScreen(
                             modifier = Modifier.padding(end = 4.dp),
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.FileUpload,
+                                imageVector = Icons.Rounded.FileUpload,
                                 contentDescription = stringResource(R.string.timetable_action_import),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
@@ -126,7 +128,7 @@ fun TimetableScreen(
                             modifier = Modifier.padding(end = 4.dp),
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Settings,
+                                imageVector = Icons.Rounded.Settings,
                                 contentDescription = "课表设置",
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
@@ -170,7 +172,7 @@ fun TimetableScreen(
                 },
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Add,
+                    imageVector = Icons.Rounded.Add,
                     contentDescription = if (state.semesters.isEmpty())
                         "新建学期"
                     else stringResource(R.string.timetable_add_course),
@@ -213,12 +215,18 @@ fun TimetableScreen(
             // 修法（A2）：外层 Row 左边补一个等宽 Spacer，
             // 让 DayHeaderRow 只占「剩余宽度」，与 grid 的 7 列共享同一套宽度基准。
             // 轴宽常量从 TimetableGrid 导出，两边引用同一个值，杜绝以后再漂。
+            // 本周起点：应用存活期间保持不变 —— remember 一次即可，
+            // 免得每次重组都取两次当前时间再算一遍周偏移
+            val currentWeekStart = remember {
+                LocalDate.now().minusDays(((LocalDate.now().dayOfWeek.value - 1).toLong()))
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Spacer(Modifier.width(TIMETABLE_AXIS_WIDTH))
                 DayHeaderRow(
-                    weekStart = LocalDate.now().minusDays(((LocalDate.now().dayOfWeek.value - 1).toLong())),
+                    weekStart = currentWeekStart,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -227,9 +235,12 @@ fun TimetableScreen(
 
             Spacer(Modifier.height(4.dp))
 
-            // 按 dayOfWeek 分组
-            val coursesByDay: Map<Int, List<Course>> = (1..7).associateWith { day ->
-                state.courses.filter { it.dayOfWeek == day }
+            // 按 dayOfWeek 分组：课程列表没变时分组结果也不会变，缓存住，
+            // 免得每次重组都重建 7 组 filter + 7 个新 List
+            val coursesByDay: Map<Int, List<Course>> = remember(state.courses) {
+                (1..7).associateWith { day ->
+                    state.courses.filter { it.dayOfWeek == day }
+                }
             }
 
             TimetableGrid(
@@ -258,18 +269,15 @@ fun TimetableScreen(
 @Composable
 private fun EmptySemesterHint(onCreateSemester: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "还没有学期",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "点击右下角 + 先创建一个学期，再添加课程",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
+        EmptyState(
+            illustration = R.drawable.ic_empty_timetable,
+            title = stringResource(R.string.empty_timetable_title),
+            description = stringResource(R.string.empty_timetable_desc),
+            action = {
+                Button(onClick = onCreateSemester) {
+                    Text(stringResource(R.string.timetable_create_semester))
+                }
+            },
+        )
     }
 }

@@ -4,16 +4,19 @@ package com.example.personalassistant.feature.calendar.domain.model
  * Phase 7c：日历视图类型
  *
  * 三种视图（与 ViewModel 配合切换）：
+ * - DAY：单日时间轴（今日优先，默认落点）
+ * - WEEK：一周横向 + 选中日详情（课表 + 任务 + 时间轴）
  * - MONTH：6×7 月视图，按日期显示事件/任务/课程 badge
- * - WEEK：横向 7 天 + 时间槽，重点看本周排课
- * - DAY：24 小时时间轴，重点看当日完整事件
+ *
+ * **枚举顺序 = 切换器上的显示顺序**（日 / 周 / 月）。
+ * Phase 14 伙伴定调：把「日」放在最前，因为打开 App 最想看的就是今天。
  */
 enum class CalendarViewType {
-    MONTH,
+    DAY,
     WEEK,
-    DAY;
+    MONTH;
 
     companion object {
-        val DEFAULT: CalendarViewType = MONTH
+        val DEFAULT: CalendarViewType = DAY
     }
 }

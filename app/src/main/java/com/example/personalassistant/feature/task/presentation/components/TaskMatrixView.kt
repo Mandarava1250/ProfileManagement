@@ -107,6 +107,12 @@ private fun MatrixGridLayout(
     onDelete: (Task) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // 格子 → 任务列表：矩阵没变时映射也不会变，预先算好一次再缓存，
+    // 别在 forEach 里反复去 matrix 里取
+    val tasksByCell: Map<MatrixCell, List<Task>> = remember(matrix) {
+        MatrixCell.CELLS.associateWith { matrix.tasksOf(it) }
+    }
+
     Column(modifier = modifier.fillMaxSize()) {
         // 未排期区：独立于 2×2，放在矩阵上方（与纵向布局顺序保持一致）
         if (matrix.hasUnscheduled) {
@@ -128,7 +134,7 @@ private fun MatrixGridLayout(
                 rowCells.forEach { cell ->
                     MatrixCellCard(
                         cell = cell,
-                        tasks = matrix.tasksOf(cell),
+                        tasks = tasksByCell[cell].orEmpty(),
                         displayName = aliasOf(displayPreferences, cell.quadrant),
                         onToggleComplete = onToggleComplete,
                         onClickTask = onClickTask,
@@ -185,7 +191,7 @@ private fun MatrixCellCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    contentPadding = PaddingValues(bottom = 8.dp),
+                    contentPadding = PaddingValues(bottom = 96.dp),
                 ) {
                     items(tasks, key = { "cell${cell.position}-${it.id}" }) { task ->
                         MatrixTaskRow(
@@ -212,13 +218,18 @@ private fun MatrixStackedLayout(
     onDelete: (Task) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // 区域 → 任务列表：矩阵没变时映射也不会变，预先算好一次再缓存
+    val tasksByRegion: Map<MatrixRegion, List<Task>> = remember(matrix) {
+        MatrixRegion.VERTICAL_ORDER.associateWith { matrix.tasksOf(it) }
+    }
+
     // 单一滚动容器：区域内任务直接铺开，不再嵌套 LazyColumn
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 8.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp),
     ) {
         MatrixRegion.VERTICAL_ORDER.forEach { region ->
-            val tasks = matrix.tasksOf(region)
+            val tasks = tasksByRegion[region].orEmpty()
             // 未排期区为空时整块省略；4 个格子即使为空也保留占位（避免布局跳动）
             if (region.isInMatrix || tasks.isNotEmpty()) {
                 item(key = "region-header-${region.name}") {

@@ -10,14 +10,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.AttachMoney
-import androidx.compose.material.icons.filled.DeleteForever
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.AttachMoney
+import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -98,7 +98,7 @@ fun AccountSettingsCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Person, contentDescription = null)
+                Icon(Icons.Rounded.Person, contentDescription = null)
                 IconTitleGap()
                 Text("记账账户", style = MaterialTheme.typography.titleMedium)
             }
@@ -131,7 +131,7 @@ fun AccountSettingsCard(
                 onClick = { showCreateDialog = true },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 IconTitleGap()
                 Text("新建账户")
             }
@@ -183,7 +183,7 @@ fun AccountSettingsCard(
     pendingDelete?.let { pending ->
         AlertDialog(
             onDismissRequest = onDismissDelete,
-            icon = { Icon(Icons.Filled.DeleteForever, contentDescription = null) },
+            icon = { Icon(Icons.Rounded.DeleteForever, contentDescription = null) },
             title = { Text("删除账户「${pending.name}」？") },
             text = {
                 Text(
@@ -266,24 +266,24 @@ private fun AccountRow(
         }
         IconButton(onClick = onBalanceClick) {
             Icon(
-                Icons.Filled.AttachMoney,
+                Icons.Rounded.AttachMoney,
                 contentDescription = "设置期初余额",
                 modifier = Modifier.size(18.dp),
             )
         }
         IconButton(onClick = onAvatarClick) {
             Icon(
-                Icons.Filled.PhotoCamera,
+                Icons.Rounded.PhotoCamera,
                 contentDescription = "更换头像",
                 modifier = Modifier.size(18.dp),
             )
         }
         IconButton(onClick = onRename) {
-            Icon(Icons.Filled.Edit, contentDescription = "重命名", modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.Edit, contentDescription = "重命名", modifier = Modifier.size(18.dp))
         }
         IconButton(onClick = onDelete, enabled = canDelete) {
             Icon(
-                Icons.Filled.Delete,
+                Icons.Rounded.Delete,
                 contentDescription = if (canDelete) "删除账户" else "至少保留一个账户，无法删除",
                 modifier = Modifier.size(18.dp),
             )
@@ -294,7 +294,7 @@ private fun AccountRow(
 /**
  * Phase 4：账户头像圆形缩略图（36dp）
  *
- * - 无头像时用 `Icons.Filled.Person` 占位，保证行高一致
+ * - 无头像时用 `Icons.Rounded.Person` 占位，保证行高一致
  * - **本身不可点**（原因见 [AccountRow] 内注释）；有头像时右下角叠一个小的「移除」按钮，
  *   那是独立 IconButton，会自己消费点击，不会泄到整行的 onSwitch
  * - Coil 已在项里（Phase 2 附件缩略图），2.7.0，无需加依赖
@@ -324,7 +324,7 @@ private fun AccountAvatar(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Filled.Person,
+                    Icons.Rounded.Person,
                     contentDescription = "未设置头像",
                     modifier = Modifier.size(36.dp),
                 )
@@ -339,7 +339,7 @@ private fun AccountAvatar(
                     .size(16.dp),
             ) {
                 Icon(
-                    Icons.Filled.Close,
+                    Icons.Rounded.Close,
                     contentDescription = "移除头像",
                     modifier = Modifier.size(14.dp),
                 )

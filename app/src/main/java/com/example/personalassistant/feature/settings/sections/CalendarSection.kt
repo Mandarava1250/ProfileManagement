@@ -6,9 +6,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -46,7 +46,7 @@ fun CalendarSection(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ModuleHeader(
-            icon = Icons.Filled.CalendarMonth,
+            icon = Icons.Rounded.CalendarMonth,
             title = "日历",
             subtitle = "节假日避让与提前提醒",
         )
@@ -59,7 +59,7 @@ fun CalendarSection(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.NotificationsActive, contentDescription = null)
+                    Icon(Icons.Rounded.NotificationsActive, contentDescription = null)
                     Spacer8()
                     Text("智能提醒", style = MaterialTheme.typography.titleMedium)
                 }
@@ -139,7 +139,7 @@ fun CalendarSection(
                     onClick = onSyncHolidays,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Icon(Icons.Filled.Sync, contentDescription = null)
+                    Icon(Icons.Rounded.Sync, contentDescription = null)
                     Spacer8()
                     Text("立即同步节假日")
                 }

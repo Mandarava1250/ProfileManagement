@@ -2,12 +2,10 @@ package com.example.personalassistant.navigation
 
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Checklist
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Checklist
+import androidx.compose.material.icons.rounded.Today
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.personalassistant.R
 
@@ -89,27 +87,38 @@ sealed class Screen(val route: String) {
      *  - 行为：编辑 scaleMax / scaleMin / 百分制→绩点 转换表，保存回 StudentProfile.gpaRule
      */
     data object EditGpaRule : Screen("me/gpa-rule")
+
+    /**
+     * Phase 14：外观设置（主题模式 / 主题色 / 背景）
+     *
+     *  - 入口：「我」页 → 外观
+     *  - 行为：改完即时生效（写 DataStore → 顶层重新套色板）
+     */
+    data object Appearance : Screen("me/appearance")
 }
 
 /**
- * 底部导航 6 个主 Tab
+ * 底部导航 4 个主 Tab（Phase 14：樱花粉 2.0 + 今日优先）
  *
- * Phase 13：把「设置」从「我」页的隐式入口提升为底部第 6 个 Tab，
- * 设置页内部按 课表 / 任务 / 记账 / 日历 / 我的 分组。
+ * Phase 14 之前的形态是 6 个 Tab（课表 / 任务 / 记账 / 日历 / 我 / 设置），
+ * 纯图标、无文字 —— 6 个位置挤在 360dp 上，每个只剩图标，识别成本很高。
  *
- * **一律只显示图标**：6 个 tab 挤在窄屏上，文字标签会把每个位置压得极窄、
- * 字号也跟着缩。图标本身已经能区分（今天 / 清单 / 钱包 / 月历 / 人 / 齿轮），
- * 无障碍名称由图标 contentDescription 承担（见 AppNavHost 的 AppBottomBar）。
+ * 现在的形态：
+ * - 4 个高频功能 Tab：日历 / 任务 / 课表 / 记账，**图标 + 文字标签常显**
+ *   （4 项每格 90dp，11sp 中文标签绰绰有余，不用再猜图标是哪个）
+ * - 第 5 个位置是「更多」，点开在底栏上方弹出面板，里面放「我」和「设置」
+ * - 「我」「设置」的路由（[Screen.Me] / [Screen.Settings]）保留不动，
+ *   deeplink 白名单不受影响
+ *
+ * 「今日」不占 Tab —— 它是日历 Tab 的「日」视图（见 CalendarViewModel.viewType）。
  */
 enum class BottomTab(
     val screen: Screen,
     @StringRes val labelRes: Int,
     val icon: ImageVector,
 ) {
-    Timetable(Screen.Timetable, R.string.tab_timetable, Icons.Filled.Today),
-    Tasks(Screen.Tasks, R.string.tab_tasks, Icons.Filled.Checklist),
-    Finance(Screen.Finance, R.string.tab_finance, Icons.Filled.AccountBalanceWallet),
-    Calendar(Screen.Calendar, R.string.tab_calendar, Icons.Filled.CalendarMonth),
-    Me(Screen.Me, R.string.tab_me, Icons.Filled.Person),
-    Settings(Screen.Settings, R.string.tab_settings, Icons.Filled.Settings);
+    Calendar(Screen.Calendar, R.string.tab_calendar, Icons.Rounded.CalendarMonth),
+    Tasks(Screen.Tasks, R.string.tab_tasks, Icons.Rounded.Checklist),
+    Timetable(Screen.Timetable, R.string.tab_timetable, Icons.Rounded.Today),
+    Finance(Screen.Finance, R.string.tab_finance, Icons.Rounded.AccountBalanceWallet);
 }

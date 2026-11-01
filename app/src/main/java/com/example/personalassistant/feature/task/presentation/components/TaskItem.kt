@@ -1,9 +1,9 @@
 package com.example.personalassistant.feature.task.presentation.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,11 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.example.personalassistant.core.ui.components.AppCard
+import com.example.personalassistant.core.ui.theme.AppSpacing
+import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import java.time.Instant
@@ -40,6 +40,9 @@ import java.time.ZoneId
  * - 勾选 → onToggleComplete
  * - 删除图标 → onDelete
  * - 右侧色点：按优先级着色
+ *
+ * Phase 14：外壳换成 [AppCard]（统一圆角 20dp），
+ * 优先级色改走语义色 token，不再散落在 colorScheme 里凑。
  */
 @Composable
 fun TaskItem(
@@ -49,33 +52,32 @@ fun TaskItem(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Phase 8 Sub-step 2：5 档颜色映射（浅灰/灰/蓝/橙/红）
-    // - LOW → outline (浅灰)
-    // - NORMAL → outlineVariant (灰)
-    // - MEDIUM → tertiary (蓝)
-    // - HIGH → secondary (橙)
-    // - URGENT → error (红)
+    // Phase 14：优先级色收进语义 token（高 / 中 / 低 三档 + 中性）
+    // - URGENT / HIGH → 高
+    // - MEDIUM → 中
+    // - NORMAL → 低
+    // - LOW → 中性灰
+    val appColors = LocalAppColors.current
     val priorityColor = when (task.priority) {
-        TaskPriority.URGENT -> MaterialTheme.colorScheme.error
-        TaskPriority.HIGH -> MaterialTheme.colorScheme.secondary
-        TaskPriority.MEDIUM -> MaterialTheme.colorScheme.tertiary
-        TaskPriority.NORMAL -> MaterialTheme.colorScheme.outlineVariant
+        TaskPriority.URGENT -> appColors.priorityHighInk
+        TaskPriority.HIGH -> appColors.priorityHighInk
+        TaskPriority.MEDIUM -> appColors.priorityMediumInk
+        TaskPriority.NORMAL -> appColors.priorityLowInk
         TaskPriority.LOW -> MaterialTheme.colorScheme.outline
     }
 
-    Card(
+    AppCard(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentPadding = PaddingValues(AppSpacing.xs),
+        // 列表里密排的卡片不要阴影，否则一屏几十个会显得脏
+        elevated = false,
+        onClick = onClick,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         ) {
             Checkbox(
                 checked = task.isCompleted,
@@ -99,16 +101,26 @@ fun TaskItem(
                     )
                 }
             }
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(priorityColor),
-            )
+            // Phase 14：优先级不只靠色点 —— 单靠颜色分不出高/中/低，
+            // 补一个文字标签（与编辑页共用同一套 TaskPriority.label）
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(priorityColor),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = task.priority.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = priorityColor,
+                )
+            }
             Spacer(Modifier.width(4.dp))
             IconButton(onClick = onDelete) {
                 Icon(
-                    imageVector = Icons.Default.Delete,
+                    imageVector = Icons.Rounded.Delete,
                     contentDescription = "删除",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

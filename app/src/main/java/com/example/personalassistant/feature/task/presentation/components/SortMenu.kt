@@ -1,7 +1,7 @@
 package com.example.personalassistant.feature.task.presentation.components
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -32,25 +32,24 @@ fun SortMenu(
         onDismissRequest = onDismiss,
         modifier = modifier,
     ) {
-        SortOption(TaskSort.PRIORITY_DUE_ASC, "优先级 + 截止日期", currentSort, onSortSelected, onDismiss)
-        SortOption(TaskSort.DUE_DATE_ASC, "截止日期（早 → 晚）", currentSort, onSortSelected, onDismiss)
-        SortOption(TaskSort.DUE_DATE_DESC, "截止日期（晚 → 早）", currentSort, onSortSelected, onDismiss)
-        SortOption(TaskSort.CREATED_DESC, "创建时间（新 → 旧）", currentSort, onSortSelected, onDismiss)
-        SortOption(TaskSort.TITLE_ASC, "标题（A → Z）", currentSort, onSortSelected, onDismiss)
-        SortOption(TaskSort.MANUAL_ORDER, "自定义顺序（拖拽）", currentSort, onSortSelected, onDismiss)
+        SortOption(TaskSort.PRIORITY_DUE_ASC, currentSort, onSortSelected, onDismiss)
+        SortOption(TaskSort.DUE_DATE_ASC, currentSort, onSortSelected, onDismiss)
+        SortOption(TaskSort.DUE_DATE_DESC, currentSort, onSortSelected, onDismiss)
+        SortOption(TaskSort.CREATED_DESC, currentSort, onSortSelected, onDismiss)
+        SortOption(TaskSort.TITLE_ASC, currentSort, onSortSelected, onDismiss)
+        SortOption(TaskSort.MANUAL_ORDER, currentSort, onSortSelected, onDismiss)
     }
 }
 
 @Composable
 private fun SortOption(
     sort: TaskSort,
-    label: String,
     current: TaskSort,
     onSelect: (TaskSort) -> Unit,
     onDismiss: () -> Unit,
 ) {
     DropdownMenuItem(
-        text = { Text(label) },
+        text = { Text(sort.displayLabel()) },
         onClick = {
             onSelect(sort)
             onDismiss()
@@ -58,7 +57,7 @@ private fun SortOption(
         trailingIcon = {
             if (sort == current) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = Icons.Rounded.Check,
                     contentDescription = "已选中",
                 )
             }

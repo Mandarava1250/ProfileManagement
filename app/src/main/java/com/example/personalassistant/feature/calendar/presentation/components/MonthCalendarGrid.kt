@@ -3,6 +3,7 @@ package com.example.personalassistant.feature.calendar.presentation.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -16,6 +17,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.presentation.CalendarUiState
+
+/** 顶部周标题（周一 ~ 周日）—— 固定内容，提成文件级常量，别每次重组都新建 List */
+private val WEEKDAYS = listOf("一", "二", "三", "四", "五", "六", "日")
 
 /**
  * Phase 7c：月视图网格（6×7）
@@ -43,8 +47,7 @@ fun MonthCalendarGrid(
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceAround,
         ) {
-            val weekdays = listOf("一", "二", "三", "四", "五", "六", "日")
-            weekdays.forEach { day ->
+            WEEKDAYS.forEach { day ->
                 Text(
                     text = day,
                     style = MaterialTheme.typography.labelMedium,
@@ -57,11 +60,15 @@ fun MonthCalendarGrid(
         }
 
         // 6×7 网格
+        //
+        // Phase 14 修崩溃：LazyVerticalGrid 不能放进 Column(Modifier.verticalScroll()) ——
+        // 外层给了无限高度约束，lazy 容器直接抛 IllegalStateException，App 直接崩。
+        // 现在外层给它一份有界高度（weight(1f) 分配的剩余空间），网格自己在里面滚。
         LazyVerticalGrid(
             columns = GridCells.Fixed(7),
             horizontalArrangement = Arrangement.spacedBy(0.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(),
         ) {
             items(cells, key = { it.date }) { cell ->
                 val label = lunarLabels[cell.date]

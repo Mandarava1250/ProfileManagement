@@ -48,7 +48,13 @@ import kotlinx.serialization.Serializable
         // Phase 3：记账页/统计查询全部以 accountId 为前导列
         Index(value = ["accountId", "date"]),
         // Phase 5：转账列表按 (账户, 类型) 取，前导 accountId 复用 Phase 3 索引语义
-        Index(value = ["accountId", "type"])
+        Index(value = ["accountId", "type"]),
+        // 性能（v14）：删一笔转账要按 transferPairId 精确定位那一对流水，
+        // 之前没有索引 → 每次删转账都是全表扫（流水越多越慢）。
+        Index("transferPairId"),
+        // 性能（v14）：删分类前的引用计数按 (accountId, categoryId) 过滤，
+        // 现有索引里没有这一对列的组合 → COUNT 时同样退化成全表扫。
+        Index(value = ["accountId", "categoryId"])
     ],
     foreignKeys = [
         ForeignKey(

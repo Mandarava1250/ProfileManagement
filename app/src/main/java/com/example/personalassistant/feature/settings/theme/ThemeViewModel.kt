@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -23,6 +24,7 @@ import javax.inject.Inject
 @HiltViewModel
 open class ThemeViewModel @Inject constructor(
     observeThemePreferences: ObserveThemePreferencesUseCase,
+    private val repository: ThemeRepository,
 ) : ViewModel() {
 
     /**
@@ -37,4 +39,32 @@ open class ThemeViewModel @Inject constructor(
             started = SharingStarted.Eagerly,
             initialValue = ThemePreferences(),
         )
+
+    /**
+     * Phase 14：改主题模式（浅色 / 深色 / 跟随系统）
+     */
+    fun setThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { repository.setMode(mode) }
+    }
+
+    /**
+     * Phase 14：改主色。传 null 恢复品牌默认蓝。
+     */
+    fun setPrimaryColor(color: Int?) {
+        viewModelScope.launch { repository.setPrimaryColor(color) }
+    }
+
+    /**
+     * Phase 14：改背景风格
+     */
+    fun setBackgroundStyle(style: BackgroundStyle) {
+        viewModelScope.launch { repository.setBackgroundStyle(style) }
+    }
+
+    /**
+     * Phase 14：Material You 动态色开关
+     */
+    fun setDynamicColor(enabled: Boolean) {
+        viewModelScope.launch { repository.setDynamicColor(enabled) }
+    }
 }

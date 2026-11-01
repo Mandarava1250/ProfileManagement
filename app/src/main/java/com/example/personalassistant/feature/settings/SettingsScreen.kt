@@ -5,13 +5,21 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
+import java.io.InputStream
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -19,7 +27,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -138,6 +147,9 @@ fun SettingsScreen(
     }
 
     // ===== 立即备份 launcher（保存到 SAF）=====
+    // Phase 14：快速替换是破坏性操作 —— 选好文件后先确认，确认前把流留着
+    var pendingImportStream by remember { mutableStateOf<InputStream?>(null) }
+    var showImportConfirm by remember { mutableStateOf(false) }
     val createBackupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri ->
@@ -156,7 +168,9 @@ fun SettingsScreen(
         if (uri != null) {
             val inputStream = context.contentResolver.openInputStream(uri)
             if (inputStream != null) {
-                viewModel.importNow(inputStream) { /* success handled by snackbar */ }
+                // Phase 14：快速替换会清空所有表 —— 先确认，再真的导入
+                pendingImportStream = inputStream
+                showImportConfirm = true
             }
         }
     }
@@ -166,6 +180,7 @@ fun SettingsScreen(
 
     // ===== 提前通知 TimePicker 状态 =====
     var showEveningTimePicker by remember { mutableStateOf(false) }
+
 
     // ===== Phase 4：账户头像 Picker =====
     //
@@ -191,7 +206,7 @@ fun SettingsScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             // Tab 页不放返回箭头 —— 与其它 5 个 Tab 保持一致。
-            TopAppBar(title = { Text("设置") })
+            AppTopBar(title = { Text(stringResource(R.string.settings_title)) })
         },
     ) { padding ->
         Column(
@@ -289,6 +304,47 @@ fun SettingsScreen(
     }
 
     // ===== 清除数据的三阶段弹窗 =====
+    // Phase 14：快速替换前确认 —— 说明会覆盖当前全部数据
+    if (showImportConfirm) {
+        AlertDialog(
+            onDismissRequest = {
+                pendingImportStream?.close()
+                pendingImportStream = null
+                showImportConfirm = false
+            },
+            title = { Text(stringResource(R.string.import_replace_confirm_title)) },
+            text = { Text(stringResource(R.string.import_replace_confirm_desc)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val stream = pendingImportStream
+                        pendingImportStream = null
+                        showImportConfirm = false
+                        if (stream != null) {
+                            viewModel.importNow(stream) { /* success handled by snackbar */ }
+                        }
+                    },
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_confirm),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingImportStream?.close()
+                        pendingImportStream = null
+                        showImportConfirm = false
+                    },
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
     when (val state = resetState) {
         is SettingsViewModel.ResetUiState.Idle -> Unit
         is SettingsViewModel.ResetUiState.SuggestBackup -> {
@@ -311,11 +367,17 @@ fun SettingsScreen(
             )
         }
         is SettingsViewModel.ResetUiState.Running -> {
-            // 用一个简易的不可关闭进度 dialog
+            // Phase 14：加进度指示 —— 清除要跑一会儿，只有一句「正在清除…」用户不知道卡到哪了
             AlertDialog(
                 onDismissRequest = {},
-                title = { Text("正在清除…") },
-                text = { Text("正在清空 14 张表与全部偏好，请稍候。") },
+                title = { Text(stringResource(R.string.reset_clearing_progress)) },
+                text = {
+                    Column {
+                        Text("正在清空 14 张表与全部偏好，请稍候。")
+                        Spacer(Modifier.height(12.dp))
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                },
                 confirmButton = {},
             )
         }

@@ -16,8 +16,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddPhotoAlternate
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -77,7 +77,7 @@ fun AttachmentSection(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.AddPhotoAlternate,
+                    imageVector = Icons.Rounded.AddPhotoAlternate,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
@@ -132,7 +132,7 @@ private fun AttachmentThumbnail(
                 .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f)),
         ) {
             Icon(
-                imageVector = Icons.Filled.Close,
+                imageVector = Icons.Rounded.Close,
                 contentDescription = "删除附件",
                 tint = Color.White,
                 modifier = Modifier.size(16.dp),

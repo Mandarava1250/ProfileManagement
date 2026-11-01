@@ -1,23 +1,23 @@
 package com.example.personalassistant.feature.finance.presentation.util
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.CardGiftcard
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.DirectionsBus
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Flight
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LocalCafe
-import androidx.compose.material.icons.filled.LocalHospital
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Pets
-import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.School
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material.icons.filled.SportsEsports
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.CardGiftcard
+import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.DirectionsBus
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.Flight
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.LocalCafe
+import androidx.compose.material.icons.rounded.LocalHospital
+import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Pets
+import androidx.compose.material.icons.rounded.Restaurant
+import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.ShoppingCart
+import androidx.compose.material.icons.rounded.SportsEsports
+import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -54,31 +54,31 @@ object IconRegistry {
     )
 
     private val ICONS: Map<String, ImageVector> = mapOf(
-        "Restaurant" to Icons.Filled.Restaurant,
-        "DirectionsBus" to Icons.Filled.DirectionsBus,
-        "ShoppingCart" to Icons.Filled.ShoppingCart,
-        "SportsEsports" to Icons.Filled.SportsEsports,
-        "Home" to Icons.Filled.Home,
-        "LocalHospital" to Icons.Filled.LocalHospital,
-        "MenuBook" to Icons.Filled.MenuBook,
-        "Category" to Icons.Filled.Category,
-        "AccountBalanceWallet" to Icons.Filled.AccountBalanceWallet,
+        "Restaurant" to Icons.Rounded.Restaurant,
+        "DirectionsBus" to Icons.Rounded.DirectionsBus,
+        "ShoppingCart" to Icons.Rounded.ShoppingCart,
+        "SportsEsports" to Icons.Rounded.SportsEsports,
+        "Home" to Icons.Rounded.Home,
+        "LocalHospital" to Icons.Rounded.LocalHospital,
+        "MenuBook" to Icons.Rounded.MenuBook,
+        "Category" to Icons.Rounded.Category,
+        "AccountBalanceWallet" to Icons.Rounded.AccountBalanceWallet,
         // 7b 新增
-        "LocalCafe" to Icons.Filled.LocalCafe,
-        "School" to Icons.Filled.School,
-        "Movie" to Icons.Filled.Movie,
-        "Pets" to Icons.Filled.Pets,
-        "Flight" to Icons.Filled.Flight,
-        "CardGiftcard" to Icons.Filled.CardGiftcard,
-        "DirectionsCar" to Icons.Filled.DirectionsCar,
+        "LocalCafe" to Icons.Rounded.LocalCafe,
+        "School" to Icons.Rounded.School,
+        "Movie" to Icons.Rounded.Movie,
+        "Pets" to Icons.Rounded.Pets,
+        "Flight" to Icons.Rounded.Flight,
+        "CardGiftcard" to Icons.Rounded.CardGiftcard,
+        "DirectionsCar" to Icons.Rounded.DirectionsCar,
         // Phase 5：内置「转账」分类的图标。
         // 故意**不**加进 availableIconNames：那是 IconPickerSheet 的渲染源，
         // 加了就等于让用户能给自己建的收支分类选上「转账」图标，
         // 一笔消费被标成转账语义 —— 不该给这个选项。
-        "SwapHoriz" to Icons.Filled.SwapHoriz,
+        "SwapHoriz" to Icons.Rounded.SwapHoriz,
     )
 
-    val DEFAULT_ICON: ImageVector = Icons.Filled.Category
+    val DEFAULT_ICON: ImageVector = Icons.Rounded.Category
 
     /** 把 CategoryEntity.iconName 转成 ImageVector；未知时返回 [DEFAULT_ICON] */
     fun resolve(iconName: String): ImageVector =

@@ -16,8 +16,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -237,7 +237,7 @@ fun EditEventSheet(
                             contentColor = MaterialTheme.colorScheme.error,
                         ),
                     ) {
-                        Icon(Icons.Filled.Delete, contentDescription = null)
+                        Icon(Icons.Rounded.Delete, contentDescription = null)
                         Spacer(Modifier.padding(end = 4.dp))
                         Text("删除")
                     }
@@ -301,7 +301,7 @@ fun CategorySelectorRow(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.Settings,
+                    imageVector = Icons.Rounded.Settings,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                 )

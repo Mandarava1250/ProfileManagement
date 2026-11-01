@@ -16,8 +16,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -221,7 +221,7 @@ private fun DayColumn(
                     if (course.location.isNotBlank()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Filled.LocationOn,
+                                imageVector = Icons.Rounded.LocationOn,
                                 contentDescription = null,
                                 modifier = Modifier.padding(end = 2.dp).size(10.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -237,7 +237,7 @@ private fun DayColumn(
                     if (course.teacher.isNotBlank()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Filled.Person,
+                                imageVector = Icons.Rounded.Person,
                                 contentDescription = null,
                                 modifier = Modifier.padding(end = 2.dp).size(10.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,

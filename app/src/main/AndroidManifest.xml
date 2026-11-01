@@ -85,6 +85,15 @@
             </intent-filter>
         </receiver>
 
+        <!--
+            Baseline Profile 接收器（AndroidX ProfileInstaller）
+            ⚠️ 这里**不**手写 <receiver>：profileinstaller 库的 AndroidManifest 已自带
+               androidx.profileinstaller.ProfileInstallReceiver 声明（exported=true，
+               由系统 DUMP 权限保护），手写一份会与之冲突导致 manifest 合并失败。
+               依赖 androidx.profileinstaller 后自动合并即可。
+               只影响 ART 的 AOT 预编译行为，不改变任何业务逻辑、UI 或数据。
+        -->
+
         <!-- 日程事件提醒精确闹钟接收器（Phase 8 Sub-step 1）-->
         <receiver
             android:name=".feature.calendar.data.reminder.EventReminderReceiver"

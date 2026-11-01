@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.me
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,7 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,13 +26,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -39,6 +43,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Palette
+import com.example.personalassistant.core.ui.components.AppCard
+import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.feature.me.domain.usecase.GpaReverseResult
 import com.example.personalassistant.feature.me.presentation.MeViewModel
 import com.example.personalassistant.feature.me.presentation.MeUiState
@@ -63,8 +71,11 @@ fun MeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("我") },
+            AppTopBar(
+                title = { Text(stringResource(R.string.tab_me)) },
+                // Phase 14：「我」不再是底部 Tab，而是从「更多」面板进入的二级页。
+                // 既然是二级页，返回箭头是合理的（也能用系统返回键）——
+                // 底栏一直都在，不需要靠顶栏箭头当唯一出口。
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -73,10 +84,10 @@ fun MeScreen(
                 actions = {
                     // 右上角：GPA 规则编辑入口（伙伴要求）
                     //
-                    // Phase 13：原来的 ⚙️ 设置入口已移除 —— 设置现在是底部导航的第 6 个 Tab，
+                    // Phase 13：原来的 ⚙️ 设置入口已移除 —— 设置现在从底栏「更多」进入，
                     // 「我」页再放一个入口只会让人以为两处设置的东西不一样。
                     IconButton(onClick = { navController.navigate(Screen.EditGpaRule.route) }) {
-                        Icon(Icons.Filled.Tune, contentDescription = "GPA 规则")
+                        Icon(Icons.Rounded.Tune, contentDescription = "GPA 规则")
                     }
                 },
             )
@@ -87,6 +98,7 @@ fun MeScreen(
             state = state,
             onGpaTargetTextChange = viewModel::updateGpaTarget,
             onResumeChange = viewModel::updateResumeText,
+            onAppearanceClick = { navController.navigate(Screen.Appearance.route) },
         )
     }
 }
@@ -97,6 +109,7 @@ private fun MeContent(
     state: MeUiState,
     onGpaTargetTextChange: (Double) -> Unit,
     onResumeChange: (String) -> Unit,
+    onAppearanceClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -137,6 +150,42 @@ private fun MeContent(
                     text = sub,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // ===== 外观入口（主题色 / 背景）=====
+        // Phase 14：伙伴要求主题色与背景放在「我」这一侧，
+        // 所以入口挂在这里 —— 改外观和改个人档案在同一个心智位置里。
+        AppCard(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onAppearanceClick,
+            contentPadding = PaddingValues(AppSpacing.md),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.Palette,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "外观",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = "主题色与背景",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
