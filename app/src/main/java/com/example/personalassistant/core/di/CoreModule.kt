@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import com.example.personalassistant.core.database.AppDatabase
 import com.example.personalassistant.core.database.DatabaseCallback
 import com.example.personalassistant.core.database.DatabaseCallbackHolder
@@ -82,6 +83,15 @@ object CoreModule {
         )
             .addMigrations(*AppDatabase.ALL_MIGRATIONS)
             .addCallback(callback)
+            // 性能优化：显式声明 WAL 日志模式。
+            //
+            // Room 2.x 的 AUTOMATIC 在 API 16+ 本来就会选 WAL，所以这一步**不改变实际行为**，
+            // 写出来只是把「靠框架默认值」变成「代码里写明」——
+            // 读不阻塞写、崩溃后不易丢数据这两条收益以后不会因为有人改 builder 而悄悄丢掉。
+            //
+            // ⚠️ 本项目不启用多进程（没开 enableMultiInstanceInvalidation），
+            // 备份走的是 JSON 导出/导入而非拷贝 db 文件，所以 WAL 的 -wal/-shm 副产物不影响备份。
+            .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
             .build()
 
         // 3. db 建好之后回填给 callback，让 callback.onCreate 能访问 dao

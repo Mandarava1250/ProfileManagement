@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.calendar.data.repository
 
+import com.example.personalassistant.core.di.IoDispatcher
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.calendar.data.mapper.toDomain
 import com.example.personalassistant.feature.calendar.data.mapper.toEntity
@@ -16,8 +17,10 @@ import com.example.personalassistant.feature.timetable.data.local.CourseDao
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
 import com.example.personalassistant.feature.timetable.data.mapper.toDomain
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
@@ -46,6 +49,7 @@ class CalendarRepositoryImpl @Inject constructor(
     private val taskDao: TaskDao,
     private val courseDao: CourseDao,
     private val semesterDao: SemesterDao,
+    @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : CalendarRepository {
 
     // ===== Event CRUD（Sub-step 1） =====
@@ -147,12 +151,18 @@ class CalendarRepositoryImpl @Inject constructor(
         //   - 后续 Phase 8 可扩展为 Room @Query 返回 List<CourseWithDayCount>
 
         // 先简化为：读所有 dayOfWeek 的 courses（combine 7 个 Flow）
-        val coursesByDayFlow = combine(
-            (1..7).map { dow -> courseDao.observeByDayOfWeek(dow).map { list -> dow to list } },
-        ) { arr ->
-            val map = mutableMapOf<Int, List<CourseEntity>>()
-            arr.forEach { (dow, list) -> map[dow] = list }
-            map
+        val coursesByDayFlow = courseDao.observeByDayOfWeekIn((1..7).toList()).map { list ->
+            // 性能优化：原来对 1..7 各 observe 一次（7 条独立 Room 查询），
+            // 现在改成单条 `IN (1..7)` 查询 —— 查询次数 7 → 1。
+            //
+            // ⚠️ 关键：必须补齐 1..7 全部 key。
+            // 原来 7 次 observe 每条都返回该 dow 的列表（没课就是空 list），
+            // 所以 map 里一定有 7 个 key；下游会遍历每个 dow 对应的「该月所有日期」，
+            // 从而给 summary 补出当月每一天的 entry（哪怕那天没课）——
+            // 若这里漏掉空 dow，那些日期就不会进 summary，
+            // 「今天」的 isToday 标记也会跟着丢。补齐后结果与原来逐字相同。
+            val grouped = list.groupBy { it.dayOfWeek }
+            (1..7).associateWith { dow -> grouped[dow] ?: emptyList() }
         }
 
         return combine(eventsFlow, tasksFlow, coursesByDayFlow, coursesFlow) { events, tasks, coursesByDay, weekNumber ->
@@ -190,6 +200,11 @@ class CalendarRepositoryImpl @Inject constructor(
 
             summary
         }
+            // 性能优化：上面这坨「分组 + 按 dayOfWeek 摊到每一天」是 O(n) 的重活，
+            // 原来跑在收集者的上下文里（UI 侧 = 主线程）→ 月份数据一多就会掉帧。
+            // flowOn 把整条上游（含 combine 的 transform）挪到 IO 线程；
+            // Room 查询仍走 Room 内部 executor，产出的数据逐字相同。
+            .flowOn(dispatcher)
     }
 
     // ===== 工具方法 =====

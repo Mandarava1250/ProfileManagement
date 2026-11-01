@@ -215,12 +215,18 @@ fun TimetableScreen(
             // 修法（A2）：外层 Row 左边补一个等宽 Spacer，
             // 让 DayHeaderRow 只占「剩余宽度」，与 grid 的 7 列共享同一套宽度基准。
             // 轴宽常量从 TimetableGrid 导出，两边引用同一个值，杜绝以后再漂。
+            // 本周起点：应用存活期间保持不变 —— remember 一次即可，
+            // 免得每次重组都取两次当前时间再算一遍周偏移
+            val currentWeekStart = remember {
+                LocalDate.now().minusDays(((LocalDate.now().dayOfWeek.value - 1).toLong()))
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Spacer(Modifier.width(TIMETABLE_AXIS_WIDTH))
                 DayHeaderRow(
-                    weekStart = LocalDate.now().minusDays(((LocalDate.now().dayOfWeek.value - 1).toLong())),
+                    weekStart = currentWeekStart,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -229,9 +235,12 @@ fun TimetableScreen(
 
             Spacer(Modifier.height(4.dp))
 
-            // 按 dayOfWeek 分组
-            val coursesByDay: Map<Int, List<Course>> = (1..7).associateWith { day ->
-                state.courses.filter { it.dayOfWeek == day }
+            // 按 dayOfWeek 分组：课程列表没变时分组结果也不会变，缓存住，
+            // 免得每次重组都重建 7 组 filter + 7 个新 List
+            val coursesByDay: Map<Int, List<Course>> = remember(state.courses) {
+                (1..7).associateWith { day ->
+                    state.courses.filter { it.dayOfWeek == day }
+                }
             }
 
             TimetableGrid(

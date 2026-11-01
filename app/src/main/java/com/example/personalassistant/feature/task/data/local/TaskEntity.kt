@@ -23,7 +23,19 @@ import kotlinx.serialization.Serializable
         Index("dueDate"),
         Index("isCompleted"),
         Index("priority"),
-        Index(value = ["dueDate", "isCompleted"])
+        Index(value = ["dueDate", "isCompleted"]),
+        // 性能（v14）：活跃任务列表 = WHERE isCompleted = 0 ORDER BY priority DESC, dueDate ASC，
+        // 单列索引各管一段，排序仍要另走临时 B-tree；这个复合索引把「过滤 + 排序」一次做完。
+        //
+        // ⚠️ `priority` 必须是 **DESC**：实测（artifacts/explain_tasks_index_search.py，5 万行）
+        // 升序索引 (isCompleted, priority, dueDate) 仍会出现
+        // `USE TEMP B-TREE FOR LAST TERM OF ORDER BY` —— 临时排序没消掉，
+        // 排序方向和索引方向相反时 SQLite 用不上索引的有序性。
+        // 改成 (isCompleted, priority DESC, dueDate) 后计划里 TEMP B-TREE 整个消失。
+        Index(
+            value = ["isCompleted", "priority", "dueDate"],
+            orders = [Index.Order.ASC, Index.Order.DESC, Index.Order.ASC],
+        )
     ]
 )
 @Serializable

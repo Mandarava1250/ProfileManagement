@@ -228,6 +228,29 @@ interface TaskDao {
     @Query("SELECT * FROM sub_tasks")
     suspend fun getAllSubTasks(): List<SubTaskEntity>
 
+    // ==================== 备份导入批量操作 ====================
+    //
+    // 导入备份时整表清空 + 整表灌入，原来走的是「读回全表 → 逐行删 / 逐行插」，
+    // N 行就是 N 次 IO 往返。这里的批量接口把它压成 1 次。
+    //
+    // ⚠️ 冲突策略必须与对应的单条方法**逐字一致**（REPLACE ↔ REPLACE）。
+
+    /** 批量插入任务（REPLACE，与 [insert] 一致）。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTasks(tasks: List<TaskEntity>): List<Long>
+
+    /** 批量插入清单项（REPLACE，与 [insertSubTask] 一致）。 */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSubTasks(subTasks: List<SubTaskEntity>): List<Long>
+
+    /** 清空任务表（备份导入用）。 */
+    @Query("DELETE FROM tasks")
+    suspend fun clearTasks(): Int
+
+    /** 清空清单项表（备份导入用）。 */
+    @Query("DELETE FROM sub_tasks")
+    suspend fun clearSubTasks(): Int
+
     // ===== 统计查询 =====
 
     /** 今日完成率：[0.0, 1.0] */

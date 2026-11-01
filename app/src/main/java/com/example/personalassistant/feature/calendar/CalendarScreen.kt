@@ -82,8 +82,10 @@ fun CalendarScreen(
     val viewType by viewModel.viewType.collectAsStateWithLifecycle()
     val selectedDate by viewModel.selectedDate.collectAsStateWithLifecycle()
     val selectedDayDetail by viewModel.selectedDayDetail.collectAsStateWithLifecycle()
-    val weekCells by viewModel.weekCells.collectAsStateWithLifecycle()
-    val editingState by viewModel.editingState.collectAsStateWithLifecycle()
+        // 性能优化：原先这里还订阅了 viewModel.weekCells，但全工程无人使用它 ——
+        // 周视图用的是 weekTimeline（课表风格）。留着这条订阅会白白挂起一条
+        // observeMonthSummary(weekStart, weekEndExclusive) 的数据库查询链，故删除。
+        val editingState by viewModel.editingState.collectAsStateWithLifecycle()
     val editorError by viewModel.editorError.collectAsStateWithLifecycle()
     val eventCategories by viewModel.eventCategories.collectAsStateWithLifecycle()
     val showCategoryManager by viewModel.showCategoryManager.collectAsStateWithLifecycle()

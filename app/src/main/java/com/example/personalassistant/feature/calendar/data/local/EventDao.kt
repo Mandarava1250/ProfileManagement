@@ -85,4 +85,12 @@ interface EventDao {
     /** 按 categoryId 一次性查询 */
     @Query("SELECT * FROM events WHERE categoryId = :categoryId ORDER BY date ASC, startTime ASC")
     suspend fun getByCategory(categoryId: Long): List<EventEntity>
+
+    // ==================== 备份导入批量操作 ====================
+
+    /**
+     * 清空事件表（备份导入用；等价于「读回全表再逐行删」，但只有 1 次 IO）。
+     */
+    @Query("DELETE FROM events")
+    suspend fun clearAll(): Int
 }

@@ -31,6 +31,9 @@ import kotlinx.serialization.Serializable
         Index(value = ["parentTaskId", "order"]),
         // Phase 15：自引用外键必须有索引，否则 Room 会告警 + 查询退化成全表扫
         Index("parentSubTaskId"),
+        // 性能（v14）：清单项按分类筛选（category = :category），
+        // 没有索引时每次筛选都要扫全表。
+        Index("category"),
     ],
     foreignKeys = [
         ForeignKey(

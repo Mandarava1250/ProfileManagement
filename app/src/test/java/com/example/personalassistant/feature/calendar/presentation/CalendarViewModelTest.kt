@@ -151,9 +151,13 @@ class CalendarViewModelTest {
         override fun observeBySemesterAndDay(semester: String, dayOfWeek: Int): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
         override suspend fun getBySemester(semester: String): List<com.example.personalassistant.feature.timetable.data.local.CourseEntity> = emptyList()
         override fun observeByDayOfWeek(dayOfWeek: Int): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+        // 性能优化：一次拿多个 dayOfWeek 的课程 —— 本测试不触发。
+        override fun observeByDayOfWeekIn(days: List<Int>): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
         override suspend fun countBySemester(semester: String): Int = 0
         override fun searchCourses(keyword: String): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
         override suspend fun getAllCourses(): List<com.example.personalassistant.feature.timetable.data.local.CourseEntity> = emptyList()
+        // 性能优化（v14）：CourseDao 新增的整表清空（备份导入用）—— 本测试不触发。
+        override suspend fun clearAll(): Int = 0
         override fun observeAll(): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
         override suspend fun renameSemesterReferences(oldName: String, newName: String) = Unit
     }
@@ -162,6 +166,10 @@ class CalendarViewModelTest {
         com.example.personalassistant.feature.timetable.data.local.SemesterDao {
         override suspend fun getCurrent(): com.example.personalassistant.feature.timetable.data.local.SemesterEntity? = null
         override suspend fun insert(semester: com.example.personalassistant.feature.timetable.data.local.SemesterEntity): Long = 0
+        // 性能优化（v14）：SemesterDao 新增的批量插入接口（备份导入用）—— 本测试不触发。
+        override suspend fun insertAll(semesters: List<com.example.personalassistant.feature.timetable.data.local.SemesterEntity>): List<Long> = emptyList()
+        // 性能优化（v14）：整表清空（备份导入用）—— 本测试不触发。
+        override suspend fun clearAll(): Int = 0
         override suspend fun update(semester: com.example.personalassistant.feature.timetable.data.local.SemesterEntity) = Unit
         override suspend fun delete(semester: com.example.personalassistant.feature.timetable.data.local.SemesterEntity) = Unit
         override fun observeAll(): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.SemesterEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())

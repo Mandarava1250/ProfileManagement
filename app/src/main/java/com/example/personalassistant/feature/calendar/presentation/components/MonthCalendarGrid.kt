@@ -18,6 +18,9 @@ import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
 import com.example.personalassistant.feature.calendar.presentation.CalendarUiState
 
+/** 顶部周标题（周一 ~ 周日）—— 固定内容，提成文件级常量，别每次重组都新建 List */
+private val WEEKDAYS = listOf("一", "二", "三", "四", "五", "六", "日")
+
 /**
  * Phase 7c：月视图网格（6×7）
  *
@@ -44,8 +47,7 @@ fun MonthCalendarGrid(
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceAround,
         ) {
-            val weekdays = listOf("一", "二", "三", "四", "五", "六", "日")
-            weekdays.forEach { day ->
+            WEEKDAYS.forEach { day ->
                 Text(
                     text = day,
                     style = MaterialTheme.typography.labelMedium,

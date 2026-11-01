@@ -37,6 +37,7 @@ import com.example.personalassistant.R
 import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -93,11 +94,15 @@ fun GlobalSearchScreen(
             )
 
             // 命中分组
+            //
+            // 扁平化 = 拼接 4 个列表 + 按时间倒序排序（O(n log n)），
+            // 只依赖 state.result —— 结果没变就不重算
+            val flattenedHits = remember(state.result) { state.flattened() }
             when {
                 !state.hasQuery -> EmptySearchState(isNoResult = false)
                 !state.hasResults -> EmptySearchState(isNoResult = true)
                 else -> HitList(
-                    hits = state.flattened(),
+                    hits = flattenedHits,
                     onHitClick = onHitClick,
                 )
             }
@@ -156,8 +161,8 @@ private fun HitList(
     hits: List<GlobalSearchHit>,
     onHitClick: (GlobalSearchHit) -> Unit,
 ) {
-    // 按类型分组渲染
-    val grouped = hits.groupBy { it.type }
+    // 按类型分组渲染：命中列表没变时分组结果也不变，缓存住
+    val grouped = remember(hits) { hits.groupBy { it.type } }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp),

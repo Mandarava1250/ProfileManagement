@@ -82,12 +82,25 @@ class FakeCourseDao : CourseDao {
     override fun observeByDayOfWeek(dayOfWeek: Int): Flow<List<CourseEntity>> =
         flowOf(store.values.filter { it.dayOfWeek == dayOfWeek })
 
+    /** 性能优化：一次拿多个 dayOfWeek 的课程（与真 DAO 的 IN 查询语义一致）。 */
+    override fun observeByDayOfWeekIn(days: List<Int>): Flow<List<CourseEntity>> =
+        flowOf(store.values.filter { it.dayOfWeek in days })
+
     override suspend fun countBySemester(semester: String): Int =
         store.values.count { it.semester == semester }
 
     override fun searchCourses(keyword: String): Flow<List<CourseEntity>> = flowOf(emptyList())
 
     override suspend fun getAllCourses(): List<CourseEntity> = store.values.toList()
+
+    /**
+     * 性能优化（v14）：CourseDao 新增的整表清空（备份导入用）。
+     */
+    override suspend fun clearAll(): Int {
+        val size = store.size
+        store.clear()
+        return size
+    }
 
     /**
      * Phase 8 Sub-step 4 备用：批量重命名学期引用
@@ -116,6 +129,21 @@ class FakeSemesterDao(
     override suspend fun insert(semester: SemesterEntity): Long {
         store[semester.name] = semester
         return semester.name.hashCode().toLong()
+    }
+
+    /**
+     * 性能优化（v14）：SemesterDao 新增的批量插入接口（备份导入用）。
+     */
+    override suspend fun insertAll(semesters: List<SemesterEntity>): List<Long> {
+        semesters.forEach { store[it.name] = it }
+        return semesters.map { it.name.hashCode().toLong() }
+    }
+
+    /** 性能优化（v14）：整表清空（备份导入用）。 */
+    override suspend fun clearAll(): Int {
+        val size = store.size
+        store.clear()
+        return size
     }
 
     override suspend fun update(semester: SemesterEntity) {

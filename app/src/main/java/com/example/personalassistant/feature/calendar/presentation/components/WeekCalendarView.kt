@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -378,20 +379,16 @@ private fun WeekDayColumnView(
     val blocks = remember(day, primary) { day.buildWeekBlocks(primary) }
     // 同一天里时间撞上的块平分成几列并排，不然会盖住
     val placed = remember(blocks) { blocks.assignColumns() }
+    // 按列分桶：placed 不变时桶也不变，别在 repeat(columnCount) 里反复全表扫描
+    val blocksByColumn = remember(placed) { placed.groupBy { it.second } }
     val columnCount = placed.maxOfOrNull { it.second + 1 } ?: 1
 
+    // 横线颜色在父层取一次：主题切换时父层重组 → 新颜色传下去
+    val hourLineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+
     Box(modifier = modifier.fillMaxHeight()) {
-        // 整点横线
-        repeat(24) { hour ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                    .align(Alignment.TopStart)
-                    .offset(y = HourHeight * hour),
-            )
-        }
+        // 整点横线（独立子组件：颜色没变时这 24 个 Box 整段跳过）
+        HourGridLines(hourLineColor)
 
         // 块
         Row(
@@ -405,7 +402,7 @@ private fun WeekDayColumnView(
                         .weight(1f)
                         .fillMaxHeight(),
                 ) {
-                    placed.filter { it.second == col }.forEach { (block) ->
+                    blocksByColumn[col].orEmpty().forEach { (block) ->
                         TimelineBlockChip(
                             block = block,
                             onToggleTask = onToggleTask,
@@ -434,6 +431,29 @@ private fun WeekDayColumnView(
                     .offset(x = (-4).dp, y = HourHeight * (nowMinute / 60f) - 3.dp),
             )
         }
+    }
+}
+
+/**
+ * 一列里的 24 条整点横线。
+ *
+ * 单独抽成一个子 Composable：入参只有一个 [Color]（稳定类型），
+ * 父组件重组而颜色没变时，这 24 个 Box 整段跳过、不必重建。
+ *
+ * 布局与原先写在 [WeekDayColumnView] 里完全一致：
+ * 同样 24 个 1dp 高的 Box、同样 TopStart 对齐、同样按 [HourHeight] 逐小时下移。
+ */
+@Composable
+private fun BoxScope.HourGridLines(color: Color) {
+    repeat(24) { hour ->
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(color)
+                .align(Alignment.TopStart)
+                .offset(y = HourHeight * hour),
+        )
     }
 }
 

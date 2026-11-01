@@ -52,7 +52,7 @@ object BackupFormatVersion {
      * FORMAT_VERSION **不升** —— 沿用 Phase 3 的同款做法：
      * 新字段都有 `@Serializable` 默认值，旧备份 JSON 缺字段时落默认值即可（向后兼容）。
      */
-    const val DB_VERSION: Int = 13
+    const val DB_VERSION: Int = 14
 
     /** 应用包名（写入 manifest 用于跨应用保护）*/
     const val APPLICATION: String = "com.example.personalassistant"

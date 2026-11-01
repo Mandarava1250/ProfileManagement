@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -29,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -360,44 +362,80 @@ internal fun AppBottomBar(
     currentRoute: String?,
     onMoreClick: () -> Unit,
 ) {
+    // 跳转回调 remember 成稳定实例 —— 底栏 item 才能在参数没变时跳过重组
+    val onNavigateToTab: (String) -> Unit = remember(navController) {
+        { route: String -> navController.navigateToTab(route) }
+    }
+
     NavigationBar {
         BottomTab.entries.forEach { tab ->
-            val selected = currentRoute == tab.screen.route
-            NavigationBarItem(
-                selected = selected,
-                onClick = {
-                    if (currentRoute != tab.screen.route) {
-                        // Phase 15 P0-1.1：统一走 navigateToTab —— 栈行为与页面内跨 Tab 跳转一致
-                        navController.navigateToTab(tab.screen.route)
-                    }
-                },
-                // 文字标签已经承担了语义，图标 contentDescription 设 null 避免读屏重复朗读
-                icon = { Icon(tab.icon, contentDescription = null) },
-                label = {
-                    Text(
-                        text = stringResource(tab.labelRes),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                },
-                alwaysShowLabel = true,
+            BottomTabItem(
+                tab = tab,
+                currentRoute = currentRoute,
+                onNavigateToTab = onNavigateToTab,
             )
         }
 
         // 第 5 个位置：「更多」
-        val moreSelected = currentRoute == Screen.Me.route || currentRoute == Screen.Settings.route
-        NavigationBarItem(
-            selected = moreSelected,
+        MoreTabItem(
+            selected = currentRoute == Screen.Me.route || currentRoute == Screen.Settings.route,
             onClick = onMoreClick,
-            icon = { Icon(Icons.Rounded.MoreHoriz, contentDescription = null) },
-            label = {
-                Text(
-                    text = stringResource(R.string.tab_more),
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            },
-            alwaysShowLabel = true,
         )
     }
+}
+
+/**
+ * 底栏单个 Tab。
+ *
+ * 抽成独立 Composable：入参只有 enum / String? / 函数，都是稳定类型，
+ * 底栏因为别的原因重组时，只要 route 没变就能整段跳过。
+ * 视觉与结构参数与原先写在 [AppBottomBar] 里时完全一致。
+ */
+@Composable
+private fun RowScope.BottomTabItem(
+    tab: BottomTab,
+    currentRoute: String?,
+    onNavigateToTab: (String) -> Unit,
+) {
+    val selected = currentRoute == tab.screen.route
+    NavigationBarItem(
+        selected = selected,
+        onClick = {
+            if (currentRoute != tab.screen.route) {
+                // Phase 15 P0-1.1：统一走 navigateToTab —— 栈行为与页面内跨 Tab 跳转一致
+                onNavigateToTab(tab.screen.route)
+            }
+        },
+        // 文字标签已经承担了语义，图标 contentDescription 设 null 避免读屏重复朗读
+        icon = { Icon(tab.icon, contentDescription = null) },
+        label = {
+            Text(
+                text = stringResource(tab.labelRes),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        },
+        alwaysShowLabel = true,
+    )
+}
+
+/** 底栏第 5 个位置：「更多」 */
+@Composable
+private fun RowScope.MoreTabItem(
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    NavigationBarItem(
+        selected = selected,
+        onClick = onClick,
+        icon = { Icon(Icons.Rounded.MoreHoriz, contentDescription = null) },
+        label = {
+            Text(
+                text = stringResource(R.string.tab_more),
+                style = MaterialTheme.typography.labelSmall,
+            )
+        },
+        alwaysShowLabel = true,
+    )
 }
 
 /**

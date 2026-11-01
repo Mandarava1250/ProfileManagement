@@ -656,27 +656,64 @@ class CalendarViewModel @Inject constructor(
         return combine(flows) { array -> array.toList() }
     }
 
+    /**
+     * 月网格缓存（性能优化）。
+     *
+     * [uiState] 的 combine 有三个源：月汇总、实时冲突、已存冲突。
+     * 后两者只在「编辑事件 / 检测到冲突」时变化，跟月网格本身毫无关系，
+     * 但每次变化都会让 [buildUiState] 重跑一遍 ——
+     * 42 格构造 + 42 次农历换算（农历换算是重量级操作）全部白做。
+     *
+     * 这里把月网格按 (yearMonth, summary, today) 缓存：
+     * 只有月份或当月数据真的变了才重建；冲突信息变化时直接复用同一份 cell 列表。
+     *
+     * 语义等价性：同样的 (yearMonth, summary, today) 一定生成同样的 cells / lunarLabels，
+     * 所以缓存命中与未命中的结果逐字相同，只是省掉了重复计算。
+     */
+    private data class MonthGridCache(
+        val yearMonth: String,
+        val summary: MonthSummary,
+        val today: Long,
+        val cells: List<CalendarDayCell>,
+        val lunarLabels: Map<Long, CalendarUiState.LunarCellLabel>,
+    )
+
+    private var monthGridCache: MonthGridCache? = null
+
     private fun buildUiState(
         summary: MonthSummary,
         liveConflict: EventConflictInfo?,
         savedConflicts: Map<Long, EventConflictInfo>,
     ): CalendarUiState {
         val yearMonth = _currentYearMonth.value
-        val cells = generateMonthCells(yearMonth, summary, today)
-        // Phase 8 Sub-step 9 Step 5：农历角标一次性生成 42 格的 label
-        val lunarLabels = cells.associate { cell ->
-            cell.date to buildLunarLabel(cell.date)
+        // 月网格缓存：冲突信息变化时直接复用，不重算 42 格与 42 次农历换算
+        val cached = monthGridCache
+        val grid = if (
+            cached != null &&
+            cached.yearMonth == yearMonth &&
+            cached.summary == summary &&
+            cached.today == today
+        ) {
+            cached
+        } else {
+            val cells = generateMonthCells(yearMonth, summary, today)
+            // Phase 8 Sub-step 9 Step 5：农历角标一次性生成 42 格的 label
+            val lunarLabels = cells.associate { cell ->
+                cell.date to buildLunarLabel(cell.date)
+            }
+            MonthGridCache(yearMonth, summary, today, cells, lunarLabels)
+                .also { monthGridCache = it }
         }
         return CalendarUiState(
             yearMonth = yearMonth,
-            monthCells = cells,
+            monthCells = grid.cells,
             summary = summary,
             today = today,
             viewType = _viewType.value,
             selectedDate = _selectedDate.value,
             liveConflictInfo = liveConflict,
             savedConflictsByEventId = savedConflicts,
-            monthLunarLabels = lunarLabels,
+            monthLunarLabels = grid.lunarLabels,
         )
     }
 

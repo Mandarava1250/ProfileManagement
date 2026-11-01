@@ -48,6 +48,29 @@ class FakeChecklistTagDao : TagDao {
 
     override suspend fun getAllTags(): List<TagEntity> = tagsState.value
 
+    /**
+     * 性能优化（v14）：TagDao 新增的批量接口（备份导入用）。
+     *
+     * ⚠️ 逐字复刻 [insert] 的 id 分配逻辑，**不**额外推进自增游标 ——
+     * 批量与逐条两条路径必须给出完全一样的 id，否则备份导入的行为会分叉。
+     */
+    override suspend fun insertTags(tags: List<TagEntity>): List<Long> {
+        val ids = mutableListOf<Long>()
+        tagsState.value = tagsState.value + tags.map { tag ->
+            val id = if (tag.id == 0L) nextTagId++ else tag.id
+            ids += id
+            tag.copy(id = id)
+        }
+        return ids
+    }
+
+    /** 性能优化（v14）：整表清空（备份导入用）。 */
+    override suspend fun clearTags(): Int {
+        val size = tagsState.value.size
+        tagsState.value = emptyList()
+        return size
+    }
+
     override fun observeAllWithCount(): Flow<List<TagWithCount>> =
         error("FakeChecklistTagDao: observeAllWithCount 不该在清单测试里被调用")
 }

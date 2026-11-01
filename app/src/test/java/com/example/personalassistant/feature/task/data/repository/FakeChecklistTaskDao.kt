@@ -131,6 +131,29 @@ class FakeChecklistTaskDao : TaskDao {
 
     override suspend fun getAllSubTasks(): List<SubTaskEntity> = subTasksState.value
 
+    /**
+     * 性能优化（v14）：TaskDao 新增的批量插入清单项接口（备份导入用）。
+     *
+     * ⚠️ 逐字复刻 [insertSubTask] 的 id 分配逻辑，**不**额外推进自增游标 ——
+     * 批量与逐条两条路径必须给出完全一样的 id。
+     */
+    override suspend fun insertSubTasks(subTasks: List<SubTaskEntity>): List<Long> {
+        val ids = mutableListOf<Long>()
+        subTasksState.value = subTasksState.value + subTasks.map { subTask ->
+            val id = if (subTask.id == 0L) nextSubTaskId++ else subTask.id
+            ids += id
+            subTask.copy(id = id)
+        }
+        return ids
+    }
+
+    /** 性能优化（v14）：整表清空清单项（备份导入用）。 */
+    override suspend fun clearSubTasks(): Int {
+        val size = subTasksState.value.size
+        subTasksState.value = emptyList()
+        return size
+    }
+
     // ===== tasks（任务）相关：清单测试用不到 =====
 
     override suspend fun insert(task: TaskEntity): Long = notUsed("insert")
@@ -182,6 +205,12 @@ class FakeChecklistTaskDao : TaskDao {
         notUsed("getTodayCompletionRate")
 
     override fun observeActiveCount(): Flow<Int> = notUsed("observeActiveCount")
+
+    /** 性能优化（v14）：批量插入任务（备份导入用）—— 清单测试用不到。 */
+    override suspend fun insertTasks(tasks: List<TaskEntity>): List<Long> = notUsed("insertTasks")
+
+    /** 性能优化（v14）：整表清空任务（备份导入用）—— 清单测试用不到。 */
+    override suspend fun clearTasks(): Int = notUsed("clearTasks")
 
     /** 清单测试里调用到任务相关 DAO 方法 = 代码写错了。 */
     private fun notUsed(name: String): Nothing =

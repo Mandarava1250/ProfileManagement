@@ -43,7 +43,7 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
  *
  * ⚠️ 升版时必须同步：本常量 + 新 Migration + `BackupFormatVersion.DB_VERSION`。
  */
-const val APP_DATABASE_VERSION = 13
+const val APP_DATABASE_VERSION = 14
 
 /**
  * App 主数据库
@@ -103,6 +103,8 @@ const val APP_DATABASE_VERSION = 13
     // v11（Phase 12）：courses.credit + courses.gradePoint + student_profile 表
     // v12（Phase 12 GPA 规则）：student_profile.gpaRuleJson
     // v13（Phase 15 清单扩展）：sub_tasks 加 5 列 + sub_task_tag_cross_ref 新表
+    // v14（性能）：补 4 条索引 —— transactions ×2（transferPairId / accountId+categoryId）、
+    // tasks ×1（isCompleted+priority+dueDate）、sub_tasks ×1（category）。零行为变更。
     version = APP_DATABASE_VERSION,
     exportSchema = true
 )
@@ -142,6 +144,7 @@ abstract class AppDatabase : RoomDatabase() {
                 Migration_10_11,
                 Migration_11_12,
                 Migration_12_13,
+                Migration_13_14,
             )
     }
 }

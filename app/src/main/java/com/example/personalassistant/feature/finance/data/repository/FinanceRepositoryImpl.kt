@@ -25,6 +25,8 @@ import com.example.personalassistant.feature.profile.data.AccountRepository
 import com.example.personalassistant.feature.profile.data.CurrentAccountRepository
 import com.example.personalassistant.feature.settings.FinanceCutoffSettings
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -437,11 +439,33 @@ class FinanceRepositoryImpl @Inject constructor(
 
         // 2. 取当月账期已支出（含今日）
         val (monthStart, monthEndExclusive) = BillingCycle.rangeOf(ym, policy, zone)
-        val monthExpense = financeDao.getMonthlyExpense(
-            accountId = accountId,
-            monthStart = monthStart,
-            monthEnd = monthEndExclusive,
-        ) ?: 0.0
+
+        // 性能优化：下面这 3 个查询互不依赖（都只读，只依赖 accountId / 账期 / 日期），
+        // 原来是 3 次串行 DB 往返，现在并发 → 墙钟时间按最慢的那次算。
+        // 语义完全一致：
+        // - 昨日 pool 依然只在 budget.carryOverEnabled 时才查（关掉结转 = 不查）
+        // - 「今日 pool 已存在 → 幂等跳过」的判断用的是同一个值，只是提前读了
+        val (monthExpense, yesterdayPool, todayPool) = coroutineScope {
+            val expense = async {
+                financeDao.getMonthlyExpense(
+                    accountId = accountId,
+                    monthStart = monthStart,
+                    monthEnd = monthEndExclusive,
+                ) ?: 0.0
+            }
+            val yesterday = async {
+                if (!budget.carryOverEnabled) {
+                    null
+                } else {
+                    val yesterdayPoolDate = todayPoolDate - ONE_DAY_MS
+                    financeDao.getDailyPool(accountId, yesterdayPoolDate)
+                }
+            }
+            val todayExisting = async {
+                financeDao.getDailyPool(accountId, todayPoolDate)
+            }
+            Triple(expense.await(), yesterday.await(), todayExisting.await())
+        }
 
         // 3. dailyBudget = (totalAmount - 已支出) / 账期剩余天数（含今日，最少 1 天）
         val remainingDays = BillingCycle.remainingDays(todayDate, policy, zone)
@@ -449,16 +473,11 @@ class FinanceRepositoryImpl @Inject constructor(
         val dailyBudget = remainingAmount / remainingDays
 
         // 4. carryOver：取昨日 pool.remainingAmount（>=0 才结转）
-        val carryOver = if (budget.carryOverEnabled) {
-            val yesterdayPoolDate = todayPoolDate - ONE_DAY_MS
-            financeDao.getDailyPool(accountId, yesterdayPoolDate)
-                ?.remainingAmount?.coerceAtLeast(0.0) ?: 0.0
-        } else {
-            0.0
-        }
+        //    （yesterdayPool 在 carryOverEnabled=false 时为 null → 0.0，与原来一致）
+        val carryOver = yesterdayPool?.remainingAmount?.coerceAtLeast(0.0) ?: 0.0
 
         // 5. 当日 pool 已存在 → 幂等跳过
-        if (financeDao.getDailyPool(accountId, todayPoolDate) != null) return@withContext
+        if (todayPool != null) return@withContext
 
         // 6. 创建今日 pool
         financeDao.insertDailyPool(

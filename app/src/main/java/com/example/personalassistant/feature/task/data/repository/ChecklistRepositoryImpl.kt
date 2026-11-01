@@ -15,6 +15,7 @@ import com.example.personalassistant.feature.task.domain.repository.ChecklistRep
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,6 +43,11 @@ class ChecklistRepositoryImpl @Inject constructor(
             dao.observeAllSubTaskTagPairs(),
             tagDao.observeAll(),
         ) { rows, pairs, tags -> buildChecklistTree(rows, pairs, tags) }
+            // 性能优化：buildChecklistTree 是 O(n) 的组树 + 装标签重活，
+            // 原来跑在收集者的上下文里（UI 侧 = 主线程）→ 清单一多就会掉帧。
+            // flowOn 把整条上游挪到 IO 线程；Room 查询仍走 Room 内部 executor，
+            // 产出的数据逐字相同。
+            .flowOn(dispatcher)
 
     override suspend fun getItem(id: Long): SubTask? = withContext(dispatcher) {
         dao.getSubTaskById(id)?.toDomain()

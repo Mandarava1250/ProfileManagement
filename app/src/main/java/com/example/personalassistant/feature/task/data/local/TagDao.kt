@@ -57,6 +57,18 @@ interface TagDao {
 
     @Query("SELECT * FROM tags")
     suspend fun getAllTags(): List<TagEntity>
+
+    // ==================== 备份导入批量操作 ====================
+    //
+    // ⚠️ 冲突策略必须与 [insert] **逐字一致**（IGNORE ↔ IGNORE）。
+
+    /** 批量插入标签（IGNORE，与 [insert] 一致）。 */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTags(tags: List<TagEntity>): List<Long>
+
+    /** 清空标签表（备份导入用）。 */
+    @Query("DELETE FROM tags")
+    suspend fun clearTags(): Int
 }
 
 /**

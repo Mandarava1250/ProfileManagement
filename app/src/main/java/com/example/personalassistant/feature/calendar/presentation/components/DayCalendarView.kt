@@ -299,9 +299,12 @@ internal fun DayTodoRow(
             fontWeight = FontWeight.Medium,
         )
         task.dueDate?.let { due ->
+            // 「时:分」串缓存：dueDate 与时区都没变时，不必每次重组都重算
+            // （zone 也进 key —— 时区变了要跟着重算，保证与原来每次重算完全一致）
+            val dueText = remember(due, ZoneId.systemDefault()) { dueTimeText(due) }
             Spacer(Modifier.width(6.dp))
             Text(
-                text = dueTimeText(due),
+                text = dueText,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

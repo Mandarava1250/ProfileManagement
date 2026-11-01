@@ -106,12 +106,12 @@ fun ChecklistTab(
     val canSubmit = input.isNotBlank()
 
     // 生效的筛选条件条数 —— 徽标上显示的数字
-    val activeFilterCount = listOf(
-        state.filter.category != null,
-        state.filter.tagId != null,
-        state.filter.group != ChecklistGroup.NONE,
-        state.filter.sort != ChecklistSort.MANUAL,
-    ).count { it }
+    // 直接数四个布尔值，省掉每次重组都要新建的临时 List
+    val activeFilterCount =
+        (if (state.filter.category != null) 1 else 0) +
+            (if (state.filter.tagId != null) 1 else 0) +
+            (if (state.filter.group != ChecklistGroup.NONE) 1 else 0) +
+            (if (state.filter.sort != ChecklistSort.MANUAL) 1 else 0)
 
     // Phase 10 修复（沿用）：把提交逻辑抽出来，IconButton 点击 + 软键盘「完成」共用同一条路径，
     // 保证两条入口行为一致（trim 校验、清空输入框、调 onAdd）。

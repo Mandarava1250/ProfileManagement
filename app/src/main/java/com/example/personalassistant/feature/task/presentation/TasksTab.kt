@@ -101,12 +101,17 @@ fun TasksTab(
     var showFilterSheet by remember { mutableStateOf(false) }
 
     // Phase 14：筛选按钮上的条件计数 —— 分类 / 标签 / 排序 / 视图各算一条
-    val activeFilterCount = listOf(
-        state.filter !is FilterExpression.All,
-        state.selectedTagId != null,
-        state.sort != TaskSort.DEFAULT,
-        state.displayPreferences.viewMode != TaskViewMode.ALL,
-    ).count { it }
+    // 直接数四个布尔值，省掉每次重组都要新建的临时 List
+    val activeFilterCount =
+        (if (state.filter !is FilterExpression.All) 1 else 0) +
+            (if (state.selectedTagId != null) 1 else 0) +
+            (if (state.sort != TaskSort.DEFAULT) 1 else 0) +
+            (if (state.displayPreferences.viewMode != TaskViewMode.ALL) 1 else 0)
+
+    // 象限任务数：分组没变时计数也不会变，缓存住
+    val activeQuadrantCount = remember(state.groups) {
+        state.groups.byQuadrant.mapValues { it.value.size }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         // Phase 14：首屏收敛 —— 只留「象限 Tab + 筛选按钮」。
@@ -118,7 +123,7 @@ fun TasksTab(
         ) {
             PriorityTabRow(
                 displayPreferences = state.displayPreferences,
-                activeQuadrantCount = state.groups.byQuadrant.mapValues { it.value.size },
+                activeQuadrantCount = activeQuadrantCount,
                 onSelectAll = onShowAll,
                 onSelectQuadrant = onSelectQuadrant,
                 onLongPressQuadrant = { q -> renamingQuadrant = q },
