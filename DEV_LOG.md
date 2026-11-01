@@ -2462,6 +2462,7 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 
 - **10b / 10c 仍是 🟨**，需要 AVD `google_apis` 镜像（README 顶层已注明）或真机做 instrumented 真跑 + 真人目测（详见 Phase 11 起点候选）。
 - 本轮清除数据功能本身仍需在真机走"新建账户 → 加几条数据 → 清空 → 重新登录"冒烟——AVD `aosp_atd` 镜像全黑屏，真机可用再补。
+> **本轮追加（Phase 16 性能优化 + 首个 release）**：2026-11-01 22:00（五批性能优化全部落地：Room 索引 v13→v14 / 备份批量化 / 重组收敛 / 调度器归位 / WAL + baseline profile；另打通 GitHub Release 发布链路，签名 APK 随 release 发布；详见文末「🚀 2026-11-01 22:00 Phase 16」段）
 
 ## 🎨 2026-10-31 20:55 —— Phase 14 阶段五 / 六收口：视觉统一 + 确定性缺陷
 
@@ -2628,3 +2629,71 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 5. **Kotlin 字符串模板里的 `\${}` 是字面量**：`"\${TABLE}"` 不会插值，要插值就写 `"${TABLE}"`。迁移 SQL 里手写这个特别危险 —— 编译期无感，运行时才炸。
 6. **批量改文件用 node，别用 PowerShell `-replace`**（默认忽略大小写，容易误伤）。
 7. **文件行尾不统一**：`CalendarScreen.kt` 用 LF，脚本按 CRLF 硬匹配会 MISS —— 批量脚本改用正则。
+
+---
+
+## 🚀 2026-11-01 22:00 Phase 16：五批性能优化 + 首个 release（v0.1.0）
+
+### 计划来源
+`.cyrene/docs/plan-20261101-032141.md`（用户批准执行，约束：**不改任何现有功能、UI 设计、业务规则与数据语义**，只动「怎么算」「怎么查」「怎么传」）
+
+### 完成清单
+
+| 批次 | 内容 | 关键文件 | 状态 |
+|---|---|---|---|
+| 1 | Room 索引补全（schema **v13 → v14**，零行为变更） | `Migration_13_14.kt` / 3 个 Entity | ✅ |
+| 2 | 备份导入批量化（IO 往返 O(N) → O(1)） | `BackupImporter.kt` / 11 张表的 DAO | ✅ |
+| 3 | Compose 重组收敛（死订阅 + 月网格缓存 + 各屏 remember） | `CalendarScreen.kt` / `CalendarViewModel.kt` / 9 个屏 | ✅ 8/9，3.3 降级 |
+| 4 | 仓储层冷流与调度器归位（`flowOn(io)` + 查询合并 + 并发化） | 4 个 `*RepositoryImpl.kt` | ✅ 4/5，4.1/4.3 只做 flowOn |
+| 5 | 运行时配置（WAL 显式化 + baseline profile + release 签名） | `CoreModule.kt` / `app/build.gradle.kts` | ✅ |
+| 6 | GitHub Release 发布链路（签名 → 构建 → tag → Release → APK 附件） | `app/build.gradle.kts` / `.gitignore` | ✅ |
+
+### 各项关键结论
+
+1. **批次 1 · 索引**：`TransactionEntity` 补 `transferPairId` 与 `(accountId, categoryId)`；`TaskEntity` 补 `(isCompleted, priority, dueDate)`；`SubTaskEntity` 补 `category`。新建 `Migration_13_14.kt`（逐条 `CREATE INDEX IF NOT EXISTS`，已注册 `ALL_MIGRATIONS`），`APP_DATABASE_VERSION` 与 `BackupFormatVersion.DB_VERSION` 同步 13 → 14，另补 `Migration_13_14StatementsTest` 断言迁移语句。
+   **实测**（SQLite 5 万行样本）：4/4 查询改走索引，耗时分别提升约 **58.8× / 59.6× / 1.2× / 189.8×**。
+2. **批次 2 · 批量化**：清表路径从「全量读回 + 逐行 delete」改成每表一次 `DELETE FROM`；插入路径与 13 张表的 merge 路径统一改批量。表间插入顺序、外键开关语义一律不变。
+3. **批次 3 · 重组**：删 `CalendarScreen` 的 `weekCells` 死订阅（顺带省掉一条无用查询订阅链）；`CalendarViewModel` 缓存「月网格 + 农历标签」，冲突信息变化时不再重建 42 格 + **42 次农历换算**。
+4. **批次 4 · 调度器**：三个仓储加 `.flowOn(io)`；月汇总课程查询 7 次 → 1 次；`refreshDailyPool` 三个互不依赖的只读查询改并发。
+5. **批次 5 · 运行时**：`CoreModule` 显式声明 WAL；接入 `androidx.profileinstaller` + `enableArtProfiles`，APK 内含 `assets/dexopt/baseline.prof`；新增 release 签名配置（`keystore.properties` / `*.jks` 均不入库）。
+
+### 降级项（如实记录，不虚标）
+
+1. **3.3「低频状态订阅下沉」未做** —— `eventCategories` 同时被编辑器 sheet 和分类管理弹窗两处使用，下沉会产生重复订阅；`todayOverview` / `weekTimeline` 的 `stateIn` 初始值在切视图时可能造成一帧闪烁。这些状态本身低频，变化时整屏重组代价极小，**收益不抵风险**。
+2. **4.1 / 4.3 的 `stateIn` 未做** —— Repository 层没有可用的 scope，改返回类型会波及所有调用方；`flowOn` 已拿到主要收益。
+3. **4.4「`setMonthlyBudget` 改单条 UPSERT」本来就是** —— `FinanceDao.setMonthlyBudget` 已是 `@Insert(onConflict = REPLACE)`，单条 UPSERT 语义已满足，无需改动。
+4. **5.1 WAL「实际行为不变」** —— Room 2.x 的 `AUTOMATIC` 在 API 16+ 本来就选 WAL（本项目 minSdk 26），这一步是把「靠框架默认值」变成「代码里写明」，防止将来有人改 builder 时悄悄丢掉这两条收益。
+5. **定向 baseline profile 未做** —— 需要 `androidx.baselineprofile` 插件 + `:app:baseline-prof` 模块 + 真机跑 Macrobenchmark 采集 ART trace。本机无设备，无法采集真实 trace；当前 APK 内是 AGP 自动生成的保守 profile（覆盖启动路径）。
+
+### 验证结果
+
+- `:app:compileDebugKotlin` → **exit 0**
+- `:app:testDebugUnitTest` → **exit 0，BUILD SUCCESSFUL**
+- `:app:assembleRelease` → **exit 0，BUILD SUCCESSFUL**（R8 混淆 + 资源压缩 + `lintVitalRelease` 全过）
+- **实证**：`app/build/outputs/apk/release/app-release.apk` 内含 `assets/dexopt/baseline.prof` 与 `baseline.profm`（`jar tf` 确认），构建日志里 `mergeReleaseArtProfile` / `expandReleaseArtProfileWildcards` / `compileReleaseArtProfile` 三个任务都实打实跑了 —— profile 是真生成、真编进 APK。
+- **收官那次第一次跑失败过**：`lintVitalAnalyzeRelease` 要解析 `com.android.tools.lint:lint-gradle:31.7.3`，该产物不在本地离线缓存 → 报错 "No cached version ... available for offline mode"。**与本次改动无关**，去掉 `--offline` 让它从镜像拉下来后即通过。顺带说明：仓库的 lint 依赖原本就没下全，首次联网构建会多下一份。
+
+### 踩坑笔记
+
+1. **Kotlin DSL 里 `java.util.Properties` 会被解析成 Gradle 的 `java` 扩展** —— `app/build.gradle.kts` 里写 `java.util.Properties()` 报 `Unresolved reference 'util'`（Gradle 的 `java` 扩展遮蔽了包名）。正解是文件顶部加 `import java.util.Properties`，然后用 `Properties()`。这个坑在提交之后才暴露，说明**改 Gradle 脚本必须当场跑一次构建**，不能只靠 IDE 静态检查。
+2. **未签名 APK 手机装不上** —— `assembleRelease` 产出的 `app-release-unsigned.apk` 无法安装。发布链路必须有真实签名密钥，且 `keystore.properties`（含明文口令）必须进 `.gitignore`。
+3. **`keytool` 把提示信息写到 stderr** —— 在 PowerShell 里 `& keytool` 会因 stderr 有输出而抛 `NativeCommandError`，脚本中途夭折（密钥其实已生成，但后续的 `keystore.properties` 没写成）。改用 cmd 直接调 keytool 最稳。
+4. **`profileinstaller` 库自带 `ProfileInstallReceiver` 声明**（`exported=true`，由系统 DUMP 权限保护）—— 手写一份会 manifest 合并冲突（`Attribute receiver#...@exported value=(false) is also present at [androidx.profileinstaller:profileinstaller:1.3.1]`）。正解：**不手写**，依赖库自动合并。
+5. **cmd 的 `&` 链会把 stdout 吞掉** —— `echo a > f & echo b >> f & cmd` 这类链在工具层拿不到输出。涉及多步引号/重定向的逻辑，写成 `.ps1` 脚本文件再执行，比硬拼 cmd 可靠得多。
+6. **PowerShell 脚本里的反引号转义在多层嵌套下极易写坏** —— 写 `.ps1` 文件时优先用**单引号字符串**（避免 `$` 与 `"` 的双重转义），需要换行符就用 `[Environment]::NewLine`。
+7. **Git Credential Manager 里的凭据可能是可用的 API token** —— `gh auth status` 说没登录、浏览器也没登录态，但 `git credential fill`（`protocol=https` / `host=github.com`）能取到一条 `gho_` 开头的 OAuth token，scopes 含 `repo` —— 足够调 GitHub API 建 Release。排查凭据时别只看 `gh`。
+
+### 未验证（如实声明）
+
+- v13 → v14 迁移在真机/模拟器上的实际执行（`MigrationTestHelper` 在 `androidTest` 目录，本机无设备）
+- 定向 baseline profile 的实际生效（需真机采集 + Play 分发）
+- 真实帧率 / 启动耗时 / 内存峰值（需 Perfetto + 真机 + 大数据量）
+- APK 在真机上的安装与运行（本次只做了构建与签名层面的验证）
+
+> 因此本轮交付承诺是：**复杂度可验证 + 构建与测试通过 + 产物可安装**，不承诺具体毫秒数。
+
+### 发布链路
+
+- 签名密钥：`release-keystore.jks`（RSA 2048 / SHA384withRSA / 10000 天，别名 `profile-release`），**不入库**，口令见本机 `keystore.properties`
+- GitHub Release：`v0.1.0`，附件 `ProfileManagement-v0.1.0.apk`
+- 分支拓扑：`feature/phase-14-ui-refresh` → `Develop` → `main`

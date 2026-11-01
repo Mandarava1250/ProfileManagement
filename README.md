@@ -8,7 +8,7 @@
 ![Language](https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin)
 ![Min SDK](https://img.shields.io/badge/minSdk-26-blue)
 ![Target SDK](https://img.shields.io/badge/targetSdk-34-blue)
-![Room](https://img.shields.io/badge/Room%20schema-v12-2ea44f)
+![Room](https://img.shields.io/badge/Room%20schema-v14-2ea44f)
 ![Tests](https://img.shields.io/badge/tests-865%20JVM%20%2B%206%20instrumented-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
@@ -20,10 +20,11 @@
 |---|---|
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用（纯离线） |
 | 包名 / 命名空间 | `com.example.personalassistant` |
-| 版本 | `versionCode 1` / `versionName 0.1.0`（未发 release） |
-| 开发分支 | `feature/phase-14-ui-refresh`（主分支 `Develop`，尚未回合） |
-| 累计 commit | 156 |
-| Room 数据库 | **v13**（15 张表，schema 快照 `app/schemas/…/1.json ~ 13.json` 全量保留） |
+| 版本 | `versionCode 1` / `versionName 0.1.0`（首个 release：`v0.1.0`） |
+| 开发分支 | `Develop`（`feature/phase-14-ui-refresh` 已回合；`main` 为 release 分支） |
+| 累计 commit | 176 |
+| Room 数据库 | **v14**（15 张表，schema 快照 `app/schemas/…/1.json ~ 14.json` 全量保留） |
+| 性能优化 | 五批（索引补全 / 备份批量化 / 重组收敛 / 调度器归位 / WAL + baseline profile）—— 详见 [`DEV_LOG.md`](DEV_LOG.md) 末尾段 |
 | 测试 | **921 JVM 单测** 全绿（99 个测试类，0 失败 / 0 错误）+ **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ JVM 数字是 Phase 15 收尾实测（`app/build/test-results/testDebugUnitTest` 下全量 XML 求和）；instrumented 数字仍是上一轮实测 |
 | 台账 | 见 [`DEV_LOG.md`](DEV_LOG.md) —— 全部 Phase 的完成项 / 验证结果 / 踩坑笔记 |
 
@@ -292,7 +293,7 @@ ProfileManagement/
 
 ---
 
-## 🗃 数据库 Schema（Room v13，15 张表）
+## 🗃 数据库 Schema（Room v14，15 张表）
 
 | 表 | 说明 | 引入版本 |
 |----|------|---------|
@@ -326,6 +327,7 @@ ProfileManagement/
 | v11 | `student_profile` 补 `gpaTarget` / `resumeText` 的 DEFAULT，`gpaRuleJson` 落库 |
 | v12 | `student_profile` **重建表**：`gpaRuleJson` 由 NOT NULL 变 nullable + 带 DEFAULT（`ADD COLUMN` 改不了已有列的 NOT NULL / DEFAULT） |
 | v13 | `sub_tasks` 加 `category` / `dueDate` / `priority` / `amount` / `parentSubTaskId` + 新建 `sub_task_tag_cross_ref`（纯增量 ADD COLUMN / 建表 / 索引） |
+| v14 | 纯性能索引补全，**不动表结构 / 列 / 数据 / 外键**：`transactions` 加 `transferPairId` 与 `(accountId, categoryId)` 索引；`tasks` 加 `(isCompleted, priority, dueDate)` 索引；`sub_tasks` 加 `category` 索引 |
 
 > ⚠️ `DEV_LOG.md` 早期段落里的部分字段名与快照有出入，**精确列名以 `app/schemas/` 为准**：
 > 快照显示 `tasks.priority` / `tasks.category` 在 **v1 就已存在**（日志写的是「v2→v3 新增」）；
