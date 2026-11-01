@@ -2697,3 +2697,37 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 - 签名密钥：`release-keystore.jks`（RSA 2048 / SHA384withRSA / 10000 天，别名 `profile-release`），**不入库**，口令见本机 `keystore.properties`
 - GitHub Release：`v0.1.0`，附件 `ProfileManagement-v0.1.0.apk`
 - 分支拓扑：`feature/phase-14-ui-refresh` → `Develop` → `main`
+
+### 发布链路实测结果（2026-11-01 22:20 补记）
+
+| 项 | 值 |
+|---|---|
+| Release | `v0.1.0`（id `430632747`，非草稿非预发布，已发布） |
+| 附件 | `ProfileManagement-v0.1.0.apk`，4,194,837 字节，state=`uploaded` |
+| 附件校验 | 从 GitHub 下载回来后 SHA256 与本地构建**完全一致**（`62eee778…0f80b2`）；`apksigner verify` → **Verifies**（v2 方案，CN=ProfileManagement，RSA 2048）；ZIP 条目 714 = 714 |
+| 分支拓扑 | `feature/phase-14-ui-refresh` @`02d6009` → `--no-ff` → `Develop` @`fc96fcb` → `--no-ff` → `main` @`ffcff77` → tag `v0.1.0` |
+| 本地副本 | `D:\Loren\Download\ProfileManagement-v0.1.0.apk`（SHA256 与构建产物一致） |
+
+### 补充踩坑笔记
+
+8. **手搓 multipart 上传 GitHub Release 附件会把整个信封存成文件** —— 第一次上传用 PowerShell 手工拼 `multipart/form-data` 请求体，boundary 取名 `----CyreneBoundary<guid>`。GitHub 的解析器没剥掉信封，**存下来的附件开头就是 `------CyreneBoundary…`**，体积比 APK 大 255 字节（正是信封长度）。附件 `state=uploaded`、大小看着正常，**光看 API 返回完全发现不了**。
+   - **症状**：下载回来的文件首字节是 `2d 2d 2d 2d 2d 2d`（ASCII `-`）而不是 `50 4b 03 04`（ZIP 头）；ZIP 条目数 0；`apksigner` 报错。
+   - **定位手法**：不比对整体哈希，而是**逐字节找第一个差异偏移** + dump 偏移前后各 64 字节的 hex —— 一眼看出开头是 boundary 而非 ZIP 头，再数差异字节总数，确认是「整体包裹」而非「局部损坏」。
+   - **正解**：删掉坏附件，改用 GitHub 文档推荐的**裸二进制上传**（`Content-Type: application/octet-stream` + `--data-binary @file`，curl.exe 或 Invoke-WebRequest 均可），服务端会原样存字节，不再需要自己构造 multipart。
+   - **教训**：上传类接口**必须做「下载回来 → 逐字节/哈希比对 → 验签」的闭环**，只看「上传返回 201 / state=uploaded」不足以证明附件内容正确。
+
+9. **私有仓库的 release 附件有两条下载路径，别混用** —— `browser_download_url`（`/releases/download/…`）在带 `Authorization: Bearer` 头请求时返回 **404**（它面向浏览器会话设计）；要用 API 端点 `GET /repos/{owner}/{repo}/releases/assets/{asset_id}` + `Accept: application/octet-stream` 才拿得到字节。
+
+10. **`Get-Content -Raw` 返回的字符串带文件系统扩展属性** —— PowerShell 5.1 里 `Get-Content file -Raw` 返回的 string 携带 `PSPath` / `PSParentPath` / `PSChildName` / `PSDrive` 等 note properties，`ConvertTo-Json` 会**把它们一起序列化进 JSON**。往 GitHub 建 Release 时表现为 body 字段被塞进一大坨 `PSDrive` 对象，API 直接拒（`Invalid request`）。正解：用 `[System.IO.File]::ReadAllText(path, [Text.Encoding]::UTF8)` 拿纯 .NET 字符串。
+
+11. **Windows PowerShell 5.1 把无 BOM 的 UTF-8 脚本按 ANSI 解析** —— `.ps1` 文件里直接写中文会触发解析错误（`表达式或语句中包含意外的标记`），且报错位置往往指向无关的行。规避：脚本正文**只用 ASCII**，中文内容放独立数据文件，用 `[System.IO.File]::ReadAllText(..., UTF8)` 读进来。
+
+12. **cmd 没有 `tail`** —— 在 `run_shell` 的 cmd 模式里写 `| tail -3` 会报「'tail' 不是内部或外部命令」，整条命令链随之中断（`&&` 后面不再执行）。要用筛选就用 `findstr`。
+
+13. **`git checkout` 会清掉被 gitignore 的工作目录** —— `.cyrene/` 在 `.gitignore` 里，切分支时其中的临时文件（凭据缓存等）可能消失。本轮就遇到 `ghcred.txt` 在切到 `main` 后不见了。规避：脚本**每次自己从 `git credential fill` 取凭据**，别依赖缓存文件跨命令存活。
+
+### 本轮未验证项（补充）
+
+- **APK 未在真机上安装运行过** —— 已验证的是「构建成功 + 签名有效 + GitHub 附件与本地构建逐字节一致」，真机安装与运行仍待验证。
+- **v13 → v14 迁移未在设备上实测**。
+- **定向 baseline profile 未采集**（APK 内为 AGP 自动生成的通用 profile）。
