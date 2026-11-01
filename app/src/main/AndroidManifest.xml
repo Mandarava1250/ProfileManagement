@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        纯离线 App：仅声明必需权限
+        ❌ INTERNET          — 无需联网
+        ❌ ACCESS_NETWORK_STATE — 无需联网检测
+        ❌ POST_NOTIFICATIONS — Android 13+ 提醒通知，由用户首次进入相关功能时请求
+    -->
+
+    <!-- 课程/任务提醒通知（Android 13+ 需运行时申请）-->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 开机自启动接收器（用于 WorkManager 重置每日 00:01 任务）-->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 精确闹钟（上课提醒等需精确触发的场景）-->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!-- 数据备份导出（Storage Access Framework，不需要 WRITE_EXTERNAL_STORAGE 也能用）-->
+    <!-- Android 10+ scoped storage 下不再需要 WRITE_EXTERNAL_STORAGE -->
+
+    <application
+        android:name=".PersonalAssistantApp"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PersonalAssistant"
+        tools:targetApi="34">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.PersonalAssistant">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- WorkManager 初始化由 Hilt 自动完成（disable-default-init）-->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+        <!-- 开机重设 WorkManager 定时器 -->
+        <receiver
+            android:name=".service.reminder.BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 课程提醒精确闹钟接收器 -->
+        <receiver
+            android:name=".service.reminder.CourseReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- 任务提醒精确闹钟接收器（Phase 5）-->
+        <receiver
+            android:name=".feature.task.data.reminder.TaskReminderReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.personalassistant.action.TASK_REMINDER" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+            Baseline Profile 接收器（AndroidX ProfileInstaller）
+            ⚠️ 这里**不**手写 <receiver>：profileinstaller 库的 AndroidManifest 已自带
+               androidx.profileinstaller.ProfileInstallReceiver 声明（exported=true，
+               由系统 DUMP 权限保护），手写一份会与之冲突导致 manifest 合并失败。
+               依赖 androidx.profileinstaller 后自动合并即可。
+               只影响 ART 的 AOT 预编译行为，不改变任何业务逻辑、UI 或数据。
+        -->
+
+        <!-- 日程事件提醒精确闹钟接收器（Phase 8 Sub-step 1）-->
+        <receiver
+            android:name=".feature.calendar.data.reminder.EventReminderReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.personalassistant.action.EVENT_REMINDER" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

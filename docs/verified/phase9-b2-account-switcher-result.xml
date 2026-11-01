@@ -1,0 +1,21 @@
+testsuite name="com.example.personalassistant.feature.profile.presentation.accountswitcher.AccountSwitcherBarTest"
+           tests="8" failures="0" errors="0" skipped="0" time="24.999" timestamp="2026-09-16T06:05:24" hostname="localhost">
+
+testcase name="click_current_chip_still_emits_its_id"                  time="..."  (pass)
+testcase name="click_is_ignored_while_switching"                        time="..."  (pass)
+testcase name="click_non_current_chip_emits_that_account_id"            time="..."  (pass)
+testcase name="current_account_is_marked_selected"                      time="..."  (pass)
+testcase name="hides_bar_when_single_account"                           time="..."  (pass)
+testcase name="hides_bar_while_loading"                                 time="..."  (pass)
+testcase name="non_current_account_is_not_selected"                     time="..."  (pass)
+testcase name="renders_chip_for_each_account_when_multiple_accounts"    time="..."  (pass)
+
+---
+
+JVM（app/build/test-results/testDebugUnitTest/，--rerun-tasks 真跑）：
+
+testsuite name="...accountswitcher.AccountSwitcherViewModelTest"
+           tests="10" skipped="0" failures="0" errors="0" time="0.587"  timestamp="2026-09-16T05:54:39.526Z"
+
+testsuite name="...accountswitcher.AccountSwitcherReducerTest"
+           tests="13" skipped="0" failures="0" errors="0" time="0.086"  timestamp="2026-09-16T05:54:39.409Z"

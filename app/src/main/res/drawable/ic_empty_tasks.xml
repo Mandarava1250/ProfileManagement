@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 14：空态插画 —— 任务清单（三条待办 + 空心方框） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="112dp"
+    android:height="112dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+
+    <!-- 三条待办横线 -->
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:pathData="M34,36 h50 a3,3 0 0 1 0,6 h-50 a3,3 0 0 1 0,-6 z" />
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:pathData="M34,55 h50 a3,3 0 0 1 0,6 h-50 a3,3 0 0 1 0,-6 z" />
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:pathData="M34,74 h30 a3,3 0 0 1 0,6 h-30 a3,3 0 0 1 0,-6 z" />
+
+    <!-- 三个待勾选的方框 -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorOnSurfaceVariant"
+        android:strokeWidth="3"
+        android:pathData="M20,35 h9 v9 h-9 z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorOnSurfaceVariant"
+        android:strokeWidth="3"
+        android:pathData="M20,54 h9 v9 h-9 z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorOnSurfaceVariant"
+        android:strokeWidth="3"
+        android:pathData="M20,73 h9 v9 h-9 z" />
+
+    <!-- 底部一条淡线，暗示「还有更多」 -->
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:fillAlpha="0.28"
+        android:pathData="M34,92 h50 a3,3 0 0 1 0,6 h-50 a3,3 0 0 1 0,-6 z" />
+</vector>

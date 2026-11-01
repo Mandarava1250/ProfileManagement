@@ -1,0 +1,50 @@
+package com.example.personalassistant.feature.task.domain.model
+
+import com.example.personalassistant.core.holiday.model.HolidayStrategy
+
+/**
+ * 任务（Domain 模型）
+ *
+ * 字段含义对齐 TaskEntity，但把 priority 和 repeatType 提升为强类型枚举，
+ * 业务层不再与 Int/String 直接打交道。
+ */
+data class Task(
+    val id: Long = 0L,
+    val title: String,
+    val description: String? = null,
+    val dueDate: Long? = null,
+    val priority: TaskPriority = TaskPriority.MEDIUM,
+    val isCompleted: Boolean = false,
+    val category: String? = null,
+    val reminderTime: Long? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val repeatType: RepeatType = RepeatType.NONE,
+    val repeatEndDate: Long? = null,
+    /**
+     * Phase 4b：自定义星期几（与 RepeatRule.CustomWeekdays 配套）。
+     * 字符串格式 "MONDAY,WEDNESDAY,FRIDAY"，null = 无自定义。
+     * - 当业务层持有 RepeatRule.CustomWeekdays(days) 时，转 Entity 之前会先把 days 序列化到这里
+     * - 当业务层读出 RepeatRule 时，会从 repeatType + repeatDays 还原为 RepeatRule 对象
+     */
+    val repeatDays: String? = null,
+
+    /**
+     * Phase 6a：用户拖拽手动排序权重。
+     *
+     * - null = 未手动排序，沿用 [TaskSort] 行为
+     * - 非 null = 升序展示（值越小越靠前）
+     *
+     * 与 [TaskEntity.manualOrder] 一一对应；只由 [TaskSort.MANUAL_ORDER] 路径触发落库。
+     */
+    val manualOrder: Long? = null,
+
+    /**
+     * Phase 8 Sub-step 7+8：节假日处理策略（仅对重复任务生效）。
+     *
+     * - 默认 [HolidayStrategy.SKIP]（遇到节假日跳过本次）
+     * - 非重复任务（repeatType == NONE）该字段无效，保留默认值
+     * - 用户在 TaskEditScreen 选择后通过 [Task.holidayStrategy] 写回 Entity
+     */
+    val holidayStrategy: HolidayStrategy = HolidayStrategy.SKIP,
+)

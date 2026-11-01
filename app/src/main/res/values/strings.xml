@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Name -->
+    <string name="app_name">个人助手</string>
+
+    <!-- Bottom Navigation Tab Labels -->
+    <string name="tab_timetable">课表</string>
+    <string name="tab_tasks">任务</string>
+    <string name="tab_finance">记账</string>
+    <string name="tab_calendar">日历</string>
+    <string name="tab_me">我</string>
+    <string name="tab_settings">设置</string>
+    <!-- Phase 14：底栏第 5 个位置 = 「更多」，点开弹出面板（我 / 设置） -->
+    <string name="tab_more">更多</string>
+    <string name="me_subtitle">学生档案 · GPA · 绩点规则</string>
+    <string name="settings_subtitle">主题 · 记账账户 · 备份恢复</string>
+
+    <!-- Common -->
+    <string name="action_save">保存</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_delete">删除</string>
+    <string name="action_edit">编辑</string>
+    <string name="action_done">完成</string>
+    <string name="action_add">添加</string>
+    <string name="action_refresh">刷新</string>
+    <string name="action_confirm">确认</string>
+    <string name="action_all">全部</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_theme">主题</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_backup">数据备份</string>
+    <string name="settings_restore">数据恢复</string>
+    <string name="settings_clear">清除数据</string>
+
+    <!-- 课表 -->
+    <string name="timetable_title">课表</string>
+    <string name="timetable_add_course">添加课程</string>
+    <string name="timetable_edit_course">编辑课程</string>
+    <string name="timetable_semester">学期</string>
+    <string name="timetable_no_courses">还没有课程，点击 + 添加</string>
+    <!-- Phase 10：课表 TopAppBar 右上角导入入口 -->
+    <string name="timetable_action_import">导入课表</string>
+    <string name="timetable_action_import_coming_soon">课表导入功能开发中，敬请期待♪</string>
+
+    <!-- 任务 -->
+    <string name="tasks_title">任务</string>
+    <string name="tasks_add">添加任务</string>
+    <string name="tasks_today">今天</string>
+    <string name="tasks_tomorrow">明天</string>
+    <string name="tasks_future">未来</string>
+    <string name="tasks_overdue">已过期</string>
+    <string name="tasks_completed">已完成</string>
+
+    <!-- 记账 -->
+    <string name="finance_title">记账</string>
+    <string name="finance_quick_add">快速记账</string>
+    <string name="finance_daily_pool">今日零钱池</string>
+    <string name="finance_monthly_report">月度报表</string>
+    <string name="finance_budget">月预算</string>
+    <string name="finance_expense">支出</string>
+    <string name="finance_income">收入</string>
+
+    <!-- 日历 -->
+    <string name="calendar_title">日历</string>
+    <string name="calendar_add_event">添加事件</string>
+    <string name="calendar_view_month">月视图</string>
+    <string name="calendar_view_week">周视图</string>
+    <string name="calendar_view_day">日视图</string>
+
+    <!-- Notification Channels -->
+    <string name="channel_course_name">课程提醒</string>
+    <string name="channel_course_desc">上课前 N 分钟自动提醒</string>
+    <string name="channel_task_name">任务提醒</string>
+    <string name="channel_task_desc">任务截止前的提醒</string>
+    <string name="channel_event_name">日程提醒</string>
+    <string name="channel_event_desc">日历事件的提醒</string>
+    <string name="channel_finance_name">记账与零钱池</string>
+    <string name="channel_finance_desc">零钱池刷新、月度报表等</string>
+    <!-- Phase 14：顶栏标题（原先全部硬编码在 Kotlin 里） -->
+    <string name="event_detail_title">事件详情</string>
+    <string name="budget_settings_title">预算设置</string>
+    <string name="category_management_title">分类管理</string>
+    <string name="global_search_title">全局搜索</string>
+    <string name="gpa_rule_title">GPA 规则</string>
+    <string name="appearance_title">外观</string>
+    <string name="backup_preview_title">导入预览</string>
+    <string name="task_detail_title">任务详情</string>
+    <string name="task_new_title">新建任务</string>
+    <string name="task_edit_title">编辑任务</string>
+    <string name="timetable_settings_title">课表设置</string>
+    <string name="timetable_create_semester">新建学期</string>
+    <string name="course_new_title">新增课程</string>
+    <string name="course_edit_title">编辑课程</string>
+
+    <!-- Phase 14：统一空态文案 -->
+    <string name="empty_tasks_title">还没有任务</string>
+    <string name="empty_tasks_desc">创建第一条任务，把要做的事放进象限里</string>
+    <string name="empty_checklist_title">清单是空的</string>
+    <string name="empty_checklist_desc">把任务拆成小步骤，完成起来更有成就感</string>
+    <string name="empty_timetable_title">还没有学期</string>
+    <string name="empty_timetable_desc">先创建一个学期，再添加课程</string>
+    <string name="empty_search_title">输入关键字开始搜索</string>
+    <string name="empty_search_desc">任务、课程、记账都能搜到</string>
+    <string name="empty_search_no_result_title">未找到匹配结果</string>
+    <string name="empty_search_no_result_desc">换个关键字再试试</string>
+    <string name="empty_subtask_title">还没有子任务</string>
+    <string name="empty_subtask_desc">在下面加一条，把大任务拆小</string>
+    <string name="empty_category_title">暂无分类</string>
+    <string name="empty_category_desc">新建一个分类，让记录更有条理</string>
+    <string name="empty_report_title">暂无数据</string>
+    <string name="empty_report_desc">这个月还没有记账记录</string>
+
+    <!-- Phase 14：破坏性操作确认 -->
+    <string name="task_delete_confirm_title">删除任务？</string>
+    <string name="task_delete_confirm_desc">删除后无法恢复</string>
+    <string name="import_replace_confirm_title">快速替换数据？</string>
+    <string name="import_replace_confirm_desc">当前全部数据会被备份文件覆盖，且无法撤销</string>
+    <string name="reset_action_clear_all">清除全部</string>
+    <string name="reset_action_backup_first">先备份</string>
+    <string name="reset_clearing_progress">正在清除…</string>
+
+    <!-- Phase 14：任务页筛选面板 -->
+    <string name="task_filter_sheet_title">筛选与排序</string>
+    <string name="task_filter_category">分类</string>
+    <string name="task_filter_tag">标签</string>
+    <string name="task_filter_sort">排序</string>
+    <string name="task_filter_view">视图</string>
+    <string name="task_filter_button">筛选</string>
+    <string name="task_filter_unlimited">不限</string>
+    <string name="task_quadrant_rename_hint">长按象限可重命名</string>
+    <!-- Phase 15：清单页（任务 → 清单）UI -->
+    <string name="checklist_input_hint">添加清单项…</string>
+    <string name="checklist_detail_add">详细添加清单项</string>
+    <string name="checklist_filter_button">筛选</string>
+    <string name="checklist_filter_category">分类</string>
+    <string name="checklist_filter_tag">标签</string>
+    <string name="checklist_filter_group">分组</string>
+    <string name="checklist_filter_sort">排序</string>
+    <string name="checklist_filter_reset">重置筛选</string>
+    <string name="checklist_filter_unlimited">不限</string>
+
+    <!-- Phase 15：清单分组 / 排序文案 -->
+    <string name="checklist_group_none">不分组</string>
+    <string name="checklist_group_all">全部</string>
+    <string name="checklist_group_uncompleted">未完成</string>
+    <string name="checklist_group_completed">已完成</string>
+    <string name="checklist_group_by_category">按分类</string>
+    <string name="checklist_group_by_due_date">按截止时间</string>
+    <string name="checklist_group_overdue">已逾期</string>
+    <string name="checklist_group_today">今天</string>
+    <string name="checklist_group_later">之后</string>
+    <string name="checklist_group_no_due_date">无截止时间</string>
+    <string name="checklist_sort_manual">手动顺序</string>
+    <string name="checklist_sort_priority">优先级</string>
+    <string name="checklist_sort_due_date">截止日期（早 → 晚）</string>
+    <string name="checklist_sort_created_desc">创建时间（新 → 旧）</string>
+    <string name="checklist_sort_title_asc">标题（A → Z）</string>
+
+    <!-- Phase 15：清单项编辑弹窗 -->
+    <string name="checklist_edit_title">编辑清单项</string>
+    <string name="checklist_create_title">新建清单项</string>
+    <string name="checklist_field_title">标题</string>
+    <string name="checklist_field_category">分类</string>
+    <string name="checklist_field_due_date">截止时间</string>
+    <string name="checklist_field_priority">优先级</string>
+    <string name="checklist_field_amount">金额</string>
+    <string name="checklist_field_tags">标签</string>
+    <string name="checklist_no_category">无分类</string>
+    <string name="checklist_no_due_date">未设置</string>
+    <string name="checklist_no_amount">未设置</string>
+    <string name="checklist_no_tags">还没有标签</string>
+    <string name="checklist_set_due_date">设置</string>
+    <string name="checklist_change_due_date">更改</string>
+    <string name="checklist_clear_due_date">清除截止时间</string>
+
+    <!-- Phase 15：清单项展示 -->
+    <string name="checklist_item_edit">编辑清单项</string>
+    <string name="checklist_item_expand">展开子清单</string>
+    <string name="checklist_item_collapse">收起子清单</string>
+    <string name="checklist_add_sub_item_hint">添加子项…</string>
+    <string name="checklist_progress">%1$d/%2$d</string>
+    <string name="checklist_due_today">今天</string>
+    <string name="checklist_due_tomorrow">明天</string>
+    <string name="checklist_due_yesterday">昨天</string>
+    <string name="checklist_amount">¥%1$s</string>
+
+    <!-- Phase 15：清单空态（筛选后为空） -->
+    <string name="empty_checklist_filtered_title">没有符合条件的清单项</string>
+    <string name="empty_checklist_filtered_desc">换个筛选条件试试</string>
+</resources>

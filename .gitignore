@@ -16,6 +16,8 @@ captures/
 # Keystore
 *.jks
 *.keystore
+# 签名口令（含明文密码，绝不入库）
+keystore.properties
 
 # Backup
 *.bak
@@ -23,9 +25,20 @@ captures/
 # OS
 .DS_Store
 Thumbs.db
+# Windows reserved device name "nul" — 某些脚本意外创建的空文件，无法用常规命令删除
+/nul
 
 # Log
 *.log
+
+# 本地脚本产物（UI dump / 截图 / 崩溃日志）
+artifacts/
+
+# 临时调试产物
+test.png
+
+# SDK 镜像 zip 残留（commandlinetools / system-images 下载临时文件）
+x86_64-*.zip
 
 # Output APK
 *.apk
@@ -34,4 +47,5 @@ Thumbs.db
 
 # Cyrene agent
 .cyrene/
-.idea/
+# Phase 8 验证轮次的原始中间产物（gradle log / logcat / uiautomator dump）；正式证据在 docs/verified*/
+/logs/

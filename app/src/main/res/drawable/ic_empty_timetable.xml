@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 14：空态插画 —— 课表格子（网格 + 一个色块） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="112dp"
+    android:height="112dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+
+    <!-- 表格外框 -->
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:fillAlpha="0.10"
+        android:pathData="M16,24 h88 v72 h-88 z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorOnSurfaceVariant"
+        android:strokeWidth="3"
+        android:pathData="M16,24 h88 v72 h-88 z" />
+
+    <!-- 竖线（列分隔） -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorOnSurfaceVariant"
+        android:strokeWidth="2"
+        android:pathData="M45,24 v72 M74,24 v72" />
+
+    <!-- 横线（行分隔） -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="?attr/colorOnSurfaceVariant"
+        android:strokeWidth="2"
+        android:pathData="M16,48 h88 M16,72 h88" />
+
+    <!-- 一个课程色块 -->
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:fillAlpha="0.75"
+        android:pathData="M20,52 h21 v16 h-21 z" />
+    <path
+        android:fillColor="?attr/colorPrimary"
+        android:fillAlpha="0.45"
+        android:pathData="M49,28 h21 v16 h-21 z" />
+</vector>

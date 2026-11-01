@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material 3 主色（与 Theme.kt 中的 LightColorScheme 对齐）-->
+    <color name="seed">#FFD81B60</color>
+    <color name="background_light">#FFFFF8F8</color>
+    <color name="background_dark">#FF1A1112</color>
+
+    <!-- App Icon Adaptive Background -->
+    <color name="ic_launcher_background">#FFD81B60</color>
+</resources>

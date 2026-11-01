@@ -1,0 +1,158 @@
+package com.example.personalassistant.feature.calendar.data.repository
+
+import com.example.personalassistant.feature.calendar.domain.model.DayDetail
+import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
+import com.example.personalassistant.feature.calendar.domain.repository.CalendarRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+
+/**
+ * Phase 7c：单元测试用的内存版 [CalendarRepository]（含 Sub-step 2 联动方法的占位实现）
+ *
+ * ## 设计动机
+ * - UseCase 测试要快、要不依赖 Room
+ * - 用 MutableStateFlow 模拟 Room 的响应式行为
+ * - **联动方法**（observeDayDetail / observeMonthSummary）提供最简单的占位实现：
+ *   返回空 DayDetail / 空 Map，让 UseCase 测试关注事件流本身的语义
+ *
+ * ## 约定
+ * - 所有 suspend 写操作同步更新内存 + 触发 flow 重新发射
+ * - id 自增（nextId 从 1 开始）
+ */
+class FakeCalendarRepository : CalendarRepository {
+
+    private val eventsState = MutableStateFlow<List<Event>>(emptyList())
+    private var nextId = 1L
+
+    /** 调试用：观察 addEvent 次数 */
+    var addCount: Int = 0
+        private set
+    var deleteCount: Int = 0
+        private set
+    var updateCount: Int = 0
+        private set
+
+    // ===== 单日 / 区间查询 =====
+
+    override fun observeEventsByDate(date: Long): Flow<List<Event>> =
+        eventsState.map { list -> list.filter { it.date == date } }
+
+    override fun observeEventsByMonthRange(monthStart: Long, monthEnd: Long): Flow<List<Event>> =
+        eventsState.map { list -> list.filter { it.date in monthStart until monthEnd } }
+
+    override fun observeUpcoming(today: Long, futureEnd: Long): Flow<List<Event>> =
+        eventsState.map { list -> list.filter { it.date in today until futureEnd } }
+
+    override fun observeEventById(id: Long): Flow<Event?> =
+        eventsState.map { list -> list.firstOrNull { it.id == id } }
+
+    override suspend fun getEventById(id: Long): Event? =
+        eventsState.value.firstOrNull { it.id == id }
+
+    // ===== 增删改 =====
+
+    override suspend fun addEvent(event: Event): Long {
+        val id = nextId++
+        addCount++
+        eventsState.value = eventsState.value + event.copy(
+            id = id,
+            createdAt = event.createdAt,
+            updatedAt = System.currentTimeMillis(),
+        )
+        return id
+    }
+
+    override suspend fun updateEvent(event: Event) {
+        if (event.id <= 0L) return
+        updateCount++
+        eventsState.value = eventsState.value.map {
+            if (it.id == event.id) event.copy(updatedAt = System.currentTimeMillis()) else it
+        }
+    }
+
+    override suspend fun deleteEvent(id: Long) {
+        deleteCount++
+        eventsState.value = eventsState.value.filter { it.id != id }
+    }
+
+    override suspend fun deleteEventsBefore(date: Long) {
+        eventsState.value = eventsState.value.filter { it.date >= date }
+    }
+
+    // ===== 联动聚合（Sub-step 2） — 占位实现 =====
+
+    /**
+     * Phase 8 Sub-step 9 Step 4.2：测试用 —— 让 [observeDayDetail] 返回指定 weekNumber。
+     *
+     * - null = 默认占位（不返回 weekNumber）
+     * - 1..N = 让 DayDetail.weekNumber = N，触发 VM 的 saved conflicts 计算路径
+     */
+    var weekNumberForTest: Int? = null
+
+    override fun observeDayDetail(date: Long): Flow<DayDetail> =
+        eventsState.map { _ ->
+            DayDetail(
+                date = date,
+                dayOfWeek = 1,
+                events = eventsState.value.filter { it.date == date },
+                tasks = emptyList(),
+                courses = emptyList(),
+                weekNumber = weekNumberForTest,
+            )
+        }
+
+    override fun observeMonthSummary(monthStart: Long, monthEnd: Long, today: Long): Flow<MonthSummary> =
+        eventsState.map { _ -> emptyMap() }
+
+    // ===== Phase 8 Sub-step 3 全局搜索 =====
+
+    /**
+     * Phase 8 Sub-step 3：测试用搜索实现。
+     *
+     * - :keyword 形如 `%xxx%`，去掉首尾 `%` 后在 title / note / category 三字段子串匹配
+     * - 区分大小写
+     */
+    override fun searchEvents(keyword: String): Flow<List<Event>> =
+        eventsState.map { list ->
+            val needle = keyword.removePrefix("%").removeSuffix("%")
+            list.filter { event ->
+                event.title.contains(needle, ignoreCase = false) ||
+                    (event.note?.contains(needle, ignoreCase = false) == true) ||
+                    (event.category?.contains(needle, ignoreCase = false) == true)
+            }
+        }
+
+    // ===== 测试辅助 helpers =====
+
+    /** 直接注入一条带 id 的事件（跳过自增），便于测试 */
+    suspend fun seedEvent(
+        title: String = "测试事件",
+        date: Long,
+        isAllDay: Boolean = false,
+        startTime: Long? = null,
+        endTime: Long? = null,
+        id: Long = 0L,
+    ): Long {
+        val resolvedId = if (id > 0L) {
+            id
+        } else {
+            nextId++
+        }
+        eventsState.value = eventsState.value + Event(
+            id = resolvedId,
+            title = title,
+            date = date,
+            isAllDay = isAllDay,
+            startTime = startTime,
+            endTime = endTime,
+        )
+        return resolvedId
+    }
+
+    /** 清空所有事件 */
+    fun clear() {
+        eventsState.value = emptyList()
+    }
+}
