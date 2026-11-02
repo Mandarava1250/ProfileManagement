@@ -79,6 +79,18 @@ interface TaskRepository {
     /** 获取任务与子任务；id 不存在时返回 null */
     suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks?
 
+    /**
+     * Phase 22.7：**所有**带提醒时间的未完成任务（含子任务）。
+     *
+     * 开机 / 应用更新后要靠它重建提醒调度（AlarmManager 的闹钟会被系统清掉）。
+     * 刻意包含子任务 —— 子任务也能单独设提醒。
+     *
+     * ⚠️ 默认实现返回空列表：绝大多数调用方（和绝大多数测试替身）不关心提醒重建。
+     * [com.example.personalassistant.feature.task.data.repository.TaskRepositoryImpl]
+     * 有真实实现；测试里要验证重建行为的请在 Fake 里覆盖它。
+     */
+    suspend fun getTasksWithReminders(): List<Task> = emptyList()
+
     // ===== 写操作 =====
 
     /**

@@ -7,6 +7,7 @@ import android.util.Log
 import com.example.personalassistant.core.holiday.di.HolidayReminderScheduler
 import com.example.personalassistant.feature.settings.SettingsRepository
 import com.example.personalassistant.feature.task.domain.reminder.ReminderScheduler
+import com.example.personalassistant.feature.task.domain.usecase.RebuildTaskRemindersUseCase
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +33,13 @@ import javax.inject.Inject
  * Phase 8 Sub-step 8 增量：
  * - 读取 SettingsRepository 当前 hour/minute，传入 scheduler 让 Worker 按用户设置的时间触发
  * - 若 [com.example.personalassistant.feature.settings.SettingsRepository.holidayEveningReminderEnabled] == false 则不调度
+ *
+ * ## Phase 22.7：不再依赖「用户打开 App」来重建任务提醒
+ *
+ * 原来这里只 `cancelAll()`，把重建责任推给「App 进程活着时的观察流」。
+ * 但 AlarmManager 的闹钟在重启后被系统清空了 —— **用户不打开 App，提醒就永远不响**。
+ *
+ * 现在改成：BootReceiver 启动后扫全表重建（[RebuildTaskRemindersUseCase]）。
  */
 @AndroidEntryPoint
 class BootReceiver : BroadcastReceiver() {
@@ -40,6 +48,7 @@ class BootReceiver : BroadcastReceiver() {
     @Inject lateinit var dailyPoolScheduler: DailyPoolRefreshScheduler
     @Inject lateinit var holidayReminderScheduler: HolidayReminderScheduler
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var rebuildTaskReminders: RebuildTaskRemindersUseCase
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -52,6 +61,9 @@ class BootReceiver : BroadcastReceiver() {
                 scope.launch {
                     try {
                         reminderScheduler.cancelAll()
+                        // Phase 22.7：扫全表重建任务提醒 —— 不再依赖用户打开 App
+                        val rebuilt = rebuildTaskReminders()
+                        Log.i(TAG, "Rebuilt $rebuilt task reminder(s) after boot")
                         dailyPoolScheduler.scheduleNext(System.currentTimeMillis())
                         // Phase 8 Sub-step 8：从 Settings 读取开关 + 时间，再重设节假日提前通知 Worker
                         val eveningEnabled = settingsRepository.holidayEveningReminderEnabled.first()

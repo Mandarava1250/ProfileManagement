@@ -142,6 +142,19 @@ class TaskRepositoryImpl @Inject constructor(
             TaskWithSubTasks(task, subTasks)
         }
 
+    /**
+     * Phase 22.7：所有带提醒的未完成任务（含子任务）。
+     *
+     * 用 `dao.getAllTasks()`（不带 `parentTaskId IS NULL`）—— 子任务也能单独设提醒。
+     */
+    override suspend fun getTasksWithReminders(): List<Task> = withContext(dispatcher) {
+        dao.getAllTasks()
+            .asSequence()
+            .filter { !it.isCompleted && it.reminderTime != null }
+            .map { it.toDomain() }
+            .toList()
+    }
+
     // ===== 写操作 =====
 
     /**

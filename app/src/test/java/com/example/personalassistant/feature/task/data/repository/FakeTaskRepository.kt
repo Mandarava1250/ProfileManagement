@@ -53,6 +53,11 @@ class FakeTaskRepository : TaskRepository {
 
     override suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks? = null
 
+    /** Phase 22.7：可注入的「带提醒的任务」列表（重建提醒的测试用） */
+    var tasksWithReminders: List<Task> = emptyList()
+
+    override suspend fun getTasksWithReminders(): List<Task> = tasksWithReminders
+
     // ===== 写操作 =====
 
     override suspend fun upsertTask(task: Task, subTasks: List<Task>): Long {
