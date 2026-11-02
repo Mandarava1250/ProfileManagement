@@ -35,6 +35,8 @@ internal fun TransactionEntity.toDomain(): Transaction = Transaction(
     attachmentUri = attachmentUri,
     // Phase 5：转账对方账户。transferPairId **不**映射到领域模型（理由见 Transaction 注释）
     transferAccountId = transferAccountId,
+    // Phase 21：来源清单项（清单 ↔ 记账联动）
+    linkedTaskId = linkedTaskId,
 )
 
 internal fun Transaction.toEntity(): TransactionEntity = TransactionEntity(
@@ -47,6 +49,8 @@ internal fun Transaction.toEntity(): TransactionEntity = TransactionEntity(
     createdAt = createdAt,
     source = source,
     attachmentUri = attachmentUri,
+    // Phase 21：来源清单项
+    linkedTaskId = linkedTaskId,
 )
 
 // ===== Category =====

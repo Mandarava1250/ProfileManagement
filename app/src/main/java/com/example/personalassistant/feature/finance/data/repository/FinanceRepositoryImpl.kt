@@ -117,6 +117,7 @@ class FinanceRepositoryImpl @Inject constructor(
         note: String?,
         date: Long,
         attachmentUri: String?,
+        linkedTaskId: Long?,
     ): Long = withContext(dispatcher) {
         val accountId = awaitAccountId()
         val poolDate = startOfDayMillis(date)
@@ -129,8 +130,9 @@ class FinanceRepositoryImpl @Inject constructor(
             date = date,
             note = note,
             createdAt = System.currentTimeMillis(),
-            source = "手动",
+            source = if (linkedTaskId != null) "清单" else "手动",
             attachmentUri = attachmentUri,
+            linkedTaskId = linkedTaskId,
         )
         when (type) {
             TransactionType.EXPENSE ->

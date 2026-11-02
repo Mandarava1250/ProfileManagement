@@ -50,6 +50,12 @@ interface FinanceRepository {
         note: String?,
         date: Long,
         attachmentUri: String? = null,
+        /**
+         * Phase 21：来源清单项 id（从清单一键记账时写入）。
+         *
+         * 默认 null = 手动记的流水（绝大多数）。非 null 时记账页能顺着它跳回清单项。
+         */
+        linkedTaskId: Long? = null,
     ): Long
 
     // ===== Phase 5：跨账户转账 =====

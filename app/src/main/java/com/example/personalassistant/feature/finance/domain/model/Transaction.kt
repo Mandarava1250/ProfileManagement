@@ -28,4 +28,11 @@ data class Transaction(
     val attachmentUri: String? = null,
     /** 转账对方账户 id（Phase 5）；普通收支为 null */
     val transferAccountId: Long? = null,
+    /**
+     * Phase 21：来源清单项 id（从清单一键记账时写入）。
+     *
+     * - null = 手动记的流水（绝大多数）
+     * - 非 null = 由某个清单项生成，记账页能顺着它跳回清单项
+     */
+    val linkedTaskId: Long? = null,
 )

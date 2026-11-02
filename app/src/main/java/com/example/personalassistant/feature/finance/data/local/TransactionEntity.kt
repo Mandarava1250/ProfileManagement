@@ -42,6 +42,8 @@ import kotlinx.serialization.Serializable
     indices = [
         Index("date"),
         Index("type"),
+        // Phase 21：按清单项查流水（清单项详情里列「已记的账」用）
+        Index("linkedTaskId"),
         Index("categoryId"),
         Index(value = ["date", "type"]),
         Index(value = ["type", "categoryId", "date"]),
@@ -126,5 +128,18 @@ data class TransactionEntity(
      * 同样**不声明 defaultValue**（可空且无 DEFAULT，对齐 `rrule` 的先例）。
      */
     @ColumnInfo(name = "transferPairId")
-    val transferPairId: String? = null
+    val transferPairId: String? = null,
+
+    /**
+     * Phase 21：关联的清单项 id（从清单一键记账时写入）。
+     *
+     * - null = 手动记的流水（绝大多数）
+     * - 非 null = 由某个清单项生成，记账页能顺着它跳回清单项
+     *
+     * ⚠️ 同样**不声明 defaultValue**（可空且无 DEFAULT，对齐 `transferPairId` 的先例）
+     * ⚠️ **故意不加外键**：清单项被删时流水应该留下（钱花出去的事实不该消失），
+     * 所以这里是「弱引用」，删任务只会留下一条孤儿指针。
+     */
+    @ColumnInfo(name = "linkedTaskId")
+    val linkedTaskId: Long? = null
 )

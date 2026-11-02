@@ -198,6 +198,10 @@ IconButton(onClick = { viewModel.goToCurrent() }) {
                             dayDetail = selectedDayDetail,
                             modifier = Modifier.padding(horizontal = AppSpacing.md),
                             onEventClick = { event -> viewModel.startEditEvent(event) },
+                            // Phase 20：任务 / 课程也能点 —— 之前只有日程能点，
+                            // 用户在日历里看到任务却摸不着它。
+                            onTaskClick = { task -> navController.navigate(Screen.DetailTask.build(task.id)) },
+                            onCourseClick = { course -> navController.navigate(Screen.EditCourse.build(course.id)) },
                         )
                     }
                     CalendarViewType.WEEK -> WeekCalendarView(

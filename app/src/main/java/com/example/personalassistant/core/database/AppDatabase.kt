@@ -43,7 +43,7 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
  *
  * ⚠️ 升版时必须同步：本常量 + 新 Migration + `BackupFormatVersion.DB_VERSION`。
  */
-const val APP_DATABASE_VERSION = 15
+const val APP_DATABASE_VERSION = 16
 
 /**
  * App 主数据库
@@ -104,6 +104,7 @@ const val APP_DATABASE_VERSION = 15
     // tasks ×1（isCompleted+priority+dueDate）、sub_tasks ×1（category）。零行为变更。
     // v15（Phase 16 清单体系）：新建 task_lists + tasks 加 7 列 + **sub_tasks 整表并入 tasks**
     // + sub_task_tag_cross_ref 并入 task_tag_cross_ref。数据搬迁用恒定 id 偏移。
+    // v16（Phase 21 清单↔记账）：transactions 加 linkedTaskId 列 + 索引（弱引用，不加外键）。
     version = APP_DATABASE_VERSION,
     exportSchema = true
 )
@@ -146,6 +147,7 @@ abstract class AppDatabase : RoomDatabase() {
                 Migration_12_13,
                 Migration_13_14,
                 Migration_14_15,
+                MIGRATION_15_16,
             )
     }
 }

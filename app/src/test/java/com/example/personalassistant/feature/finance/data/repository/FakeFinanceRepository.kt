@@ -76,6 +76,7 @@ class FakeFinanceRepository : FinanceRepository {
         note: String?,
         date: Long,
         attachmentUri: String?,
+        linkedTaskId: Long?,
     ): Long {
         val id = nextTxId++
         transactionsState.value = transactionsState.value + Transaction(
@@ -86,8 +87,10 @@ class FakeFinanceRepository : FinanceRepository {
             date = date,
             note = note,
             createdAt = System.currentTimeMillis(),
-            source = "手动",
+            source = if (linkedTaskId != null) "清单" else "手动",
             attachmentUri = attachmentUri,
+            // Phase 21：来源清单项
+            linkedTaskId = linkedTaskId,
         )
         return id
     }

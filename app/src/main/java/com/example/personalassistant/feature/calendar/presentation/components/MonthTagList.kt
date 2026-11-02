@@ -42,13 +42,16 @@ import com.example.personalassistant.feature.timetable.domain.model.Course
  * 所以网格下面接一排标签，把选中这一天的日程、任务、课程全列出来 ——
  * 横向滚动，一行一类，不换行。
  *
- * 日程的标签可点（进编辑），任务和课程的标签只展示。
+ * Phase 20：**日程 / 任务 / 课程三类都可点** —— 任务跳任务详情，课程跳课表详情。
+ * 之前只有日程能点，任务和课程只是「摆在那儿」，用户看得到却摸不着。
  */
 @Composable
 fun MonthTagList(
     dayDetail: DayDetail?,
     modifier: Modifier = Modifier,
     onEventClick: (Event) -> Unit = {},
+    onTaskClick: (Task) -> Unit = {},
+    onCourseClick: (Course) -> Unit = {},
 ) {
     if (dayDetail == null) return
     val events = remember(dayDetail) { dayDetail.events }
@@ -80,6 +83,7 @@ fun MonthTagList(
                         text = task.title,
                         color = MaterialTheme.colorScheme.primary,
                         done = task.isCompleted,
+                        onClick = { onTaskClick(task) },
                     )
                 },
             )
@@ -91,6 +95,7 @@ fun MonthTagList(
                     TagChipData(
                         text = course.name,
                         color = Color(course.color),
+                        onClick = { onCourseClick(course) },
                     )
                 },
             )

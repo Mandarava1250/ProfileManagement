@@ -9,8 +9,10 @@ import com.example.personalassistant.feature.task.data.repository.ChecklistRepos
 import com.example.personalassistant.feature.task.data.repository.TagRepositoryImpl
 import com.example.personalassistant.feature.task.data.repository.TaskListRepositoryImpl
 import com.example.personalassistant.feature.task.data.repository.TaskRepositoryImpl
+import com.example.personalassistant.feature.task.data.preferences.NamedFilterRepositoryImpl
 import com.example.personalassistant.feature.task.domain.reminder.ReminderScheduler
 import com.example.personalassistant.feature.task.domain.repository.ChecklistRepository
+import com.example.personalassistant.feature.task.domain.repository.NamedFilterRepository
 import com.example.personalassistant.feature.task.domain.repository.TagRepository
 import com.example.personalassistant.feature.task.domain.repository.TaskListRepository
 import com.example.personalassistant.feature.task.domain.repository.TaskRepository
@@ -58,6 +60,11 @@ abstract class TaskModule {
     @Binds
     @Singleton
     abstract fun bindTaskListRepository(impl: TaskListRepositoryImpl): TaskListRepository
+
+    /** Phase 19：命名过滤器仓库绑定。 */
+    @Binds
+    @Singleton
+    abstract fun bindNamedFilterRepository(impl: NamedFilterRepositoryImpl): NamedFilterRepository
 
     @Binds
     @Singleton
