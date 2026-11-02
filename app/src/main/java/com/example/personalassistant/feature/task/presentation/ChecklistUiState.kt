@@ -1,7 +1,9 @@
 package com.example.personalassistant.feature.task.presentation
 
 import com.example.personalassistant.feature.task.domain.model.ChecklistFilter
+import com.example.personalassistant.feature.task.domain.model.ChecklistView
 import com.example.personalassistant.feature.task.domain.model.Task
+import com.example.personalassistant.feature.task.domain.model.TaskListWithCount
 import com.example.personalassistant.feature.task.domain.model.Tag
 
 /**
@@ -15,6 +17,11 @@ import com.example.personalassistant.feature.task.domain.model.Tag
  * - [sections]：按当前分组方式聚合的结果（group = NONE 时只有一个 section）
  * - [filter]：当前筛选条件（分类 / 标签 / 分组 / 排序）
  * - [availableTags]：全部标签（UI 画标签筛选 chip 行用）
+ *
+ * ## Phase 17 扩展
+ *
+ * - [currentView]：当前看的视图（智能清单 or 用户清单）—— 抽屉选中项
+ * - [lists]：全部未归档清单 + 未完成数（抽屉的「清单」区）
  */
 data class ChecklistUiState(
     val isLoading: Boolean = true,
@@ -28,4 +35,21 @@ data class ChecklistUiState(
     val filter: ChecklistFilter = ChecklistFilter(),
     /** 全部标签（标签筛选 chip 行用）。 */
     val availableTags: List<Tag> = emptyList(),
-)
+    /** Phase 17：当前视图（抽屉选中项）。 */
+    val currentView: ChecklistView = ChecklistView.Default,
+    /** Phase 17：全部未归档清单 + 未完成数。 */
+    val lists: List<TaskListWithCount> = emptyList(),
+) {
+    /**
+     * Phase 17：当前视图的标题（顶栏显示）。
+     *
+     * 用户清单用清单名，智能清单用固定文案。
+     */
+    val currentTitle: String
+        get() = when (val view = currentView) {
+            is ChecklistView.User -> lists.firstOrNull { it.list.id == view.listId }?.list?.displayName
+                ?: ""
+            is ChecklistView.Smart -> view.smartList.name
+            is ChecklistView.Quadrant -> "四象限"
+        }
+}

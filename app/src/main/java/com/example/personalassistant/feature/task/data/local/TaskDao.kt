@@ -179,6 +179,18 @@ interface TaskDao {
 
     // ===== Phase 8 Sub-step 4：备份导出快照 =====
 
+    /** 某清单下的全部任务 id（删清单前先把任务挪走用） */
+    @Query("SELECT id FROM tasks WHERE listId = :listId")
+    suspend fun getTaskIdsByList(listId: Long): List<Long>
+
+    /** 把任务移到另一个清单（Phase 17：清单之间挪任务） */
+    @Query("UPDATE tasks SET listId = :toListId, updatedAt = :now WHERE id = :taskId")
+    suspend fun updateListId(taskId: Long, toListId: Long, now: Long = System.currentTimeMillis())
+
+    /** 批量把任务移到另一个清单（Phase 17：删清单时「任务移到收集箱」） */
+    @Query("UPDATE tasks SET listId = :toListId, updatedAt = :now WHERE id IN (:taskIds)")
+    suspend fun updateListIds(taskIds: List<Long>, toListId: Long, now: Long = System.currentTimeMillis()): Int
+
     @Query("SELECT * FROM tasks")
     suspend fun getAllTasks(): List<TaskEntity>
 

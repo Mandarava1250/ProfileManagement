@@ -169,6 +169,31 @@ class FakeChecklistTaskDao : TaskDao {
         return size
     }
 
+    // ===== Phase 17：清单归属 =====
+
+    override suspend fun getTaskIdsByList(listId: Long): List<Long> =
+        tasksState.value.filter { it.listId == listId }.map { it.id }
+
+    override suspend fun updateListId(taskId: Long, toListId: Long, now: Long) {
+        tasksState.value = tasksState.value.map {
+            if (it.id == taskId) it.copy(listId = toListId) else it
+        }
+    }
+
+    override suspend fun updateListIds(taskIds: List<Long>, toListId: Long, now: Long): Int {
+        val target = taskIds.toSet()
+        var count = 0
+        tasksState.value = tasksState.value.map {
+            if (it.id in target) {
+                count++
+                it.copy(listId = toListId)
+            } else {
+                it
+            }
+        }
+        return count
+    }
+
     override suspend fun getAllTasks(): List<TaskEntity> = tasksState.value
 
     // ===== 清单测试用不到的方法 =====

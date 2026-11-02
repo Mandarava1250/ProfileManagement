@@ -2,6 +2,7 @@ package com.example.personalassistant.feature.task.domain.repository
 
 import com.example.personalassistant.feature.task.domain.model.ChecklistItem
 import com.example.personalassistant.feature.task.domain.model.Task
+import com.example.personalassistant.feature.task.domain.model.TaskList
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import kotlinx.coroutines.flow.Flow
 
@@ -51,6 +52,7 @@ interface ChecklistRepository {
         dueDate: Long? = null,
         priority: TaskPriority = TaskPriority.MEDIUM,
         amount: Double? = null,
+        listId: Long = TaskList.INBOX_ID,
     ): Long
 
     /**

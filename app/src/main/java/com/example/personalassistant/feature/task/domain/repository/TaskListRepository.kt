@@ -53,14 +53,16 @@ interface TaskListRepository {
     suspend fun updateAppearance(id: Long, colorHex: Long? = null, iconKey: String? = null)
 
     /**
-     * 删除清单。
+     * 删除清单（连带处理它的任务）。
      *
-     * ⚠️ `tasks.listId` 对 `task_lists` 是 **ON DELETE CASCADE** —— 删清单会连带删掉
-     * 它的任务！所以上层必须在删之前问用户「任务怎么办」（移到收集箱 / 一并删）。
+     * ⚠️ `tasks.listId` 对 `task_lists` 是 **ON DELETE CASCADE** —— 直接删清单
+     * 会连带删掉它的任务。所以删除必须和「任务怎么办」一起做，不能拆成两步：
+     * 拆开的话中间态一崩，用户的任务就无声无息地没了。
      *
-     * ⚠️ 内置收集箱不可删除。
+     * @param moveTasksToInbox true = 任务先挪到收集箱（任务保住）；false = 任务一并删除
+     * @return 被处理（移动或删除）的任务数
      */
-    suspend fun deleteList(id: Long)
+    suspend fun deleteListAndHandleTasks(id: Long, moveTasksToInbox: Boolean): Int
 
     /**
      * 归档 / 取消归档。
@@ -77,7 +79,7 @@ interface TaskListRepository {
     suspend fun reorderLists(orderedIds: List<Long>)
 
     /**
-     * 把任务移到另一个清单（删除清单时「移到收集箱」用）。
+     * 把任务移到另一个清单（清单之间挪任务）。
      *
      * @param toListId 目标清单 id
      * @param taskIds 要移动的任务 id

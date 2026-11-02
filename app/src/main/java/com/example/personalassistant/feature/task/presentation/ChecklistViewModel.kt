@@ -5,17 +5,27 @@ import androidx.lifecycle.viewModelScope
 import com.example.personalassistant.feature.task.domain.model.ChecklistFilter
 import com.example.personalassistant.feature.task.domain.model.ChecklistGroup
 import com.example.personalassistant.feature.task.domain.model.ChecklistSort
+import com.example.personalassistant.feature.task.domain.model.ChecklistView
+import com.example.personalassistant.feature.task.domain.model.SmartList
 import com.example.personalassistant.feature.task.domain.model.Task
+import com.example.personalassistant.feature.task.domain.model.TaskList
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.domain.model.applyTo
 import com.example.personalassistant.feature.task.domain.model.groupChecklistItems
+import com.example.personalassistant.feature.task.domain.model.matches
+import com.example.personalassistant.feature.task.domain.model.parseQuickInput
+import com.example.personalassistant.feature.task.domain.repository.TaskListRepository
 import com.example.personalassistant.feature.task.domain.usecase.AddChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.AddNestedChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.AttachTagToChecklistItemUseCase
+import com.example.personalassistant.feature.task.domain.usecase.CreateTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DeleteChecklistItemUseCase
+import com.example.personalassistant.feature.task.domain.usecase.DeleteTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DetachTagFromChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveAllTagsWithCountUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveChecklistItemsUseCase
+import com.example.personalassistant.feature.task.domain.usecase.ObserveTaskListsUseCase
+import com.example.personalassistant.feature.task.domain.usecase.RenameTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.UpdateChecklistItemUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,6 +36,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
 import javax.inject.Inject
 
 /**
@@ -53,17 +65,31 @@ class ChecklistViewModel @Inject constructor(
     private val attachTagToItem: AttachTagToChecklistItemUseCase,
     private val detachTagFromItem: DetachTagFromChecklistItemUseCase,
     observeAllTagsWithCount: ObserveAllTagsWithCountUseCase,
+    // ===== Phase 17：清单（归属地）=====
+    observeTaskLists: ObserveTaskListsUseCase,
+    private val createTaskList: CreateTaskListUseCase,
+    private val renameTaskList: RenameTaskListUseCase,
+    private val deleteTaskList: DeleteTaskListUseCase,
 ) : ViewModel() {
 
     /** 当前筛选条件（分类 / 标签 / 分组 / 排序）。 */
     private val filterState = MutableStateFlow(ChecklistFilter())
 
+    /** Phase 17：当前视图（智能清单 or 用户清单）。 */
+    private val currentViewState = MutableStateFlow<ChecklistView>(ChecklistView.Default)
+
     val uiState: StateFlow<ChecklistUiState> = combine(
         observeChecklistItems(),
         filterState,
         observeAllTagsWithCount(),
-    ) { items, filter, tags ->
-        val visible = filter.applyTo(items)
+        currentViewState,
+        observeTaskLists(),
+    ) { items, filter, tags, view, lists ->
+        // Phase 17：先按视图筛（收集箱 / 今天 / 用户清单……），再按分类 / 标签筛
+        val today = LocalDate.now()
+        val zone = ZoneId.systemDefault()
+        val inView = items.filter { view.matches(it.task, today, zone) }
+        val visible = filter.applyTo(inView)
         ChecklistUiState(
             isLoading = false,
             // 旧 UI 兼容字段：扁平清单项
@@ -73,12 +99,84 @@ class ChecklistViewModel @Inject constructor(
             sections = groupChecklistItems(visible, filter.group).map { it.toUi() },
             filter = filter,
             availableTags = tags,
+            currentView = view,
+            lists = lists,
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = ChecklistUiState(),
     )
+
+    // ===== Phase 17：视图切换 =====
+
+    /** 切到某个视图（智能清单 / 用户清单）。 */
+    fun selectView(view: ChecklistView) {
+        currentViewState.value = view
+    }
+
+    /** 切到某个智能清单。 */
+    fun selectSmartList(smartList: SmartList) {
+        selectView(ChecklistView.Smart(smartList))
+    }
+
+    /** 切到某个用户清单。 */
+    fun selectUserList(listId: Long) {
+        selectView(ChecklistView.User(listId))
+    }
+
+    /**
+     * 新建清单，建完自动切过去 —— 用户刚建完就等着往里放东西。
+     */
+    fun createList(displayName: String, colorHex: Long? = null) {
+        val trimmed = displayName.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch {
+            runCatching {
+                createTaskList(
+                    displayName = trimmed,
+                    colorHex = colorHex ?: TaskListRepository.DEFAULT_COLOR,
+                )
+            }.onSuccess { id -> selectUserList(id) }
+        }
+    }
+
+    /** 重命名清单。 */
+    fun renameList(id: Long, displayName: String) {
+        viewModelScope.launch {
+            runCatching { renameTaskList(id, displayName) }
+        }
+    }
+
+    /**
+     * 删除清单。
+     *
+     * 删完如果当前正看着这个清单，就退回收集箱 —— 否则页面会停在一个不存在的清单上。
+     */
+    fun deleteList(id: Long, strategy: DeleteTaskListUseCase.DeleteStrategy) {
+        viewModelScope.launch {
+            runCatching { deleteTaskList(id, strategy) }
+                .onSuccess {
+                    val view = currentViewState.value
+                    if (view is ChecklistView.User && view.listId == id) {
+                        selectSmartList(SmartList.INBOX)
+                    }
+                }
+        }
+    }
+
+    /**
+     * 当前视图下新建的清单项应该落在哪个清单。
+     *
+     * - 用户清单视图 → 落在那个清单
+     * - 智能清单视图 → 落收集箱（智能清单是「视图」不是「归属地」）
+     */
+    private fun targetListId(): Long = when (val view = currentViewState.value) {
+        is ChecklistView.User -> view.listId
+        is ChecklistView.Smart -> TaskList.INBOX_ID
+        // 四象限是「换排布」不是「归属地」—— 新建项仍落收集箱
+        is ChecklistView.Quadrant -> TaskList.INBOX_ID
+    }
 
     // ===== 增 =====
 
@@ -93,6 +191,9 @@ class ChecklistViewModel @Inject constructor(
 
     /**
      * 新增清单项（可带分类 / 截止时间 / 优先级 / 金额）。
+     *
+     * Phase 18：**标题里的自然语言日期会被拆出来**（「买牛奶 明天」→ 标题「买牛奶」+
+     * 截止明天 9:00）。拆不出就原样当标题。
      */
     fun addItemWithDetails(
         title: String,
@@ -103,12 +204,27 @@ class ChecklistViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             runCatching {
+                // Phase 18：自然语言日期 —— 只在没显式给截止时间时才从标题里拆
+                val parsed = if (dueDate == null) {
+                    parseQuickInput(
+                        input = title,
+                        today = LocalDate.now(),
+                        zoneId = ZoneId.systemDefault(),
+                    )
+                } else {
+                    null
+                }
+                val finalTitle = parsed?.title?.takeIf { it.isNotBlank() } ?: title
+                val finalDueDate = dueDate ?: parsed?.dueDate
+
                 addChecklistItem(
-                    title = title,
+                    title = finalTitle,
                     category = category,
-                    dueDate = dueDate,
+                    dueDate = finalDueDate,
                     priority = priority,
                     amount = amount,
+                    // Phase 17：落在当前视图对应的清单
+                    listId = targetListId(),
                 )
             }
         }

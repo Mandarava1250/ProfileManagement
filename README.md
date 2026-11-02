@@ -21,9 +21,9 @@
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用（纯离线） |
 | 包名 / 命名空间 | `com.example.personalassistant` |
 | 版本 | `versionCode 1` / `versionName 0.1.0`（首个 release：`v0.1.0`） |
-| 开发分支 | `Develop`（`feature/phase-14-ui-refresh` 已回合；`main` 为 release 分支） |
+| 开发分支 | `Develop`（`feature/phase-16-checklist-rebuild` 进行中；`main` 为 release 分支） |
 | 累计 commit | 176 |
-| Room 数据库 | **v14**（15 张表，schema 快照 `app/schemas/…/1.json ~ 14.json` 全量保留） |
+| Room 数据库 | **v15**（15 张表，schema 快照 `app/schemas/…/1.json ~ 15.json` 全量保留） |
 | 性能优化 | 五批（索引补全 / 备份批量化 / 重组收敛 / 调度器归位 / WAL + baseline profile）—— 详见 [`DEV_LOG.md`](DEV_LOG.md) 末尾段 |
 | 测试 | **921 JVM 单测** 全绿（99 个测试类，0 失败 / 0 错误）+ **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ JVM 数字是 Phase 15 收尾实测（`app/build/test-results/testDebugUnitTest` 下全量 XML 求和）；instrumented 数字仍是上一轮实测 |
 | 台账 | 见 [`DEV_LOG.md`](DEV_LOG.md) —— 全部 Phase 的完成项 / 验证结果 / 踩坑笔记 |
@@ -54,6 +54,7 @@
 - 筛选 / 排序 / 拖拽手动排序（`tasks.manualOrder`）/ 重复任务（repeatType + repeatDays）
 - 提醒调度：WorkManager 预排 + AlarmManager 精确触发，节假日感知策略（提前 / 当天 / 跳过）
 - **清单能力**（Phase 15）：分类 / 截止时间 / 优先级 / 金额 / 标签 / 分组筛选排序 / 子任务嵌套（最深 3 层），独立 `ChecklistRepository` + `ChecklistViewModel`
+- **清单模型合并 + 抽屉式清单页**（Phase 16–17）：两套模型合一（`tasks` 承载清单项，`task_lists` 承载归属地）；底栏「任务」改名「清单」，去掉双子 Tab 改**单页 + 左侧抽屉** —— 抽屉装**智能清单**（收集箱 / 今天 / 明天 / 最近 7 天 / 全部 / 已完成）与**用户清单**（自建归属地，带未完成数徽标，可新建 / 重命名 / 删除 / 归档）
 
 ### 记账（finance）
 - 流水 CRUD + 分类管理（含自定义图标）+ 月度预算 + 每日零钱池（跨天刷新）

@@ -37,6 +37,15 @@ sealed interface ChecklistView {
     /** 用户自建清单 */
     data class User(val listId: Long) : ChecklistView
 
+    /**
+     * 四象限视图（Eisenhower 矩阵）—— App 自有特色，非滴答模型。
+     *
+     * 与 [Smart] / [User] 的区别：它不是「筛选一批任务」，而是**换一种排布**
+     * （2×2 矩阵）。所以 [matches] 一律返回 true，实际分组由 UI 层的
+     * 矩阵视图负责。
+     */
+    data object Quadrant : ChecklistView
+
     companion object {
         /** 默认视图 = 收集箱（滴答的行为：进去先看收集箱） */
         val Default: ChecklistView = Smart(SmartList.INBOX)
@@ -52,6 +61,9 @@ sealed interface ChecklistView {
  * @param today 「今天」的日期（调用方按本地时区算好传进来）
  */
 fun ChecklistView.matches(task: Task, today: LocalDate, zoneId: ZoneId): Boolean = when (this) {
+    // 四象限是「换排布」不是「筛一批」—— 全部任务都进，由 UI 层分格
+    is ChecklistView.Quadrant -> true
+
     is ChecklistView.Smart -> when (smartList) {
         SmartList.INBOX -> task.listId == TaskList.INBOX_ID
         SmartList.ALL -> true

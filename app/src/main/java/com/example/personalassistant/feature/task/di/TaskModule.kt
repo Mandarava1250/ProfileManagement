@@ -7,10 +7,12 @@ import com.example.personalassistant.feature.task.data.reminder.CompositeReminde
 import com.example.personalassistant.feature.task.data.reminder.WorkManagerReminderScheduler
 import com.example.personalassistant.feature.task.data.repository.ChecklistRepositoryImpl
 import com.example.personalassistant.feature.task.data.repository.TagRepositoryImpl
+import com.example.personalassistant.feature.task.data.repository.TaskListRepositoryImpl
 import com.example.personalassistant.feature.task.data.repository.TaskRepositoryImpl
 import com.example.personalassistant.feature.task.domain.reminder.ReminderScheduler
 import com.example.personalassistant.feature.task.domain.repository.ChecklistRepository
 import com.example.personalassistant.feature.task.domain.repository.TagRepository
+import com.example.personalassistant.feature.task.domain.repository.TaskListRepository
 import com.example.personalassistant.feature.task.domain.repository.TaskRepository
 import com.example.personalassistant.feature.task.presentation.util.DefaultTagPaletteSource
 import com.example.personalassistant.feature.task.presentation.util.TagPaletteSource
@@ -51,6 +53,11 @@ abstract class TaskModule {
     @Binds
     @Singleton
     abstract fun bindChecklistRepository(impl: ChecklistRepositoryImpl): ChecklistRepository
+
+    /** Phase 17：清单（归属地）仓库绑定。 */
+    @Binds
+    @Singleton
+    abstract fun bindTaskListRepository(impl: TaskListRepositoryImpl): TaskListRepository
 
     @Binds
     @Singleton

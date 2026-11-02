@@ -71,7 +71,7 @@ interface TaskListDao {
         ORDER BY l.sortOrder ASC, l.createdAt ASC
         """
     )
-    fun observeWithPendingCount(): Flow<List<TaskListWithCount>>
+    fun observeWithPendingCount(): Flow<List<TaskListWithCountRow>>
 
     /** 归档 / 取消归档 */
     @Query("UPDATE task_lists SET isArchived = :archived WHERE id = :id")
@@ -80,6 +80,10 @@ interface TaskListDao {
     /** 改排序权重 */
     @Query("UPDATE task_lists SET sortOrder = :sortOrder WHERE id = :id")
     suspend fun setSortOrder(id: Long, sortOrder: Int)
+
+    /** 当前最大排序权重（新建清单时排到末尾用） */
+    @Query("SELECT MAX(sortOrder) FROM task_lists")
+    suspend fun getMaxSortOrder(): Int?
 
     // ===== 备份导出 / 导入 =====
 
@@ -103,8 +107,12 @@ interface TaskListDao {
  * 带未完成数的清单（侧边栏投影用）
  *
  * 计数由 JOIN + GROUP BY 算出，0 表示该清单下没有未完成任务。
+ *
+ * ⚠️ 名字带 `Row` 后缀：domain 层也有一个 `TaskListWithCount`（带 `list: TaskList`），
+ * 同名会让 mapper 的 import 冲突、类型推断崩掉。这里是**扁平行**（直接摊平字段），
+ * domain 那个是**嵌套行**（list + pendingCount），故用 Row 区分。
  */
-data class TaskListWithCount(
+data class TaskListWithCountRow(
     val id: Long,
     val nameNormalized: String,
     val displayName: String,

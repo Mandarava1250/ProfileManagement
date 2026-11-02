@@ -11,6 +11,7 @@ import com.example.personalassistant.feature.task.data.mapper.toDomain
 import com.example.personalassistant.feature.task.data.mapper.toEntity
 import com.example.personalassistant.feature.task.domain.model.ChecklistItem
 import com.example.personalassistant.feature.task.domain.model.Task
+import com.example.personalassistant.feature.task.domain.model.TaskList
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.domain.repository.ChecklistRepository
 import kotlinx.coroutines.CoroutineDispatcher
@@ -69,12 +70,14 @@ class ChecklistRepositoryImpl @Inject constructor(
         dueDate: Long?,
         priority: TaskPriority,
         amount: Double?,
+        listId: Long,
     ): Long = withContext(dispatcher) {
         // 追加到末尾（max + 1），修掉「order 恒为 0，新项全挤在最前面」的旧问题
         val nextOrder = (dao.getMaxTopLevelOrder() ?: -1L) + 1
         dao.insert(
             TaskEntity(
                 parentTaskId = null,
+                listId = listId,
                 title = title,
                 manualOrder = nextOrder,
                 category = category,
@@ -88,9 +91,12 @@ class ChecklistRepositoryImpl @Inject constructor(
     override suspend fun addNestedItem(parentSubTaskId: Long, title: String): Long = withContext(dispatcher) {
         // 子项在**同一父项下**排序，所以取的是该父项下子项的最大 order
         val nextOrder = (dao.getMaxSubTaskOrder(parentSubTaskId) ?: -1L) + 1
+        val parent = dao.getById(parentSubTaskId)
         dao.insert(
             TaskEntity(
                 parentTaskId = parentSubTaskId,
+                // 子项跟随父项的清单归属（Phase 17）
+                listId = parent?.listId ?: TaskList.INBOX_ID,
                 title = title,
                 manualOrder = nextOrder,
             ),

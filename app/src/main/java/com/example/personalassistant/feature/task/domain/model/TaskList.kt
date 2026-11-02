@@ -17,7 +17,7 @@ data class TaskList(
     /** UI 显示名（保留用户输入的大小写） */
     val displayName: String,
     /** ARGB 颜色值 */
-    val colorHex: Long,
+    val colorHex: Long = 0xFFFF69B4L,
     /** 图标 key，空串 = 默认图标 */
     val iconKey: String = "",
     /** 抽屉里的排序权重（升序） */

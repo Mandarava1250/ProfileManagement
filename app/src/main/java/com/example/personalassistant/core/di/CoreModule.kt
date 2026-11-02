@@ -19,6 +19,7 @@ import com.example.personalassistant.feature.me.data.local.StudentProfileDao
 import com.example.personalassistant.feature.profile.data.local.UserProfileDao
 import com.example.personalassistant.feature.task.data.local.TagDao
 import com.example.personalassistant.feature.task.data.local.TaskDao
+import com.example.personalassistant.feature.task.data.local.TaskListDao
 import com.example.personalassistant.feature.task.data.local.TaskTagDao
 import com.example.personalassistant.feature.timetable.data.local.CourseDao
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
@@ -107,6 +108,10 @@ object CoreModule {
 
     @Provides
     fun provideTaskDao(db: AppDatabase): TaskDao = db.taskDao()
+
+    /** Phase 17：清单 DAO（任务的归属地）。 */
+    @Provides
+    fun provideTaskListDao(db: AppDatabase): TaskListDao = db.taskListDao()
 
     @Provides
     fun provideTagDao(db: AppDatabase): TagDao = db.tagDao()

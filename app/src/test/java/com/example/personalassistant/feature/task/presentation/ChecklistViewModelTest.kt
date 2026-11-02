@@ -12,12 +12,17 @@ import com.example.personalassistant.feature.task.domain.repository.TagRepositor
 import com.example.personalassistant.feature.task.domain.usecase.AddChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.AddNestedChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.AttachTagToChecklistItemUseCase
+import com.example.personalassistant.feature.task.domain.usecase.CreateTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DeleteChecklistItemUseCase
+import com.example.personalassistant.feature.task.domain.usecase.DeleteTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DetachTagFromChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveAllTagsWithCountUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveChecklistItemsUseCase
+import com.example.personalassistant.feature.task.domain.usecase.ObserveTaskListsUseCase
+import com.example.personalassistant.feature.task.domain.usecase.RenameTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.UpdateChecklistItemUseCase
+import com.example.personalassistant.feature.task.data.repository.FakeTaskListRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -101,11 +106,13 @@ class ChecklistViewModelTest {
             dueDate: Long?,
             priority: TaskPriority,
             amount: Double?,
+            listId: Long,
         ): Long {
             val id = nextId++
             itemsState.value = itemsState.value + Task(
                 id = id,
                 parentTaskId = null,
+                listId = listId,
                 title = title,
                 manualOrder = itemsState.value.size.toLong(),
                 category = category,
@@ -190,6 +197,7 @@ class ChecklistViewModelTest {
     private fun makeVm(
         repo: FakeChecklistRepository = FakeChecklistRepository(),
         tagRepo: TagRepository = FakeTagRepository(),
+        listRepo: FakeTaskListRepository = FakeTaskListRepository(),
     ): ChecklistViewModel = ChecklistViewModel(
         observeChecklistItems = ObserveChecklistItemsUseCase(repo),
         addChecklistItem = AddChecklistItemUseCase(repo),
@@ -200,6 +208,11 @@ class ChecklistViewModelTest {
         attachTagToItem = AttachTagToChecklistItemUseCase(repo),
         detachTagFromItem = DetachTagFromChecklistItemUseCase(repo),
         observeAllTagsWithCount = ObserveAllTagsWithCountUseCase(tagRepo),
+        // ===== Phase 17：清单（归属地）=====
+        observeTaskLists = ObserveTaskListsUseCase(listRepo),
+        createTaskList = CreateTaskListUseCase(listRepo),
+        renameTaskList = RenameTaskListUseCase(listRepo),
+        deleteTaskList = DeleteTaskListUseCase(listRepo),
     )
 
     private fun tag(id: Long): Tag = Tag(
