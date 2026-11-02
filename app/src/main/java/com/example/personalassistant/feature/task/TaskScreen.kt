@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.DrawerValue
@@ -118,6 +119,17 @@ fun TaskScreen(
                             Icon(
                                 imageVector = Icons.Rounded.Menu,
                                 contentDescription = "打开清单抽屉",
+                            )
+                        }
+                    },
+                    actions = {
+                        // Phase 22.1：全局搜索入口
+                        // 滴答清单的搜索在顶部 —— 这里跟它的习惯一致，
+                        // 而不是把入口藏进「更多」里让用户找不到。
+                        IconButton(onClick = { navController.navigate(Screen.GlobalSearch.route) }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = "全局搜索",
                             )
                         }
                     },

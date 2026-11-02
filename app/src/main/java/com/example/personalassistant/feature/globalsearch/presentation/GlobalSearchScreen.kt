@@ -47,6 +47,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHit
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHitType
+import com.example.personalassistant.feature.globalsearch.domain.model.SearchHighlight
+import com.example.personalassistant.feature.globalsearch.presentation.components.HighlightedText
 
 /**
  * Phase 8 Sub-step 3：全局搜索页
@@ -103,6 +105,7 @@ fun GlobalSearchScreen(
                 !state.hasResults -> EmptySearchState(isNoResult = true)
                 else -> HitList(
                     hits = flattenedHits,
+                    query = state.query,
                     onHitClick = onHitClick,
                 )
             }
@@ -159,6 +162,7 @@ private fun EmptySearchState(isNoResult: Boolean) {
 @Composable
 private fun HitList(
     hits: List<GlobalSearchHit>,
+    query: String,
     onHitClick: (GlobalSearchHit) -> Unit,
 ) {
     // 按类型分组渲染：命中列表没变时分组结果也不变，缓存住
@@ -174,7 +178,11 @@ private fun HitList(
                     SectionHeader(type = type, count = items.size)
                 }
                 items(items = items, key = { "${type}_${it.entityId}" }) { hit ->
-                    HitCard(hit = hit, onClick = { onHitClick(hit) })
+                    HitCard(
+                        hit = hit,
+                        query = query,
+                        onClick = { onHitClick(hit) },
+                    )
                 }
             }
         }
@@ -213,6 +221,7 @@ private fun SectionHeader(type: GlobalSearchHitType, count: Int) {
 @Composable
 private fun HitCard(
     hit: GlobalSearchHit,
+    query: String,
     onClick: () -> Unit,
 ) {
     Card(
@@ -236,11 +245,12 @@ private fun HitCard(
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
+                // Phase 22.3：标题里的关键字高亮
+                HighlightedText(
                     text = hit.title,
+                    query = query,
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -252,6 +262,18 @@ private fun HitCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+            // Phase 22.3：命中片段（关键字不在标题里时，它才有信息量）
+            val highlight = hit.highlight
+            if (!highlight.isNullOrBlank() && !SearchHighlight.contains(hit.title, query)) {
+                Spacer(modifier = Modifier.height(2.dp))
+                HighlightedText(
+                    text = highlight,
+                    query = query,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
             }
         }
