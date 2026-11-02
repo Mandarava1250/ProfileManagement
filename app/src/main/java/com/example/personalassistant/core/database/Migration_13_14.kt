@@ -33,7 +33,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * `Migration didn't properly handle: transactions`（线上闪退同款）。
  *
  * 所以这里的四条语句**不是手写想当然** —— 它们与
- * `TransactionEntity` / `TaskEntity` / `SubTaskEntity` 上 `indices = [...]`
+ * `TransactionEntity` / `TaskEntity` / v13 时期的 `sub_tasks` 表上 `indices = [...]`
  * 的声明一一对应，由 KSP 生成的 `app/schemas/14.json` 反向校对过。
  *
  * 改名规则 = `index_` + 表名 + `_` + 各列名用 `_` 连接（列序与声明序一致）。

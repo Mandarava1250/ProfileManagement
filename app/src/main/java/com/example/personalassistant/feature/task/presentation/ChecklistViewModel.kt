@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.personalassistant.feature.task.domain.model.ChecklistFilter
 import com.example.personalassistant.feature.task.domain.model.ChecklistGroup
 import com.example.personalassistant.feature.task.domain.model.ChecklistSort
-import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.domain.model.applyTo
 import com.example.personalassistant.feature.task.domain.model.groupChecklistItems
@@ -67,7 +67,7 @@ class ChecklistViewModel @Inject constructor(
         ChecklistUiState(
             isLoading = false,
             // 旧 UI 兼容字段：扁平清单项
-            items = visible.map { it.subTask },
+            items = visible.map { it.task },
             // 新 UI 用这个：带标签 + 嵌套子清单
             itemDetails = visible.map { it.toUi() },
             sections = groupChecklistItems(visible, filter.group).map { it.toUi() },
@@ -183,7 +183,7 @@ class ChecklistViewModel @Inject constructor(
     // ===== 删 =====
 
     /** 删除清单项。 */
-    fun deleteItem(item: SubTask) {
+    fun deleteItem(item: Task) {
         viewModelScope.launch {
             runCatching { deleteChecklistItem(item) }
         }

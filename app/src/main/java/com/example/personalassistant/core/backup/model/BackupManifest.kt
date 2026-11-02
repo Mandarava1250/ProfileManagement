@@ -26,23 +26,50 @@ data class BackupManifest(
     val tables: List<String>,
 ) {
     companion object {
-        /** manifest 的固定顺序表清单（导入侧按此顺序清理+插入以保证外键依赖） */
+        /**
+         * manifest 的固定顺序表清单（导入侧按此顺序清理+插入以保证外键依赖）
+         *
+         * Phase 16：**15 张表**（原 13 张 - `sub_tasks` + `task_lists` + `event_categories` + `student_profile`）
+         *
+         * - 删 `sub_tasks`：Phase 16 把「清单项」并进 `tasks`，子项改由 `tasks.parentTaskId` 自引用表达
+         * - 加 `task_lists`：任务的归属清单（`tasks.listId` → `task_lists.id`）
+         * - 加 `event_categories`：日历事件分类（`events.categoryId` 指向它）
+         * - 加 `student_profile`：「我」档案（一账户一行，主键 accountId）
+         *
+         * 排序规则：**父表在前、子表在后** —— 本顺序同时决定三件事：
+         * ① **导出顺序** —— [com.example.personalassistant.core.backup.exporter.BackupExporter]
+         *    按本顺序逐张写 ZIP，父表先写，读回来时顺序才对得上；
+         * ② **导入插入顺序** —— 按本顺序**正序**插入，被依赖的父行必须先落库；
+         * ③ **导入清表顺序** —— 按本顺序的**反序**执行（先删子表、再删父表）。
+         *
+         * ⚠️ 改这个列表 = 同时改了上面三件事的顺序，外键依赖顺序要重新核一遍。
+         *
+         * - `user_profiles` 排最前 —— 记账 4 表与 `student_profile` 的 accountId 指向它
+         * - `task_lists` 排在 `tasks` 前 —— `tasks.listId` → `task_lists.id`（CASCADE）
+         * - `task_tag_cross_ref` 排在 `tasks` / `tags` 后 —— (taskId, tagId) 联合外键
+         * - `student_profile` 排最后 —— 叶子表（accountId → `user_profiles`）
+         */
         val DEFAULT_TABLES: List<String> = listOf(
             // Phase 3：账户表排最前 —— 记账 4 表的 accountId 指向它，必须先就位
             "user_profiles",
             "semesters",
             "courses",
             "tags",
+            // Phase 16：清单表 —— tasks.listId 指向它，必须排在 tasks 前
+            "task_lists",
             "tasks",
-            "sub_tasks",
             "task_tag_cross_ref",
             "events",
+            // Phase 16：日历事件分类 —— events.categoryId 指向它
+            "event_categories",
             "categories",
             "monthly_budgets",
             "daily_pools",
             "transactions",
             // Phase 8 Sub-step 7：节假日表（v6 新增）
             "holidays",
+            // Phase 16：「我」档案 —— accountId → user_profiles，叶子表排最后
+            "student_profile",
         )
     }
 }

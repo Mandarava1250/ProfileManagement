@@ -3,17 +3,14 @@ package com.example.personalassistant.feature.task.data.repository
 import androidx.room.withTransaction
 import com.example.personalassistant.core.database.AppDatabase
 import com.example.personalassistant.core.di.IoDispatcher
-import com.example.personalassistant.feature.task.data.local.SubTaskEntity
 import com.example.personalassistant.feature.task.data.local.TaskDao
-import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
+import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagDao
 import com.example.personalassistant.feature.task.data.mapper.toDomain
 import com.example.personalassistant.feature.task.data.mapper.toEntity
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
-import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
-import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.domain.model.TaskSort
 import com.example.personalassistant.feature.task.domain.model.TaskWithSubTasks
 import com.example.personalassistant.feature.task.domain.model.toComparator
@@ -35,13 +32,19 @@ import javax.inject.Singleton
  *
  * - 所有 IO 通过 [dispatcher]（IoDispatcher）执行
  * - upsertTask 走 withTransaction 保证原子性
- * - 子清单按 FK SET_NULL 行为：删除任务时子清单自动转为独立项
+ * - 子项按 FK SET NULL 行为：删除任务时子项自动转为顶层
  * - filter / sort 在内存层应用（Phase 4a）；未来可下沉到 DAO `@RawQuery`
  *
  * Phase 6c：
  * - 新增 [observeTasks] 的 [FilterExpression] 重载，支持 [FilterExpression.ByTag] + And/Or/Not 组合
  * - 旧 [observeTasks] ([TaskFilter], sort) 入口委托给新路径（通过 [TaskFilter.toExpression]）
  * - tag 筛选走内存过滤：从 [TaskTagDao.observeAllTaskTagPairs] 拉所有关联，构 tagId→taskIds 索引
+ *
+ * ## Phase 16
+ *
+ * `sub_tasks` 表已并入 `tasks`，所以这个仓库现在同时承担「任务」与「清单项」两种角色的读写 ——
+ * 它们本来就是同一个模型。原先挂在 `subTaskDao` 上的子项 CRUD 全部改走 [dao]，
+ * 「独立清单项」= 顶层任务（`parentTaskId IS NULL`）。
  */
 @Singleton
 class TaskRepositoryImpl @Inject constructor(
@@ -65,13 +68,19 @@ class TaskRepositoryImpl @Inject constructor(
     override fun observeTaskById(id: Long): Flow<Task?> =
         dao.observeById(id).map { it?.toDomain() }
 
-    override fun observeStandaloneChecklist(): Flow<List<SubTask>> =
-        dao.observeStandaloneSubTasks().map { list -> list.map { it.toDomain() } }
+    /**
+     * Phase 16：顶层任务流。
+     *
+     * 原语义是「独立清单项」（`sub_tasks` 里 `parentTaskId IS NULL` 的行）。
+     * 合并后它们就是 `tasks` 表里 `parentTaskId IS NULL` 的行 —— 也就是 [TaskDao.observeAll]。
+     */
+    override fun observeStandaloneChecklist(): Flow<List<Task>> =
+        dao.observeAll().map { list -> list.map { it.toDomain() } }
 
     /**
-     * Phase 6b：观察任务下的子清单（详情页 SubTaskSection 用）
+     * Phase 6b：观察任务下的子项（详情页 SubTaskSection 用）
      */
-    override fun observeSubTasks(parentId: Long): Flow<List<SubTask>> =
+    override fun observeSubTasks(parentId: Long): Flow<List<Task>> =
         dao.observeSubTasks(parentId).map { list -> list.map { it.toDomain() } }
 
     /**
@@ -135,14 +144,20 @@ class TaskRepositoryImpl @Inject constructor(
 
     // ===== 写操作 =====
 
-    override suspend fun upsertTask(task: Task, subTasks: List<SubTask>): Long =
+    /**
+     * 写入任务及其子项。
+     *
+     * Phase 16：子项不再是独立的 `SubTaskEntity`，而是同一张 `tasks` 表里的行，
+     * 用 `parentTaskId` 指向父任务。
+     */
+    override suspend fun upsertTask(task: Task, subTasks: List<Task>): Long =
         withContext(dispatcher) {
             database.withTransaction {
                 val taskId = dao.insert(task.toEntity())
-                // 整体替换子清单（清单项 id 不保留；MVP 阶段可接受的简化）
+                // 整体替换子项（子项 id 不保留；MVP 阶段可接受的简化）
                 dao.deleteSubTasksByParent(taskId)
                 subTasks.forEach { sub ->
-                    dao.insertSubTask(sub.copy(parentTaskId = taskId).toEntity())
+                    dao.insert(sub.copy(parentTaskId = taskId).toEntity())
                 }
                 taskId
             }
@@ -150,7 +165,7 @@ class TaskRepositoryImpl @Inject constructor(
 
     override suspend fun deleteTask(task: Task) = withContext(dispatcher) {
         dao.delete(task.toEntity())
-        // 子清单由 FK SET_NULL 自动转为独立项（设计意图：不删清单内容）
+        // 子项由 FK SET NULL 自动转为顶层（设计意图：不删清单内容）
         // 任务↔标签关联由 FK CASCADE 自动清掉
     }
 
@@ -159,13 +174,16 @@ class TaskRepositoryImpl @Inject constructor(
             dao.setCompleted(id, completed, System.currentTimeMillis())
         }
 
+    /**
+     * Phase 16：子项与任务是同一张表，所以完成状态走同一个 [TaskDao.setCompleted]。
+     */
     override suspend fun toggleSubTaskComplete(id: Long, completed: Boolean) =
         withContext(dispatcher) {
-            dao.setSubTaskCompleted(id, completed)
+            dao.setCompleted(id, completed, System.currentTimeMillis())
         }
 
     /**
-     * Phase 15：新增独立清单项，order **追加到末尾**（max + 1）。
+     * Phase 15/16：新增顶层项，manualOrder **追加到末尾**（max + 1）。
      *
      * 旧实现 order 恒为 0 → 所有独立清单项的 order 都是 0，
      * 新加的项会跟老项挤在一起（排序只能靠 createdAt 兜底，列表看着乱）。
@@ -173,37 +191,36 @@ class TaskRepositoryImpl @Inject constructor(
      */
     override suspend fun addStandaloneSubTask(title: String): Long =
         withContext(dispatcher) {
-            val maxOrder = dao.getMaxTopLevelSubTaskOrder() ?: -1
-            dao.insertSubTask(
-                SubTaskEntity(
+            val maxOrder = dao.getMaxTopLevelOrder() ?: -1L
+            dao.insert(
+                TaskEntity(
                     parentTaskId = null,
-                    parentSubTaskId = null,
                     title = title,
-                    order = maxOrder + 1,
+                    manualOrder = maxOrder + 1,
                 )
             )
         }
 
     /**
-     * Phase 6b：在指定任务下新增一个子清单项，order 自动追加到末尾
+     * Phase 6b：在指定任务下新增一个子项，manualOrder 自动追加到末尾
      *
      * - 调用方（UseCase）保证 title 已 trim 非空
      * - parentId 对应 task 不存在时由 FK 报错（应不会发生，详情页 init 时已加载）
      */
     override suspend fun addSubTaskToTask(parentId: Long, title: String): Long =
         withContext(dispatcher) {
-            val maxOrder = dao.getMaxSubTaskOrder(parentId) ?: -1
-            dao.insertSubTask(
-                SubTaskEntity(
+            val maxOrder = dao.getMaxSubTaskOrder(parentId) ?: -1L
+            dao.insert(
+                TaskEntity(
                     parentTaskId = parentId,
                     title = title,
-                    order = maxOrder + 1,
+                    manualOrder = maxOrder + 1,
                 )
             )
         }
 
-    override suspend fun deleteSubTask(subTask: SubTask) = withContext(dispatcher) {
-        dao.deleteSubTask(subTask.toEntity())
+    override suspend fun deleteSubTask(subTask: Task) = withContext(dispatcher) {
+        dao.delete(subTask.toEntity())
     }
 
     /**

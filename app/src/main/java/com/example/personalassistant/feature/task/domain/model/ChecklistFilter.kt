@@ -61,7 +61,7 @@ data class ChecklistFilter(
  */
 internal fun ChecklistFilter.applyTo(items: List<ChecklistItem>): List<ChecklistItem> {
     val filtered = items.filter { item ->
-        val categoryOk = category == null || item.subTask.category == category
+        val categoryOk = category == null || item.task.category == category
         val tagOk = tagId == null || item.tags.any { it.id == tagId }
         categoryOk && tagOk
     }
@@ -73,19 +73,19 @@ internal fun ChecklistFilter.applyTo(items: List<ChecklistItem>): List<Checklist
  */
 internal fun ChecklistFilter.sortItems(items: List<ChecklistItem>): List<ChecklistItem> = when (sort) {
     ChecklistSort.MANUAL -> items.sortedWith(
-        compareBy<ChecklistItem> { it.subTask.order }.thenBy { it.subTask.createdAt },
+        compareBy<ChecklistItem> { it.task.manualOrder }.thenBy { it.task.createdAt },
     )
     ChecklistSort.PRIORITY -> items.sortedWith(
-        compareByDescending<ChecklistItem> { it.subTask.priority.rank }.thenBy { it.subTask.order },
+        compareByDescending<ChecklistItem> { it.task.priority.rank }.thenBy { it.task.manualOrder },
     )
     ChecklistSort.DUE_DATE -> items.sortedWith(
-        compareBy<ChecklistItem> { it.subTask.dueDate ?: Long.MAX_VALUE }.thenBy { it.subTask.order },
+        compareBy<ChecklistItem> { it.task.dueDate ?: Long.MAX_VALUE }.thenBy { it.task.manualOrder },
     )
     ChecklistSort.CREATED_DESC -> items.sortedWith(
-        compareByDescending<ChecklistItem> { it.subTask.createdAt },
+        compareByDescending<ChecklistItem> { it.task.createdAt },
     )
     ChecklistSort.TITLE_ASC -> items.sortedWith(
-        compareBy(String.CASE_INSENSITIVE_ORDER) { it.subTask.title },
+        compareBy(String.CASE_INSENSITIVE_ORDER) { it.task.title },
     )
 }
 
@@ -101,22 +101,22 @@ internal fun groupChecklistItems(
 ): List<ChecklistSection> = when (group) {
     ChecklistGroup.NONE -> listOf(ChecklistSection("all", "全部", items))
     ChecklistGroup.UNCOMPLETED -> listOf(
-        ChecklistSection("uncompleted", "未完成", items.filter { !it.subTask.isCompleted }),
-        ChecklistSection("completed", "已完成", items.filter { it.subTask.isCompleted }),
+        ChecklistSection("uncompleted", "未完成", items.filter { !it.task.isCompleted }),
+        ChecklistSection("completed", "已完成", items.filter { it.task.isCompleted }),
     )
     ChecklistGroup.COMPLETED -> listOf(
-        ChecklistSection("completed", "已完成", items.filter { it.subTask.isCompleted }),
+        ChecklistSection("completed", "已完成", items.filter { it.task.isCompleted }),
     )
     ChecklistGroup.BY_CATEGORY -> items
-        .groupBy { it.subTask.category ?: UNCATEGORIZED_TITLE }
+        .groupBy { it.task.category ?: UNCATEGORIZED_TITLE }
         .map { (category, groupItems) -> ChecklistSection("category:$category", category, groupItems) }
     ChecklistGroup.BY_DUE_DATE -> {
         val dayStart = dayStartMillis(now)
         val dayEnd = dayEndMillis(now)
-        val overdue = items.filter { it.subTask.dueDate != null && it.subTask.dueDate < dayStart }
-        val today = items.filter { it.subTask.dueDate != null && it.subTask.dueDate in dayStart..dayEnd }
-        val later = items.filter { it.subTask.dueDate != null && it.subTask.dueDate > dayEnd }
-        val none = items.filter { it.subTask.dueDate == null }
+        val overdue = items.filter { it.task.dueDate != null && it.task.dueDate < dayStart }
+        val today = items.filter { it.task.dueDate != null && it.task.dueDate in dayStart..dayEnd }
+        val later = items.filter { it.task.dueDate != null && it.task.dueDate > dayEnd }
+        val none = items.filter { it.task.dueDate == null }
         listOf(
             ChecklistSection("overdue", "已逾期", overdue),
             ChecklistSection("today", "今天", today),

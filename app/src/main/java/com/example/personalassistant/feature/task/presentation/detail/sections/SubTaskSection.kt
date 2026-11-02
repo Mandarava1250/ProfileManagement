@@ -23,11 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.presentation.components.ChecklistItem
 
 /**
- * Phase 6b：详情页 SubTask section（可编辑子清单）。
+ * Phase 6b：详情页 Task section（可编辑子清单）。
  *
  * - 顶部：Section 标题 + 完成进度 badge（如「3/5」）
  * - 列表：复用现有 [ChecklistItem]
@@ -39,13 +39,13 @@ import com.example.personalassistant.feature.task.presentation.components.Checkl
  */
 @Composable
 fun SubTaskSection(
-    subTasks: List<SubTask>,
+    subTasks: List<Task>,
     completedCount: Int,
     input: String,
     onInputChange: (String) -> Unit,
     onAdd: () -> Unit,
     onToggle: (Long, Boolean) -> Unit,
-    onDelete: (SubTask) -> Unit,
+    onDelete: (Task) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(

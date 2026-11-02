@@ -1,5 +1,7 @@
 package com.example.personalassistant.core.backup.model
 
+import com.example.personalassistant.core.database.APP_DATABASE_VERSION
+
 /**
  * Phase 8 Sub-step 4：备份格式版本常量
  *
@@ -9,7 +11,7 @@ package com.example.personalassistant.core.backup.model
  *
  * ⚠️ DB_VERSION 与 [com.example.personalassistant.core.database.AppDatabase.version] 同步维护。
  *    Phase 3 之前它长期停在 7，而实际 schema 已到 8 —— 一处未被发现的老漂移，
- *    随 Phase 3（v9）一并修正；以后每次 schema +1 都要同时改这里。
+ *    随 Phase 3（v9）一并修正；现在它直接引用 [APP_DATABASE_VERSION]，不会再漂。
  *
  * 备份文件结构：
  * ```
@@ -17,19 +19,21 @@ package com.example.personalassistant.core.backup.model
  * ├── manifest.json     (格式版本 + 创建时间 + 数据库版本)
  * ├── checksums.json    (各表 JSON 的 sha256)
  * └── data/
- *     ├── user_profiles.json   ← Phase 3 新增（账户清单，记账数据归属根表）
- *     ├── courses.json
+ *     ├── user_profiles.json    ← Phase 3 新增（账户清单，记账数据归属根表）
  *     ├── semesters.json
- *     ├── tasks.json
- *     ├── sub_tasks.json
+ *     ├── courses.json
  *     ├── tags.json
+ *     ├── task_lists.json       ← Phase 16 新增（清单表，tasks.listId 的父表）
+ *     ├── tasks.json
  *     ├── task_tag_cross_ref.json
  *     ├── events.json
- *     ├── transactions.json
+ *     ├── event_categories.json ← Phase 16 新增（日历事件分类，events.categoryId 的父表）
  *     ├── categories.json
  *     ├── monthly_budgets.json
  *     ├── daily_pools.json
- *     └── holidays.json     ← Phase 8 Sub-step 7 新增（v6 起）
+ *     ├── transactions.json
+ *     ├── holidays.json         ← Phase 8 Sub-step 7 新增（v6 起）
+ *     └── student_profile.json  ← Phase 16 新增（「我」档案，一账户一行）
  * ```
  */
 object BackupFormatVersion {
@@ -39,8 +43,17 @@ object BackupFormatVersion {
      * Phase 3 没有升它：按 [BackupManifest] 的增量规则「新增表只往 tables 加一项，
      * FORMAT_VERSION 不必升」，user_profiles 属于新增表；
      * 记账 4 表新增 accountId 字段则靠 `@Serializable` 默认值向后兼容（旧 JSON 缺该字段 → 落 1L）。
+     *
+     * Phase 16：**升到 2**。理由是这次动到了「字段删除」这条红线 ——
+     * `sub_tasks` 表整张消失，[BackupPayload.subTasks] 字段被删除。
+     * 按 [BackupManifest] 的增量规则「删除字段：FORMAT_VERSION + 1」，
+     * 旧备份（formatVersion=1）解出来的 payload 少了这张表，
+     * 导入端必须能识别出「这份备份来自 sub_tasks 还在的年代」。
+     *
+     * 新增表（task_lists / event_categories / student_profile）本身不构成升版理由 ——
+     * 它们都有 `@Serializable` 默认值，旧 JSON 缺字段时解出空列表即可。
      */
-    const val FORMAT_VERSION: Int = 1
+    const val FORMAT_VERSION: Int = 2
 
     /**
      * App 数据库 schema version（备份时的 schema 版本）
@@ -48,11 +61,11 @@ object BackupFormatVersion {
      * ⚠️ Phase 5：必须与 [com.example.personalassistant.core.database.APP_DATABASE_VERSION] 同步。
      * 它由 BackupFormatVersionTest 直接引用那个常量比对，不是比对字面量。
      *
-     * Phase 15（v13）：清单项表加 5 列（分类/截止/优先级/金额/嵌套父指针）。
-     * FORMAT_VERSION **不升** —— 沿用 Phase 3 的同款做法：
-     * 新字段都有 `@Serializable` 默认值，旧备份 JSON 缺字段时落默认值即可（向后兼容）。
+     * Phase 16（v15）：新建 `task_lists` + `tasks` 加 7 列 + `sub_tasks` 整表并入 `tasks`。
+     * 这里**不再写字面量** —— 直接引用 [APP_DATABASE_VERSION]，
+     * 以后 schema 升版只要动数据库那边一个常量，备份这边自动跟上（老漂移的根治）。
      */
-    const val DB_VERSION: Int = 14
+    const val DB_VERSION: Int = APP_DATABASE_VERSION
 
     /** 应用包名（写入 manifest 用于跨应用保护）*/
     const val APPLICATION: String = "com.example.personalassistant"

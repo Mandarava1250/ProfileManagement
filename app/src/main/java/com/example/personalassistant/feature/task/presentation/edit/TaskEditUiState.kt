@@ -2,7 +2,7 @@ package com.example.personalassistant.feature.task.presentation.edit
 
 import com.example.personalassistant.core.holiday.model.HolidayStrategy
 import com.example.personalassistant.feature.task.domain.model.RepeatRule
-import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskCategory
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import java.time.Instant
@@ -30,7 +30,7 @@ data class TaskEditUiState(
     val description: String = "",
     val priority: TaskPriority = TaskPriority.MEDIUM,
     val dueDate: Long? = null,
-    val subTasks: List<SubTask> = emptyList(),
+    val subTasks: List<Task> = emptyList(),
     val newSubTaskInput: String = "",
     val showDatePicker: Boolean = false,
 

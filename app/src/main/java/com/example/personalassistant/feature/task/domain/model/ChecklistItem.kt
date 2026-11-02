@@ -1,31 +1,48 @@
 package com.example.personalassistant.feature.task.domain.model
 
 /**
- * Phase 15：清单项（Domain 组合模型）
+ * Phase 15/16：清单项（Domain 组合模型）
  *
- * 单纯的 [SubTask] 只带自身字段，清单页需要「一项 + 它的标签 + 它的子清单」，
+ * 单纯的 [Task] 只带自身字段，清单页需要「一项 + 它的标签 + 它的子清单」，
  * 所以数据层读出来之后组合成这个模型交给上层。
  *
- * - subTask：清单项本体（含分类 / 截止时间 / 优先级 / 金额）
- * - tags：关联标签（DB 表 `sub_task_tag_cross_ref`）
- * - children：嵌套子清单项（`parentSubTaskId` 指向本项）
+ * - task：清单项本体（[Task] —— Phase 16 起任务与清单项是同一个模型）
+ * - tags：关联标签（DB 表 `task_tag_cross_ref`）
+ * - children：嵌套子清单项（`parentTaskId` 指向本项）
+ *
+ * ## Phase 16 的变化
+ *
+ * 原来包装的是 `SubTask`，现在包装的是 [Task] —— `sub_tasks` 表已并入 `tasks`，
+ * 层级靠 `parentTaskId` 自引用表达。
  */
 data class ChecklistItem(
-    val subTask: SubTask,
+    val task: Task,
     val tags: List<Tag> = emptyList(),
     val children: List<ChecklistItem> = emptyList(),
 ) {
-    /** 清单项 id（快捷访问，省得 UI 每次都写 `item.subTask.id`） */
-    val id: Long get() = subTask.id
+    /** 清单项 id（快捷访问，省得 UI 每次都写 `item.task.id`） */
+    val id: Long get() = task.id
 
     /** 标题 */
-    val title: String get() = subTask.title
+    val title: String get() = task.title
 
     /** 是否已完成 */
-    val isCompleted: Boolean get() = subTask.isCompleted
+    val isCompleted: Boolean get() = task.isCompleted
 
     /** 分类名。null = 未分类 */
-    val category: String? get() = subTask.category
+    val category: String? get() = task.category
+
+    /** 截止时间（毫秒时间戳）。null = 无截止 */
+    val dueDate: Long? get() = task.dueDate
+
+    /** 优先级 */
+    val priority: TaskPriority get() = task.priority
+
+    /** 金额。null = 无金额 */
+    val amount: Double? get() = task.amount
+
+    /** 父清单项 id。null = 顶层清单项 */
+    val parentTaskId: Long? get() = task.parentTaskId
 }
 
 /**

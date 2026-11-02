@@ -16,15 +16,17 @@ import com.example.personalassistant.core.backup.snapshot.BackupSnapshotProvider
 import com.example.personalassistant.core.backup.validator.IBackupValidator
 import com.example.personalassistant.core.backup.validator.ValidationBundle
 import com.example.personalassistant.core.holiday.model.HolidayEntity
+import com.example.personalassistant.feature.calendar.data.local.EventCategoryEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
-import com.example.personalassistant.feature.task.data.local.SubTaskEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskEntity
+import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
@@ -58,7 +60,7 @@ import javax.inject.Inject
  *
  * ## 设计取舍
  * - **解码与差异分离**：[load] 不进入 Room 事务；[confirmImport] 才写入。预览不污染数据。
- * - **手动解码 13 张表**：本类不复用 [BackupImporter.import] 的内部解码，
+ * - **手动解码 15 张表**：本类不复用 [BackupImporter.import] 的内部解码，
  *   是因为 [BackupImporter] 把校验 + 解码 + 写库 串成一个函数，不能单独调解码。
  *   复制一份到此处是 plan 8f' 已认可的设计取舍；用同一份 [Json] 实例（DI 注入）
  *   保证反序列化行为对齐。
@@ -133,7 +135,7 @@ class BackupPreviewViewModel @Inject constructor(
     }
 
     /**
-     * 打开 SAF → ZipInputStream → 校验 → 解码 13 张表 → 返回 [BackupPayload]
+     * 打开 SAF → ZipInputStream → 校验 → 解码 15 张表 → 返回 [BackupPayload]
      */
     private fun openValidateAndDecode(
         uri: Uri?,
@@ -155,10 +157,13 @@ class BackupPreviewViewModel @Inject constructor(
     }
 
     /**
-     * 把 [ValidationBundle] 中的 13 张表 JSON 字节解码成 [BackupPayload]
+     * 把 [ValidationBundle] 中的 15 张表 JSON 字节解码成 [BackupPayload]
      *
      * 顺序与 [BackupManifest.DEFAULT_TABLES] 完全对应；与 [BackupImporter] 中的
      * 内部 `importValidatedBundle` 等价实现，但走自己的代码路径避免耦合。
+     *
+     * Phase 16：新增 task_lists / event_categories / student_profile；
+     * 删除 sub_tasks（子任务已并入 tasks，父任务 id 由 tasks.parentTaskId 表达）。
      */
     private fun decodePayload(bundle: ValidationBundle): BackupPayload {
         fun <T> bytes(table: String, ser: kotlinx.serialization.KSerializer<List<T>>): List<T> {
@@ -170,13 +175,17 @@ class BackupPreviewViewModel @Inject constructor(
             semesters = bytes("semesters", ListSerializer(SemesterEntity.serializer())),
             courses = bytes("courses", ListSerializer(CourseEntity.serializer())),
             tags = bytes("tags", ListSerializer(TagEntity.serializer())),
+            taskLists = bytes("task_lists", ListSerializer(TaskListEntity.serializer())),
             tasks = bytes("tasks", ListSerializer(TaskEntity.serializer())),
-            subTasks = bytes("sub_tasks", ListSerializer(SubTaskEntity.serializer())),
             taskTagCrossRefs = bytes(
                 "task_tag_cross_ref",
                 ListSerializer(TaskTagCrossRef.serializer()),
             ),
             events = bytes("events", ListSerializer(EventEntity.serializer())),
+            eventCategories = bytes(
+                "event_categories",
+                ListSerializer(EventCategoryEntity.serializer()),
+            ),
             categories = bytes("categories", ListSerializer(CategoryEntity.serializer())),
             monthlyBudgets = bytes(
                 "monthly_budgets",
@@ -185,6 +194,10 @@ class BackupPreviewViewModel @Inject constructor(
             dailyPools = bytes("daily_pools", ListSerializer(DailyPoolEntity.serializer())),
             transactions = bytes("transactions", ListSerializer(TransactionEntity.serializer())),
             holidays = bytes("holidays", ListSerializer(HolidayEntity.serializer())),
+            studentProfile = bytes(
+                "student_profile",
+                ListSerializer(StudentProfileEntity.serializer()),
+            ),
         )
     }
 

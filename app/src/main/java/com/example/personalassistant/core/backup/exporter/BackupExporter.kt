@@ -8,14 +8,16 @@ import com.example.personalassistant.core.backup.model.BackupManifest
 import com.example.personalassistant.core.backup.model.BackupPayload
 import com.example.personalassistant.core.backup.model.BackupResult
 import com.example.personalassistant.core.holiday.model.HolidayEntity
+import com.example.personalassistant.feature.calendar.data.local.EventCategoryEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
-import com.example.personalassistant.feature.task.data.local.SubTaskEntity
+import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskEntity
+import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
@@ -33,6 +35,9 @@ import javax.inject.Singleton
  * Phase 8 Sub-step 4：备份导出器（Payload -> ZIP）
  *
  * 把 [BackupPayload] 序列化为 JSON 写入 ZIP 压缩包，并写入 manifest / checksums。
+ *
+ * Phase 16：15 张表（原 13 张 - `sub_tasks` + `task_lists` + `event_categories` + `student_profile`）。
+ * 写出顺序与 [BackupManifest.DEFAULT_TABLES] 保持一致 —— 父表先写，导入侧读回来时顺序才对得上。
  */
 @Singleton
 class BackupExporter @Inject constructor(
@@ -52,15 +57,20 @@ class BackupExporter @Inject constructor(
                 writeSemesters(zipOut, payload.semesters, checksums)
                 writeCourses(zipOut, payload.courses, checksums)
                 writeTags(zipOut, payload.tags, checksums)
+                // Phase 16：清单表 —— tasks.listId 指向它，必须先写
+                writeTaskLists(zipOut, payload.taskLists, checksums)
                 writeTasks(zipOut, payload.tasks, checksums)
-                writeSubTasks(zipOut, payload.subTasks, checksums)
                 writeTaskTagCrossRefs(zipOut, payload.taskTagCrossRefs, checksums)
                 writeEvents(zipOut, payload.events, checksums)
+                // Phase 16：日历事件分类 —— events.categoryId 指向它
+                writeEventCategories(zipOut, payload.eventCategories, checksums)
                 writeCategories(zipOut, payload.categories, checksums)
                 writeMonthlyBudgets(zipOut, payload.monthlyBudgets, checksums)
                 writeDailyPools(zipOut, payload.dailyPools, checksums)
                 writeTransactions(zipOut, payload.transactions, checksums)
                 writeHolidays(zipOut, payload.holidays, checksums)
+                // Phase 16：「我」档案 —— 叶子表，最后写
+                writeStudentProfile(zipOut, payload.studentProfile, checksums)
 
                 val manifest = BackupManifest(
                     application = BackupFormatVersion.APPLICATION,
@@ -89,7 +99,7 @@ class BackupExporter @Inject constructor(
         }
     }
 
-    // 13 张表分别 dispatch（用唯一方法名避免 JVM signature clash）
+    // 15 张表分别 dispatch（用唯一方法名避免 JVM signature clash）
     private fun writeUserProfiles(zipOut: ZipOutputStream, data: List<UserProfileEntity>, checksums: MutableMap<String, String>) =
         writeBytes(zipOut, "user_profiles",
             json.encodeToString(ListSerializer(UserProfileEntity.serializer()), data).toByteArray(Charsets.UTF_8),
@@ -110,14 +120,15 @@ class BackupExporter @Inject constructor(
             json.encodeToString(ListSerializer(TagEntity.serializer()), data).toByteArray(Charsets.UTF_8),
             checksums)
 
+    /** Phase 16：清单表（tasks.listId 的父表） */
+    private fun writeTaskLists(zipOut: ZipOutputStream, data: List<TaskListEntity>, checksums: MutableMap<String, String>) =
+        writeBytes(zipOut, "task_lists",
+            json.encodeToString(ListSerializer(TaskListEntity.serializer()), data).toByteArray(Charsets.UTF_8),
+            checksums)
+
     private fun writeTasks(zipOut: ZipOutputStream, data: List<TaskEntity>, checksums: MutableMap<String, String>) =
         writeBytes(zipOut, "tasks",
             json.encodeToString(ListSerializer(TaskEntity.serializer()), data).toByteArray(Charsets.UTF_8),
-            checksums)
-
-    private fun writeSubTasks(zipOut: ZipOutputStream, data: List<SubTaskEntity>, checksums: MutableMap<String, String>) =
-        writeBytes(zipOut, "sub_tasks",
-            json.encodeToString(ListSerializer(SubTaskEntity.serializer()), data).toByteArray(Charsets.UTF_8),
             checksums)
 
     private fun writeTaskTagCrossRefs(zipOut: ZipOutputStream, data: List<TaskTagCrossRef>, checksums: MutableMap<String, String>) =
@@ -128,6 +139,12 @@ class BackupExporter @Inject constructor(
     private fun writeEvents(zipOut: ZipOutputStream, data: List<EventEntity>, checksums: MutableMap<String, String>) =
         writeBytes(zipOut, "events",
             json.encodeToString(ListSerializer(EventEntity.serializer()), data).toByteArray(Charsets.UTF_8),
+            checksums)
+
+    /** Phase 16：日历事件分类（events.categoryId 的父表） */
+    private fun writeEventCategories(zipOut: ZipOutputStream, data: List<EventCategoryEntity>, checksums: MutableMap<String, String>) =
+        writeBytes(zipOut, "event_categories",
+            json.encodeToString(ListSerializer(EventCategoryEntity.serializer()), data).toByteArray(Charsets.UTF_8),
             checksums)
 
     private fun writeCategories(zipOut: ZipOutputStream, data: List<CategoryEntity>, checksums: MutableMap<String, String>) =
@@ -153,6 +170,12 @@ class BackupExporter @Inject constructor(
     private fun writeHolidays(zipOut: ZipOutputStream, data: List<HolidayEntity>, checksums: MutableMap<String, String>) =
         writeBytes(zipOut, "holidays",
             json.encodeToString(ListSerializer(HolidayEntity.serializer()), data).toByteArray(Charsets.UTF_8),
+            checksums)
+
+    /** Phase 16：「我」档案（一账户一行） */
+    private fun writeStudentProfile(zipOut: ZipOutputStream, data: List<StudentProfileEntity>, checksums: MutableMap<String, String>) =
+        writeBytes(zipOut, "student_profile",
+            json.encodeToString(ListSerializer(StudentProfileEntity.serializer()), data).toByteArray(Charsets.UTF_8),
             checksums)
 
     private fun writeBytes(

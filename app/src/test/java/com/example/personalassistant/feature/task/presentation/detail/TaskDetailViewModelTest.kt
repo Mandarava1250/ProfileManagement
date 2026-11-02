@@ -2,7 +2,6 @@ package com.example.personalassistant.feature.task.presentation.detail
 
 import androidx.lifecycle.SavedStateHandle
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
-import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Tag
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
@@ -54,12 +53,12 @@ class TaskDetailViewModelTest {
 
     private class FakeTaskRepository(
         val taskFlow: MutableStateFlow<Task?> = MutableStateFlow(null),
-        val subTaskFlow: MutableStateFlow<List<SubTask>> = MutableStateFlow(emptyList()),
+        val subTaskFlow: MutableStateFlow<List<Task>> = MutableStateFlow(emptyList()),
     ) : TaskRepository {
         override fun observeActive() = MutableStateFlow<List<Task>>(emptyList())
         override fun observeCompleted() = MutableStateFlow<List<Task>>(emptyList())
         override fun observeTaskById(id: Long) = taskFlow
-        override fun observeStandaloneChecklist() = MutableStateFlow<List<SubTask>>(emptyList())
+        override fun observeStandaloneChecklist() = MutableStateFlow<List<Task>>(emptyList())
         override fun observeSubTasks(parentId: Long) = subTaskFlow
         override fun observeTasks(filter: TaskFilter, sort: TaskSort) =
             MutableStateFlow<List<Task>>(emptyList())
@@ -68,13 +67,13 @@ class TaskDetailViewModelTest {
             MutableStateFlow<List<Task>>(emptyList())
 
         override suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks? = null
-        override suspend fun upsertTask(task: Task, subTasks: List<SubTask>): Long = -1L
+        override suspend fun upsertTask(task: Task, subTasks: List<Task>): Long = -1L
         override suspend fun deleteTask(task: Task) {}
         override suspend fun toggleTaskComplete(id: Long, completed: Boolean) {}
         override suspend fun toggleSubTaskComplete(id: Long, completed: Boolean) {}
         override suspend fun addStandaloneSubTask(title: String): Long = -1L
         override suspend fun addSubTaskToTask(parentId: Long, title: String): Long = -1L
-        override suspend fun deleteSubTask(subTask: SubTask) {}
+        override suspend fun deleteSubTask(subTask: Task) {}
         override suspend fun reorderTasks(orderedIds: List<Long>) {}
 
         // Phase 8 Sub-step 3 全局搜索（占位实现 — 这些 VM 测试不关心搜索）
@@ -120,8 +119,8 @@ class TaskDetailViewModelTest {
         private val repo: FakeTaskRepository,
     ) : DeleteSubTaskUseCase(repository = repo) {
         var calls: Int = 0; private set
-        var lastSubTask: SubTask? = null; private set
-        override suspend operator fun invoke(subTask: SubTask) {
+        var lastSubTask: Task? = null; private set
+        override suspend operator fun invoke(subTask: Task) {
             calls++
             lastSubTask = subTask
         }
@@ -289,7 +288,7 @@ class TaskDetailViewModelTest {
             addTagToTaskUseCase = FakeAddTagToTaskUseCase(),
             removeTagFromTaskUseCase = FakeRemoveTagFromTaskUseCase(),
         )
-        val subTask = SubTask(id = 7L, parentTaskId = 1L, title = "test")
+        val subTask = Task(id = 7L, parentTaskId = 1L, title = "test")
 
         vm.deleteSubTask(subTask)
         advanceUntilIdle()

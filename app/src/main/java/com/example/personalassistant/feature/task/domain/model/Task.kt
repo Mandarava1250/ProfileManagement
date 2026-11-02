@@ -47,4 +47,37 @@ data class Task(
      * - 用户在 TaskEditScreen 选择后通过 [Task.holidayStrategy] 写回 Entity
      */
     val holidayStrategy: HolidayStrategy = HolidayStrategy.SKIP,
+
+    // ===== Phase 16：清单体系（吸收原「清单项」的字段） =====
+
+    /**
+     * 清单归属 id。指向 `task_lists` 表。
+     *
+     * DB 层这一列可空（SQLite 规定带 `REFERENCES` 的新列 DEFAULT 必须为 NULL），
+     * 但**业务层保证它一定有值** —— 拿不到就按内置收集箱（`TaskListEntity.INBOX_ID`）处理。
+     */
+    val listId: Long = 1L,
+
+    /**
+     * 父任务 id。null = 顶层任务。
+     *
+     * Phase 16 起用它统一表达层级：原来「任务 → 子清单 → 嵌套子清单」三层
+     * 现在统一成「任务 → 子任务」的 `parentTaskId` 链。
+     */
+    val parentTaskId: Long? = null,
+
+    /** 金额（经济程度）。null = 无金额。 */
+    val amount: Double? = null,
+
+    /** 时间段起点（绝对毫秒时间戳）。与 [endAt] 同时有值 = 在日历里是一个时段块。 */
+    val startAt: Long? = null,
+
+    /** 时间段终点（绝对毫秒时间戳）。 */
+    val endAt: Long? = null,
+
+    /** 完成时间（绝对毫秒时间戳）。null = 未完成。 */
+    val completedAt: Long? = null,
+
+    /** 置顶（恒在列表最前）。 */
+    val isPinned: Boolean = false,
 )

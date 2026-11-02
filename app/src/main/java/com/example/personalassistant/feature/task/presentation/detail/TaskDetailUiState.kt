@@ -1,13 +1,12 @@
 package com.example.personalassistant.feature.task.presentation.detail
 
-import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Tag
 import com.example.personalassistant.feature.task.domain.model.Task
 
 /**
  * Phase 6b→6c：任务详情页 UI 状态
  *
- * 设计动机：详情页按 sections（BasicInfo / SubTask / Tag / Attachments）拆分，
+ * 设计动机：详情页按 sections（BasicInfo / Task / Tag / Attachments）拆分，
  * 单一 UiState 聚合 sections 需要的字段，避免 section 各自订阅多个 ViewModel。
  *
  * - isLoading：首次加载 / task 还未到达（combine 第一帧之前）
@@ -23,7 +22,7 @@ import com.example.personalassistant.feature.task.domain.model.Task
 data class TaskDetailUiState(
     val isLoading: Boolean = true,
     val task: Task? = null,
-    val subTasks: List<SubTask> = emptyList(),
+    val subTasks: List<Task> = emptyList(),
     val newSubTaskInput: String = "",
     val tags: List<Tag> = emptyList(),
     val errorMessage: String? = null,

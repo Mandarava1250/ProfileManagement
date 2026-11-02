@@ -226,19 +226,19 @@ class BackupLegacyCompatTest {
     // ---------- 表清单不变量 ----------
 
     @Test
-    fun `DEFAULT_TABLES 为 13 张且顺序与内容固定`() {
-        assertEquals(13, BackupManifest.DEFAULT_TABLES.size)
+    fun `DEFAULT_TABLES 为 15 张且顺序与内容固定`() {
+        assertEquals(15, BackupManifest.DEFAULT_TABLES.size)
         assertEquals("user_profiles", BackupManifest.DEFAULT_TABLES.first())
-        assertEquals("holidays", BackupManifest.DEFAULT_TABLES.last())
+        assertEquals("student_profile", BackupManifest.DEFAULT_TABLES.last())
         assertEquals(
-            "表清单去重后仍应是 13 项",
-            13,
+            "表清单去重后仍应是 15 项",
+            15,
             BackupManifest.DEFAULT_TABLES.distinct().size,
         )
     }
 
     @Test
-    fun `manifest 带全部 13 张表可 round-trip`() {
+    fun `manifest 带全部 15 张表可 round-trip`() {
         val manifest = BackupManifest(
             application = "com.example.personalassistant",
             formatVersion = BackupFormatVersion.FORMAT_VERSION,

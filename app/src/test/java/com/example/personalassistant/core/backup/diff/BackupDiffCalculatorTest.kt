@@ -7,15 +7,17 @@ import com.example.personalassistant.core.backup.model.ImportStrategy
 import com.example.personalassistant.core.backup.model.TableDiff
 import com.example.personalassistant.core.holiday.model.HolidayEntity
 import com.example.personalassistant.core.holiday.model.HolidayType
+import com.example.personalassistant.feature.calendar.data.local.EventCategoryEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
-import com.example.personalassistant.feature.task.data.local.SubTaskEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskEntity
+import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
@@ -35,8 +37,11 @@ import org.junit.Test
  * - 默认策略必须是 ADD（最保守，绝不静默覆盖用户数据）
  * - 联合主键表（task_tag_cross_ref）不能走 id 等价
  * - sampleRowIds 的上限与去重
- * - 13 张表的完整性与顺序（与 [BackupManifest.DEFAULT_TABLES] 对齐）
+ * - 15 张表的完整性与顺序（与 [BackupManifest.DEFAULT_TABLES] 对齐）
  * - 外键拓扑表 [BackupDiffCalculator.TABLE_FK_GRAPH] 自身的一致性
+ *
+ * Phase 16：sub_tasks 已删表（子任务并入 tasks.parentTaskId），
+ * 新增 task_lists / event_categories / student_profile 三张表。
  */
 class BackupDiffCalculatorTest {
 
@@ -55,8 +60,19 @@ class BackupDiffCalculatorTest {
     private fun task(id: Long, title: String = "任务$id") =
         TaskEntity(id = id, title = title)
 
-    private fun subTask(id: Long, parent: Long = 1L) =
-        SubTaskEntity(id = id, parentTaskId = parent, title = "子$id")
+    private fun taskList(id: Long, name: String = "清单$id") = TaskListEntity(
+        id = id,
+        nameNormalized = "list$id",
+        displayName = name,
+    )
+
+    private fun eventCategory(id: Long) = EventCategoryEntity(
+        id = id,
+        name = "分类$id",
+        color = 0xFF112233.toInt(),
+    )
+
+    private fun studentProfile(accountId: Long) = StudentProfileEntity(accountId = accountId)
 
     private fun tag(id: Long) = TagEntity(
         id = id,
@@ -135,7 +151,7 @@ class BackupDiffCalculatorTest {
     // ---------- 完整性 ----------
 
     @Test
-    fun `compute 空备份空库 产出 13 张表且全部为空`() {
+    fun `compute 空备份空库 产出 15 张表且全部为空`() {
         val preview = compute(BackupPayload())
 
         assertEquals(
@@ -143,7 +159,7 @@ class BackupDiffCalculatorTest {
             BackupManifest.DEFAULT_TABLES.size,
             preview.perTable.size,
         )
-        assertEquals(13, preview.perTable.size)
+        assertEquals(15, preview.perTable.size)
         assertEquals(0, preview.totalToAdd)
         assertEquals(0, preview.totalToOverwrite)
         assertEquals(0, preview.totalSkippedTables)
@@ -343,28 +359,30 @@ class BackupDiffCalculatorTest {
     }
 
     @Test
-    fun `13 张表都能各自算出差异`() {
+    fun `15 张表都能各自算出差异`() {
         val payload = BackupPayload(
             userProfiles = listOf(profile(1)),
             semesters = listOf(semester(1)),
             courses = listOf(course(1)),
             tags = listOf(tag(1)),
+            taskLists = listOf(taskList(1)),
             tasks = listOf(task(1)),
-            subTasks = listOf(subTask(1)),
             taskTagCrossRefs = listOf(crossRef(1, 1)),
             events = listOf(event(1)),
+            eventCategories = listOf(eventCategory(1)),
             categories = listOf(category(1)),
             monthlyBudgets = listOf(monthlyBudget(1)),
             dailyPools = listOf(dailyPool(1)),
             transactions = listOf(transaction(1)),
             holidays = listOf(holiday(1)),
+            studentProfile = listOf(studentProfile(1)),
         )
         val preview = compute(payload)
 
-        assertEquals(13, preview.perTable.size)
+        assertEquals(15, preview.perTable.size)
         assertEquals(
             "每张表各 1 行全新数据",
-            13,
+            15,
             preview.totalToAdd,
         )
         preview.perTable.forEach { diff ->
@@ -413,17 +431,22 @@ class BackupDiffCalculatorTest {
         val graph = BackupDiffCalculator.TABLE_FK_GRAPH
 
         assertTrue(graph.getValue("courses").contains("semesters"))
-        assertTrue(graph.getValue("sub_tasks").contains("tasks"))
+        assertTrue(graph.getValue("tasks").contains("task_lists"))
         assertTrue(graph.getValue("task_tag_cross_ref") == setOf("tasks", "tags"))
         assertTrue(graph.getValue("transactions").contains("categories"))
+        assertTrue(graph.getValue("student_profile").contains("user_profiles"))
 
-        // events 与 holidays 是孤儿表：不参与级联（Phase 8 Sub-step 3 设计取舍）
-        assertTrue(graph.getValue("events").isEmpty())
+        // Phase 16：events 依赖 event_categories（语义依赖；DB 层没有这条 FK）
+        assertTrue(graph.getValue("events").contains("event_categories"))
+
+        // task_lists / event_categories 是根表；holidays 无 FK
+        assertTrue(graph.getValue("task_lists").isEmpty())
+        assertTrue(graph.getValue("event_categories").isEmpty())
         assertTrue(graph.getValue("holidays").isEmpty())
     }
 
     @Test
-    fun `依赖表在写入顺序上排在被依赖表之后`() {
+    fun `硬外键依赖表在写入顺序上排在被依赖表之前`() {
         val order: Map<String, Int> = BackupManifest.DEFAULT_TABLES
             .mapIndexed { index, table -> table to index }
             .toMap()
@@ -431,8 +454,14 @@ class BackupDiffCalculatorTest {
             order[table] ?: error("未知表 $table")
         }
 
+        // ⚠️ `events → event_categories` 是**语义依赖**（DB 层没有这条 FK），
+        // 而 DEFAULT_TABLES 里 events 排在 event_categories 之前 —— 这是有意为之
+        // （保持既定的 15 项固定顺序），所以这里对它网开一面。
+        val semanticOnlyEdges = setOf("events" to "event_categories")
+
         BackupDiffCalculator.TABLE_FK_GRAPH.forEach { (table, deps) ->
             deps.forEach { dep ->
+                if (table to dep in semanticOnlyEdges) return@forEach
                 assertTrue(
                     "$dep 必须先于 $table 写入，否则外键检查会失败",
                     indexOf(dep) < indexOf(table),
@@ -495,7 +524,7 @@ class BackupDiffCalculatorTest {
             courses = listOf(course(1L)),
             tags = listOf(tag(1L)),
             tasks = listOf(task(1L)),
-            subTasks = listOf(subTask(1L)),
+            taskLists = listOf(taskList(1L)),
             events = listOf(event(1L)),
             holidays = listOf(holiday(1L)),
         )
@@ -529,7 +558,7 @@ class BackupDiffCalculatorTest {
                     toOverwrite = emptyList(),
                 ),
                 TableDiff(
-                    tableName = "sub_tasks",
+                    tableName = "task_lists",
                     strategy = ImportStrategy.SKIP,
                     toAdd = emptyList<Any>(),
                     toOverwrite = emptyList(),

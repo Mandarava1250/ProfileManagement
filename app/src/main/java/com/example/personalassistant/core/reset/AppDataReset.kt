@@ -17,10 +17,12 @@ import javax.inject.Singleton
  * 阶段 Phase 6：应用数据清除（设置页「清除全部数据」入口的实际执行者）。
  *
  * ## 范围（不可恢复，UI 层需 3 秒长按 + 二次确认）
- * 1. [Room] 业务表：14 张全部清空（[RoomDatabase.clearAllTables]，事务内）。
+ * 1. [Room] 业务表：15 张全部清空（[RoomDatabase.clearAllTables]，事务内）。
  *    ⚠️ 不会触发 [com.example.personalassistant.core.database.DatabaseCallback.onCreate]，
  *    因此**默认账户不会被重新 seed**（决策 1A：完全清空，不留默认行）。
  *    下次启动 FinanceTab 会显示空账户列表，由用户在设置页建账户。
+ *    （v15 / Phase 16 起是 15 张：v13 的 16 张减去已废弃的 `sub_tasks`
+ *    与 `sub_task_tag_cross_ref`，加上新建的 `task_lists`。）
  * 2. [DataStore<Preferences>]：单一 Preferences 实例（"settings"）所有 key 一起清。
  *    含主题 / 当前账户 id / 通知询问 / 任务显示 / 备份 / 节假日等所有偏好。
  *    清完后 `currentAccountId` 回到默认 0（[com.example.personalassistant.feature.profile.data.local.AccountIds.DEFAULT_ACCOUNT_ID]）。

@@ -46,15 +46,16 @@ data class ChecklistSectionUi(
 
 /** Domain 清单项 → UI 模型 */
 internal fun ChecklistItem.toUi(): ChecklistItemUi = ChecklistItemUi(
-    id = subTask.id,
-    title = subTask.title,
-    isCompleted = subTask.isCompleted,
-    order = subTask.order,
-    category = subTask.category,
-    dueDate = subTask.dueDate,
-    priority = subTask.priority,
-    amount = subTask.amount,
-    parentSubTaskId = subTask.parentSubTaskId,
+    id = task.id,
+    title = task.title,
+    isCompleted = task.isCompleted,
+    // Phase 16：排序权重从 `sub_tasks.order`（Int）迁到 `tasks.manualOrder`（Long?）
+    order = task.manualOrder?.toInt() ?: 0,
+    category = task.category,
+    dueDate = task.dueDate,
+    priority = task.priority,
+    amount = task.amount,
+    parentSubTaskId = task.parentTaskId,
     tags = tags,
     children = children.map { it.toUi() },
 )

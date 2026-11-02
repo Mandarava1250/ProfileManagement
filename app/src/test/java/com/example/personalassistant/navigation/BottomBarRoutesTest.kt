@@ -88,8 +88,8 @@ class BottomBarRoutesTest {
             Screen.Appearance.route,
             Screen.FinanceCategory.route,
             Screen.FinanceBudget.route,
-            Screen.AddTransaction.route,
-            Screen.MonthlyBudget.route,
+            // Phase 16：`Screen.AddTransaction` / `Screen.MonthlyBudget` 已作为死声明删除
+            // （全项目零引用），故不再列入二级页清单。
         )
         secondary.forEach { route ->
             assertFalse("二级页面不应显示底栏：$route", isBottomBarRoute(route))

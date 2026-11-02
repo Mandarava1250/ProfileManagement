@@ -299,10 +299,9 @@ ProfileManagement/
 |----|------|---------|
 | `courses` | 课程（dayOfWeek、startTime/endTime 当天分钟数、weeks） | v1 |
 | `semesters` | 学期（name unique、startDate、endDate、isCurrent） | v1 |
-| `tasks` | 任务（priority、category、repeatType/repeatDays、reminderTime、manualOrder、holidayStrategy） | v1 → v6 |
-| `sub_tasks` | 子任务（parentTaskId、order、**category / dueDate / priority / amount / parentSubTaskId**） | v1 → **v13** |
-| `tags` / `task_tag_cross_ref` | 标签与任务↔标签关联 | v5（Phase 6c） |
-| `sub_task_tag_cross_ref` | 标签与清单项↔标签关联 | **v13**（Phase 15） |
+| `tasks` | 任务 = 清单项（**v15 起两套模型合并**）：priority、category、repeatType/repeatDays、reminderTime、manualOrder、holidayStrategy + **listId / parentTaskId / amount / startAt / endAt / completedAt / isPinned** | v1 → v6 → **v15** |
+| `task_lists` | 清单（nameNormalized、displayName、colorHex、iconKey、sortOrder、isSystem、isArchived）；内置「收集箱」id = 1 | **v15**（Phase 16） |
+| `tags` / `task_tag_cross_ref` | 标签与任务↔标签关联（v15 起清单项也走这张表） | v5（Phase 6c） |
 | `events` | 日历事件（date、startTime、isAllDay、reminder、categoryId、rrule） | v1 → v8 |
 | `event_categories` | 事件分类（name、color、iconKey、orderIndex） | v7（Phase 8 Sub-step 9） |
 | `transactions` | 记账流水（amount、type、categoryId、date、attachmentUri、accountId、**transferAccountId / transferPairId**） | v1 → **v10** |
@@ -311,6 +310,9 @@ ProfileManagement/
 | `daily_pools` | 每日零钱池（date unique、remainingAmount、carryOver） | v1 |
 | `holidays` | 节假日（2025-2026 预置） | v6（Phase 8 Sub-step 7） |
 | `user_profiles` | 账户（name、avatarUri、**initialBalance**；当前账户标记走 DataStore，不在表里） | v9 → **v10** |
+
+> **v15 起 `sub_tasks` / `sub_task_tag_cross_ref` 已不存在** —— 清单项并入 `tasks`，
+> 层级改用 `tasks.parentTaskId` 自引用表达。
 
 ### 版本演进关键节点
 
@@ -328,6 +330,7 @@ ProfileManagement/
 | v12 | `student_profile` **重建表**：`gpaRuleJson` 由 NOT NULL 变 nullable + 带 DEFAULT（`ADD COLUMN` 改不了已有列的 NOT NULL / DEFAULT） |
 | v13 | `sub_tasks` 加 `category` / `dueDate` / `priority` / `amount` / `parentSubTaskId` + 新建 `sub_task_tag_cross_ref`（纯增量 ADD COLUMN / 建表 / 索引） |
 | v14 | 纯性能索引补全，**不动表结构 / 列 / 数据 / 外键**：`transactions` 加 `transferPairId` 与 `(accountId, categoryId)` 索引；`tasks` 加 `(isCompleted, priority, dueDate)` 索引；`sub_tasks` 加 `category` 索引 |
+| v15 | **清单模型合并**（Phase 16）：新建 `task_lists`（内置收集箱 id=1）+ `tasks` 加 7 列（`listId` / `parentTaskId` / `amount` / `startAt` / `endAt` / `completedAt` / `isPinned`）+ **`sub_tasks` 整表并入 `tasks`**（恒定 id 偏移搬迁）、`sub_task_tag_cross_ref` 并入 `task_tag_cross_ref` |
 
 > ⚠️ `DEV_LOG.md` 早期段落里的部分字段名与快照有出入，**精确列名以 `app/schemas/` 为准**：
 > 快照显示 `tasks.priority` / `tasks.category` 在 **v1 就已存在**（日志写的是「v2→v3 新增」）；

@@ -71,7 +71,7 @@ internal const val DEFAULT_SUB_TASK_PRIORITY = 1
 /**
  * v13 新增的 5 列 → ADD COLUMN 语句片段。
  *
- * 键 = 列名（与 `SubTaskEntity` 的 `@ColumnInfo(name = ...)` 逐字一致），
+ * 键 = 列名（与 v13 时期 `sub_tasks` 表的列名逐字一致 —— 该 Entity 已随 Phase 16 删表下线），
  * 值 = 该列的 DDL 片段（不含 `ALTER TABLE ... ADD COLUMN` 前缀）。
  */
 internal val SUB_TASKS_NEW_COLUMN_DDL: Map<String, String> = mapOf(

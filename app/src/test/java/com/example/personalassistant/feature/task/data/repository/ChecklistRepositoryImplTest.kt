@@ -1,8 +1,9 @@
 package com.example.personalassistant.feature.task.data.repository
 
-import com.example.personalassistant.feature.task.data.local.SubTaskEntity
-import com.example.personalassistant.feature.task.data.local.SubTaskTagCrossRef
 import com.example.personalassistant.feature.task.data.local.TagEntity
+import com.example.personalassistant.feature.task.data.local.TaskEntity
+import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
+import com.example.personalassistant.feature.task.domain.model.ChecklistItem
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -14,49 +15,54 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Phase 15：清单仓库实现 [ChecklistRepositoryImpl] 的 JVM 单测。
+ * Phase 15/16：清单仓库实现 [ChecklistRepositoryImpl] 的 JVM 单测。
  *
- * 用内存版 Fake DAO（[FakeChecklistTaskDao] / [FakeChecklistTagDao]）跑，不碰真 Room。
+ * 用内存版 Fake DAO（[FakeChecklistTaskDao] / [FakeChecklistTagDao] / [FakeTaskTagDao]）跑，不碰真 Room。
  *
  * 覆盖这四件最容易回归的事：
  * 1. **新字段落库**：分类 / 截止时间 / 优先级 / 金额 / 嵌套父指针写得进去、读得出来
- * 2. **order 追加**：新增清单项是 `max(order) + 1`，不再全挤在 order = 0
- * 3. **标签挂载 / 解绑**：`sub_task_tag_cross_ref` 行的增删
+ * 2. **manualOrder 追加**：新增清单项是 `max(manualOrder) + 1`，不再全挤在 0
+ * 3. **标签挂载 / 解绑**：`task_tag_cross_ref` 行的增删
  * 4. **嵌套组树**：顶层项 + 标签 + 子清单能正确组出来（含深度上限与自环保护）
+ *
+ * ## Phase 16
+ *
+ * `sub_tasks` 表已并入 `tasks`：清单项本体就是 [TaskEntity]，
+ * 嵌套层级改用 `parentTaskId` 自引用表达（原 `parentSubTaskId`）。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChecklistRepositoryImplTest {
 
     private val dao = FakeChecklistTaskDao()
+    private val taskTagDao = FakeTaskTagDao()
     private val tagDao = FakeChecklistTagDao()
 
     /** 用 Unconfined 当 IO 调度器：仓库里的 withContext 不会把测试挂住。 */
-    private val repository = ChecklistRepositoryImpl(dao, tagDao, Dispatchers.Unconfined)
+    private val repository = ChecklistRepositoryImpl(dao, taskTagDao, tagDao, Dispatchers.Unconfined)
 
     private fun topLevel(
         id: Long = 0L,
         title: String = "项",
-        order: Int = 0,
-    ): SubTaskEntity = SubTaskEntity(
+        manualOrder: Long = 0L,
+    ): TaskEntity = TaskEntity(
         id = id,
         parentTaskId = null,
         title = title,
-        order = order,
+        manualOrder = manualOrder,
         createdAt = id,
     )
 
     private fun child(
         id: Long,
-        parentSubTaskId: Long,
+        parentTaskId: Long,
         title: String = "子项",
-        order: Int = 0,
-    ): SubTaskEntity = SubTaskEntity(
+        manualOrder: Long = 0L,
+    ): TaskEntity = TaskEntity(
         id = id,
-        parentTaskId = null,
+        parentTaskId = parentTaskId,
         title = title,
-        order = order,
+        manualOrder = manualOrder,
         createdAt = id,
-        parentSubTaskId = parentSubTaskId,
     )
 
     private fun tag(id: Long, name: String): TagEntity = TagEntity(
@@ -78,21 +84,20 @@ class ChecklistRepositoryImplTest {
             amount = 9.9,
         )
 
-        val stored = dao.storedSubTasks.single { it.id == id }
+        val stored = dao.storedTasks.single { it.id == id }
         assertEquals("买牛奶", stored.title)
         assertEquals("生活", stored.category)
         assertEquals(1_700_000_000_000L, stored.dueDate)
         assertEquals(TaskPriority.HIGH.dbValue, stored.priority)
         assertEquals(9.9, stored.amount!!, 0.0001)
         assertNull("顶层清单项不该有 parentTaskId", stored.parentTaskId)
-        assertNull("顶层清单项不该有 parentSubTaskId", stored.parentSubTaskId)
     }
 
     @Test
     fun addItemWithoutDetailsKeepsNullableFieldsNull() = runTest {
         val id = repository.addItem(title = "只有标题")
 
-        val stored = dao.storedSubTasks.single { it.id == id }
+        val stored = dao.storedTasks.single { it.id == id }
         assertNull(stored.category)
         assertNull(stored.dueDate)
         assertNull(stored.amount)
@@ -101,7 +106,7 @@ class ChecklistRepositoryImplTest {
 
     @Test
     fun updateItemPersistsNewFields() = runTest {
-        dao.seedSubTask(topLevel(id = 1L, title = "旧标题"))
+        dao.seedTask(topLevel(id = 1L, title = "旧标题"))
         val current = repository.getItem(1L)!!
 
         repository.updateItem(
@@ -114,7 +119,7 @@ class ChecklistRepositoryImplTest {
             ),
         )
 
-        val stored = dao.storedSubTasks.single()
+        val stored = dao.storedTasks.single()
         assertEquals("新标题", stored.title)
         assertEquals("工作", stored.category)
         assertEquals(42L, stored.dueDate)
@@ -124,8 +129,8 @@ class ChecklistRepositoryImplTest {
 
     @Test
     fun getItemMapsNewFieldsToDomain() = runTest {
-        dao.seedSubTask(
-            SubTaskEntity(
+        dao.seedTask(
+            TaskEntity(
                 id = 1L,
                 parentTaskId = null,
                 title = "带字段",
@@ -143,36 +148,36 @@ class ChecklistRepositoryImplTest {
         assertEquals(1.25, item.amount!!, 0.0001)
     }
 
-    // ===== 2. order 追加 =====
+    // ===== 2. manualOrder 追加 =====
 
     @Test
     fun addItemAppendsAfterExistingTopLevelItems() = runTest {
-        dao.seedSubTask(topLevel(id = 1L, title = "第一", order = 0))
-        dao.seedSubTask(topLevel(id = 2L, title = "第二", order = 1))
+        dao.seedTask(topLevel(id = 1L, title = "第一", manualOrder = 0L))
+        dao.seedTask(topLevel(id = 2L, title = "第二", manualOrder = 1L))
 
         val id = repository.addItem(title = "第三")
 
-        assertEquals("新项应排在末尾（max + 1）", 2, dao.storedSubTasks.single { it.id == id }.order)
+        assertEquals("新项应排在末尾（max + 1）", 2L, dao.storedTasks.single { it.id == id }.manualOrder)
     }
 
     @Test
     fun addItemStartsAtOrderZeroOnEmptyTable() = runTest {
         val id = repository.addItem(title = "第一个")
-        assertEquals(0, dao.storedSubTasks.single { it.id == id }.order)
+        assertEquals(0L, dao.storedTasks.single { it.id == id }.manualOrder)
     }
 
     @Test
     fun addNestedItemAppendsWithinTheSameParent() = runTest {
-        dao.seedSubTask(topLevel(id = 1L, title = "父", order = 0))
+        dao.seedTask(topLevel(id = 1L, title = "父", manualOrder = 0L))
 
         val first = repository.addNestedItem(parentSubTaskId = 1L, title = "子一")
         val second = repository.addNestedItem(parentSubTaskId = 1L, title = "子二")
         val otherParentChild = repository.addNestedItem(parentSubTaskId = 2L, title = "另一个父的子")
 
-        assertEquals(1L, dao.storedSubTasks.single { it.id == first }.parentSubTaskId)
-        assertEquals(0, dao.storedSubTasks.single { it.id == first }.order)
-        assertEquals(1, dao.storedSubTasks.single { it.id == second }.order)
-        assertEquals("不同父项下各自从 0 开始", 0, dao.storedSubTasks.single { it.id == otherParentChild }.order)
+        assertEquals(1L, dao.storedTasks.single { it.id == first }.parentTaskId)
+        assertEquals(0L, dao.storedTasks.single { it.id == first }.manualOrder)
+        assertEquals(1L, dao.storedTasks.single { it.id == second }.manualOrder)
+        assertEquals("不同父项下各自从 0 开始", 0L, dao.storedTasks.single { it.id == otherParentChild }.manualOrder)
     }
 
     // ===== 3. 标签挂载 / 解绑 =====
@@ -182,8 +187,8 @@ class ChecklistRepositoryImplTest {
         repository.attachTag(subTaskId = 1L, tagId = 7L)
 
         assertEquals(
-            listOf(SubTaskTagCrossRef(subTaskId = 1L, tagId = 7L)),
-            dao.storedTagPairs,
+            listOf(TaskTagCrossRef(taskId = 1L, tagId = 7L)),
+            taskTagDao.storedPairs,
         )
     }
 
@@ -192,7 +197,7 @@ class ChecklistRepositoryImplTest {
         repository.attachTag(subTaskId = 1L, tagId = 7L)
         repository.attachTag(subTaskId = 1L, tagId = 7L)
 
-        assertEquals(1, dao.storedTagPairs.size)
+        assertEquals(1, taskTagDao.storedPairs.size)
     }
 
     @Test
@@ -200,16 +205,17 @@ class ChecklistRepositoryImplTest {
         repository.attachTag(subTaskId = 1L, tagId = 7L)
         repository.detachTag(subTaskId = 1L, tagId = 7L)
 
-        assertTrue("解绑后不该还留着关联行", dao.storedTagPairs.isEmpty())
+        assertTrue("解绑后不该还留着关联行", taskTagDao.storedPairs.isEmpty())
     }
 
     // ===== 4. 组树（顶层 + 标签 + 子清单） =====
 
     @Test
     fun observeChecklistItemsBuildsTreeWithTagsAndChildren() = runTest {
-        dao.seedSubTask(topLevel(id = 1L, title = "父", order = 0))
-        dao.seedSubTask(child(id = 2L, parentSubTaskId = 1L, title = "子"))
+        dao.seedTask(topLevel(id = 1L, title = "父", manualOrder = 0L))
+        dao.seedTask(child(id = 2L, parentTaskId = 1L, title = "子"))
         tagDao.seedTag(tag(id = 7L, name = "Work"))
+        taskTagDao.seedTag(tag(id = 7L, name = "Work"))
         repository.attachTag(subTaskId = 1L, tagId = 7L)
 
         val items = repository.observeChecklistItems().first()
@@ -220,14 +226,13 @@ class ChecklistRepositoryImplTest {
         assertEquals(listOf(7L), root.tags.map { it.id })
         assertEquals(1, root.children.size)
         assertEquals("子", root.children.single().title)
-        assertEquals(1L, root.children.single().subTask.parentSubTaskId)
-        assertNull(root.children.single().subTask.parentTaskId)
+        assertEquals(1L, root.children.single().task.parentTaskId)
     }
 
     @Test
-    fun observeChecklistItemsSortsTopLevelByOrder() = runTest {
-        dao.seedSubTask(topLevel(id = 1L, title = "第一", order = 1))
-        dao.seedSubTask(topLevel(id = 2L, title = "第二", order = 0))
+    fun observeChecklistItemsSortsTopLevelByManualOrder() = runTest {
+        dao.seedTask(topLevel(id = 1L, title = "第一", manualOrder = 1L))
+        dao.seedTask(topLevel(id = 2L, title = "第二", manualOrder = 0L))
 
         val items = repository.observeChecklistItems().first()
 
@@ -237,13 +242,12 @@ class ChecklistRepositoryImplTest {
     @Test
     fun buildChecklistTreeStopsAtMaxDepth() {
         val rows = (1L..5L).map { id ->
-            SubTaskEntity(
+            TaskEntity(
                 id = id,
-                parentTaskId = null,
+                parentTaskId = if (id == 1L) null else id - 1,
                 title = "级$id",
-                order = 0,
+                manualOrder = 0L,
                 createdAt = id,
-                parentSubTaskId = if (id == 1L) null else id - 1,
             )
         }
 
@@ -254,17 +258,29 @@ class ChecklistRepositoryImplTest {
         assertEquals(1, root.children.size)
         assertEquals(1, root.children.single().children.size)
         assertEquals(1, root.children.single().children.single().children.size)
-        assertTrue(
-            "超过最大层级后不再展开",
-            root.children.single().children.single().children.single().children.isEmpty(),
-        )
+
+        // Phase 16：深度到顶（MAX_CHECKLIST_DEPTH = 3）后，更深的子孙被**拍平**挂到这一层，
+        // 而不是被静默丢掉 —— 数据还在，界面上也得看得见。
+        val depthTop = root.children.single().children.single().children.single()
+        assertEquals("超深项应被拍平挂到深度上限那一层", 1, depthTop.children.size)
+        assertEquals(5L, depthTop.children.single().id)
+        assertTrue("拍平项不再往下展开", depthTop.children.single().children.isEmpty())
+
+        // 全部 5 行都还在树里 —— 一行都没丢
+        val idsInTree = mutableListOf<Long>()
+        fun collect(item: ChecklistItem) {
+            idsInTree += item.id
+            item.children.forEach { collect(it) }
+        }
+        tree.forEach { collect(it) }
+        assertEquals("所有行都应出现在树里", (1L..5L).toSet(), idsInTree.toSet())
     }
 
     @Test
     fun buildChecklistTreeIgnoresSelfParentedRow() {
         val rows = listOf(
             topLevel(id = 1L, title = "根"),
-            child(id = 2L, parentSubTaskId = 2L, title = "自环"),
+            child(id = 2L, parentTaskId = 2L, title = "自环"),
         )
 
         val tree = buildChecklistTree(rows, emptyList(), emptyList())
@@ -277,20 +293,20 @@ class ChecklistRepositoryImplTest {
 
     @Test
     fun toggleCompleteFlipsStoredFlag() = runTest {
-        dao.seedSubTask(topLevel(id = 1L))
+        dao.seedTask(topLevel(id = 1L))
 
         repository.toggleComplete(id = 1L, completed = true)
 
-        assertTrue(dao.storedSubTasks.single().isCompleted)
+        assertTrue(dao.storedTasks.single().isCompleted)
     }
 
     @Test
     fun deleteItemRemovesStoredRow() = runTest {
-        dao.seedSubTask(topLevel(id = 1L))
+        dao.seedTask(topLevel(id = 1L))
         val item = repository.getItem(1L)!!
 
         repository.deleteItem(item)
 
-        assertTrue(dao.storedSubTasks.isEmpty())
+        assertTrue(dao.storedTasks.isEmpty())
     }
 }

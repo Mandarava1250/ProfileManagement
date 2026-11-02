@@ -33,7 +33,7 @@ import com.example.personalassistant.feature.task.presentation.ChecklistItemUi
  * 清单页的清单项卡片（Phase 15）—— 带分类 / 标签 / 截止 / 金额 / 优先级 + 可展开的子清单。
  *
  * 与旧的 [ChecklistItem] 的关系：
- * - 旧的 [ChecklistItem] 吃 [com.example.personalassistant.feature.task.domain.model.SubTask]，
+ * - 旧的 [ChecklistItem] 吃 [com.example.personalassistant.feature.task.domain.model.Task]，
  *   服务于任务详情页 / 编辑页的子清单，那里拿不到标签与嵌套子项。
  * - 这里的 [ChecklistItemUi] 是清单页专用的 UI 模型，自带 tags / children。
  * - 两边共用同一套行画法 [ChecklistItemRow]，视觉不会分叉。

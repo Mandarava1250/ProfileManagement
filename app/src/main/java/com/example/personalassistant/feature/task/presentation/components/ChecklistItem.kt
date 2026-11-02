@@ -38,7 +38,7 @@ import com.example.personalassistant.R
 import com.example.personalassistant.core.ui.components.AppMetaChip
 import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.core.ui.theme.LocalAppColors
-import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.Tag
 import com.example.personalassistant.feature.task.domain.model.TaskCategory
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
@@ -69,7 +69,7 @@ import java.time.ZoneId
  */
 @Composable
 fun ChecklistItem(
-    item: SubTask,
+    item: Task,
     onToggleComplete: (Boolean) -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,

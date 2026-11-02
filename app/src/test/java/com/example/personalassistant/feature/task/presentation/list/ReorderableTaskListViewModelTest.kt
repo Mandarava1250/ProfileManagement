@@ -1,7 +1,6 @@
 package com.example.personalassistant.feature.task.presentation.list
 
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
-import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
 import com.example.personalassistant.feature.task.domain.model.TaskSort
@@ -44,21 +43,21 @@ class ReorderableTaskListViewModelTest {
         override fun observeActive() = MutableStateFlow<List<Task>>(emptyList())
         override fun observeCompleted() = MutableStateFlow<List<Task>>(emptyList())
         override fun observeTaskById(id: Long) = MutableStateFlow<Task?>(null)
-        override fun observeStandaloneChecklist() = MutableStateFlow<List<SubTask>>(emptyList())
-        override fun observeSubTasks(parentId: Long) = MutableStateFlow<List<SubTask>>(emptyList())
+        override fun observeStandaloneChecklist() = MutableStateFlow<List<Task>>(emptyList())
+        override fun observeSubTasks(parentId: Long) = MutableStateFlow<List<Task>>(emptyList())
         override fun observeTasks(filter: TaskFilter, sort: TaskSort) =
             MutableStateFlow<List<Task>>(emptyList())
         // Phase 6c：FilterExpression 重载
         override fun observeTasks(filter: FilterExpression, sort: TaskSort) =
             MutableStateFlow<List<Task>>(emptyList())
         override suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks? = null
-        override suspend fun upsertTask(task: Task, subTasks: List<SubTask>): Long = -1L
+        override suspend fun upsertTask(task: Task, subTasks: List<Task>): Long = -1L
         override suspend fun deleteTask(task: Task) {}
         override suspend fun toggleTaskComplete(id: Long, completed: Boolean) {}
         override suspend fun toggleSubTaskComplete(id: Long, completed: Boolean) {}
         override suspend fun addStandaloneSubTask(title: String): Long = -1L
         override suspend fun addSubTaskToTask(parentId: Long, title: String): Long = -1L
-        override suspend fun deleteSubTask(subTask: SubTask) {}
+        override suspend fun deleteSubTask(subTask: Task) {}
         override suspend fun reorderTasks(orderedIds: List<Long>) {
             reorderCalls++
             lastReorderIds = orderedIds.toList()

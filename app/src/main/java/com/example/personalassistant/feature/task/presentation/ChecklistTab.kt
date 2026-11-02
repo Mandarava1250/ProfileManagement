@@ -44,7 +44,7 @@ import com.example.personalassistant.core.ui.components.EmptyState
 import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.feature.task.domain.model.ChecklistGroup
 import com.example.personalassistant.feature.task.domain.model.ChecklistSort
-import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.presentation.components.ChecklistItemCard
 import com.example.personalassistant.feature.task.presentation.components.FilterEntryButton
 
@@ -81,7 +81,7 @@ import com.example.personalassistant.feature.task.presentation.components.Filter
 fun ChecklistTab(
     state: ChecklistUiState,
     onToggleComplete: (Long, Boolean) -> Unit,
-    onDelete: (SubTask) -> Unit,
+    onDelete: (Task) -> Unit,
     onAdd: (String) -> Unit,
     onSaveItem: (ChecklistItemEdit) -> Unit,
     onClearItemFields: (Long, Boolean, Boolean, Boolean) -> Unit,
@@ -380,16 +380,16 @@ private fun ChecklistListSkeleton() {
  * 仓库层的 `deleteItem` 最终是 Room 的 `@Delete`，**只按主键匹配**，
  * 所以这里只需要 id 正确；其余字段填上是为了对象本身自洽。
  */
-internal fun ChecklistItemUi.toSubTask(): SubTask = SubTask(
+internal fun ChecklistItemUi.toSubTask(): Task = Task(
     id = id,
-    parentTaskId = null,
+    // Phase 16：嵌套层级统一用 `parentTaskId` 表达（原 `parentSubTaskId` 已并入 `tasks` 表）
+    parentTaskId = parentSubTaskId,
     title = title,
     isCompleted = isCompleted,
-    order = order,
+    manualOrder = order.toLong(),
     createdAt = 0L,
     category = category,
     dueDate = dueDate,
     priority = priority,
     amount = amount,
-    parentSubTaskId = parentSubTaskId,
 )

@@ -1,14 +1,16 @@
 package com.example.personalassistant.core.backup.model
 
 import com.example.personalassistant.core.holiday.model.HolidayEntity
+import com.example.personalassistant.feature.calendar.data.local.EventCategoryEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
-import com.example.personalassistant.feature.task.data.local.SubTaskEntity
+import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskEntity
+import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
@@ -21,8 +23,8 @@ import kotlinx.serialization.Serializable
  * [BackupSerializer] 从 Room 拉出全表数据，组装成 [BackupPayload]，
  * 再序列化为 JSON 写入 ZIP 各文件。
  *
- * - 13 张表，全部以 List<*Entity> 形式承载
- *   （Phase 3 新增 user_profiles，共 13 张参与备份；task 相关的 tags/cross_ref 等已计入）
+ * - 15 张表，全部以 List<*Entity> 形式承载
+ *   （Phase 3 新增 user_profiles；Phase 16 删 sub_tasks、加 task_lists / event_categories / student_profile）
  * - 空表也写空 JSON `[]`，让导入端知道表清单完整没遗漏
  * - 所有 List 字段默认空 list，不会出现 null
  *
@@ -33,6 +35,11 @@ import kotlinx.serialization.Serializable
  *
  * 旧备份（formatVersion=1）没有 user_profiles.json → [userProfiles] 解出空列表，
  * [com.example.personalassistant.core.backup.importer.BackupImporter] 对这种情况有专门兼容。
+ *
+ * ## Phase 16：为什么 `subTasks` 字段被删掉
+ * 「清单项」不再是独立表 —— 它的字段（金额 / 起止时间 / 嵌套父指针 / 置顶）
+ * 全部并进 `tasks`，子项改由 `tasks.parentTaskId` 自引用表达。
+ * 少一张表 = 少一份需要同步的 schema、少一条导入顺序约束。
  */
 @Serializable
 data class BackupPayload(
@@ -41,23 +48,28 @@ data class BackupPayload(
     val semesters: List<SemesterEntity> = emptyList(),
     val courses: List<CourseEntity> = emptyList(),
     val tags: List<TagEntity> = emptyList(),
+    // Phase 16：清单表（tasks.listId 的父表，必须排在 tasks 前）
+    val taskLists: List<TaskListEntity> = emptyList(),
     val tasks: List<TaskEntity> = emptyList(),
-    val subTasks: List<SubTaskEntity> = emptyList(),
     val taskTagCrossRefs: List<TaskTagCrossRef> = emptyList(),
     val events: List<EventEntity> = emptyList(),
+    // Phase 16：日历事件分类（events.categoryId 的父表）
+    val eventCategories: List<EventCategoryEntity> = emptyList(),
     val categories: List<CategoryEntity> = emptyList(),
     val monthlyBudgets: List<MonthlyBudgetEntity> = emptyList(),
     val dailyPools: List<DailyPoolEntity> = emptyList(),
     val transactions: List<TransactionEntity> = emptyList(),
     // Phase 8 Sub-step 7：节假日表（v6 新增）
     val holidays: List<HolidayEntity> = emptyList(),
+    // Phase 16：「我」档案（一账户一行，主键 accountId → user_profiles.id）
+    val studentProfile: List<StudentProfileEntity> = emptyList(),
 ) {
     /**
      * 总记录数（用于 manifest 报告 / 调试 / UI 展示）
      */
     val totalRecordCount: Int
         get() = userProfiles.size + semesters.size + courses.size + tags.size +
-                tasks.size + subTasks.size + taskTagCrossRefs.size +
-                events.size + categories.size + monthlyBudgets.size +
-                dailyPools.size + transactions.size + holidays.size
+                taskLists.size + tasks.size + taskTagCrossRefs.size +
+                events.size + eventCategories.size + categories.size + monthlyBudgets.size +
+                dailyPools.size + transactions.size + holidays.size + studentProfile.size
 }

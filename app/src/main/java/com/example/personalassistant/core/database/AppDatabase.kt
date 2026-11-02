@@ -18,12 +18,12 @@ import com.example.personalassistant.feature.me.data.local.StudentProfileDao
 import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileDao
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
-import com.example.personalassistant.feature.task.data.local.SubTaskEntity
-import com.example.personalassistant.feature.task.data.local.SubTaskTagCrossRef
 import com.example.personalassistant.feature.task.data.local.TagDao
 import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskDao
 import com.example.personalassistant.feature.task.data.local.TaskEntity
+import com.example.personalassistant.feature.task.data.local.TaskListDao
+import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagDao
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseDao
@@ -43,19 +43,18 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
  *
  * ⚠️ 升版时必须同步：本常量 + 新 Migration + `BackupFormatVersion.DB_VERSION`。
  */
-const val APP_DATABASE_VERSION = 14
+const val APP_DATABASE_VERSION = 15
 
 /**
  * App 主数据库
  *
- * 15 张表：
+ * 16 张表：
  * 1. courses          - 课程
  * 2. semesters        - 学期
- * 3. tasks            - 任务
- * 4. sub_tasks        - 子任务（Phase 15：加分类/截止/优先级/金额/嵌套父指针 5 列）
+ * 3. tasks            - 任务（Phase 16：加清单归属 / 父任务 / 金额 / 时间段 / 完成时间 / 置顶 7 列）
+ * 4. task_lists       - 清单（Phase 16 新增：任务归属地，内置「收集箱」id=1）
  * 5. tags             - 标签（Phase 6c 新增）
- * 6. task_tag_cross_ref - 任务↔标签关联（Phase 6c 新增）
- * 7. sub_task_tag_cross_ref - 清单项↔标签关联（Phase 15 新增）
+ * 6. task_tag_cross_ref - 任务↔标签关联（Phase 6c 新增；Phase 16 吸收了原 sub_task_tag_cross_ref）
  * 7. events           - 日历事件
  * 8. event_categories - 日历事件分类（Phase 8 Sub-step 9 新增）
  * 9. transactions     - 记账流水
@@ -64,7 +63,7 @@ const val APP_DATABASE_VERSION = 14
  * 12. daily_pools      - 每日零钱池
  * 13. holidays        - 节假日（Phase 8 Sub-step 7 新增）
  * 14. user_profiles    - 账户（Phase 3 多账户新增，记账域 4 表靠 accountId 指向它）
- * 15. sub_task_tag_cross_ref - 清单项↔标签关联（Phase 15 新增）
+ * 15. student_profile  - 「我」档案（Phase 12 新增）
  *
  * ⚠️ schema 变更必须按以下流程：
  *   1. 修改对应 Entity
@@ -77,13 +76,11 @@ const val APP_DATABASE_VERSION = 14
         // 课表
         CourseEntity::class,
         SemesterEntity::class,
-        // 任务
+        // 任务（Phase 16：sub_tasks 已并入 tasks）
         TaskEntity::class,
-        SubTaskEntity::class,
+        TaskListEntity::class,
         TagEntity::class,
         TaskTagCrossRef::class,
-        // 清单项↔标签关联（Phase 15）
-        SubTaskTagCrossRef::class,
         // 日历（Phase 8 Sub-step 9 加 event_categories）
         EventEntity::class,
         EventCategoryEntity::class,
@@ -105,6 +102,8 @@ const val APP_DATABASE_VERSION = 14
     // v13（Phase 15 清单扩展）：sub_tasks 加 5 列 + sub_task_tag_cross_ref 新表
     // v14（性能）：补 4 条索引 —— transactions ×2（transferPairId / accountId+categoryId）、
     // tasks ×1（isCompleted+priority+dueDate）、sub_tasks ×1（category）。零行为变更。
+    // v15（Phase 16 清单体系）：新建 task_lists + tasks 加 7 列 + **sub_tasks 整表并入 tasks**
+    // + sub_task_tag_cross_ref 并入 task_tag_cross_ref。数据搬迁用恒定 id 偏移。
     version = APP_DATABASE_VERSION,
     exportSchema = true
 )
@@ -112,6 +111,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao
     abstract fun semesterDao(): SemesterDao
     abstract fun taskDao(): TaskDao
+    abstract fun taskListDao(): TaskListDao
     abstract fun tagDao(): TagDao
     abstract fun taskTagDao(): TaskTagDao
     abstract fun eventDao(): EventDao
@@ -145,6 +145,7 @@ abstract class AppDatabase : RoomDatabase() {
                 Migration_11_12,
                 Migration_12_13,
                 Migration_13_14,
+                Migration_14_15,
             )
     }
 }

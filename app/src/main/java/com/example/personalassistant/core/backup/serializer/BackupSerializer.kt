@@ -3,6 +3,7 @@ package com.example.personalassistant.core.backup.serializer
 import com.example.personalassistant.core.backup.model.BackupError
 import com.example.personalassistant.core.backup.model.BackupPayload
 import com.example.personalassistant.core.backup.model.BackupResult
+import com.example.personalassistant.core.database.AppDatabase
 import com.example.personalassistant.core.holiday.data.HolidayDao
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
@@ -18,12 +19,13 @@ import javax.inject.Singleton
 /**
  * Phase 8 Sub-step 4：备份序列化器（Room → 内存快照）
  *
- * 单一职责：把 Room 13 张表全量拉出，组装成 [BackupPayload]。
+ * 单一职责：把 Room 15 张表全量拉出，组装成 [BackupPayload]。
  * 不涉及 IO / ZIP / 偏好。导出侧的 [BackupExporter] 负责把它写到 ZIP，
  * 导入侧的 [BackupImporter] 负责把 ZIP 数据写回 Room。
  *
- * 测试策略：mock 全部 8 个 DAO（task 模块 4 个 + 课程 2 个 + 财务 1 个 + 日历 1 个 + 节假日 1 个），
- * 验证 snapshot() 正确返回各表数据。
+ * Phase 16：15 张表 = 原 13 张 - `sub_tasks` + `task_lists` + `event_categories` + `student_profile`。
+ *
+ * 测试策略：mock 全部 DAO，验证 snapshot() 正确返回各表数据。
  */
 @Singleton
 class BackupSerializer @Inject constructor(
@@ -37,9 +39,15 @@ class BackupSerializer @Inject constructor(
     private val holidayDao: HolidayDao,
     // Phase 3：账户表必须入备份，否则恢复后记账数据会指向不存在的账户
     private val userProfileDao: UserProfileDao,
+    // Phase 16：清单表 / 日历事件分类 / 「我」档案三张新表
+    //
+    // 这三个 DAO 里只有 EventCategoryDao / StudentProfileDao 在 CoreModule 里有 Hilt provider，
+    // TaskListDao 没有 —— 与其为了一个 DAO 去动 CoreModule 的绑定图（那边正在并行改造，容易撞车），
+    // 不如直接拿 AppDatabase 自己取（BackupImporter / BackupCurrentSnapshotProvider 同款做法）。
+    private val database: AppDatabase,
 ) {
     /**
-     * 全量快照：从 Room 拉出 13 张表全部数据
+     * 全量快照：从 Room 拉出 15 张表全部数据
      *
      * 全部是**跨账户全量**：备份语义 = 导出所有账户的所有数据（含账户清单本身）。
      */
@@ -49,15 +57,20 @@ class BackupSerializer @Inject constructor(
             semesters = semesterDao.getAll(),
             courses = courseDao.getAllCourses(),
             tags = tagDao.getAllTags(),
+            // Phase 16：清单表 —— tasks.listId 的父表
+            taskLists = database.taskListDao().getAllTaskLists(),
             tasks = taskDao.getAllTasks(),
-            subTasks = taskDao.getAllSubTasks(),
             taskTagCrossRefs = taskTagDao.getAllCrossRefs(),
             events = eventDao.getAllEvents(),
+            // Phase 16：日历事件分类 —— events.categoryId 的父表
+            eventCategories = database.eventCategoryDao().getAll(),
             categories = financeDao.getAllCategories(),
             monthlyBudgets = financeDao.getAllMonthlyBudgets(),
             dailyPools = financeDao.getAllDailyPools(),
             transactions = financeDao.getAllTransactions(),
             holidays = holidayDao.getAll(),
+            // Phase 16：「我」档案 —— 一账户一行
+            studentProfile = database.studentProfileDao().getAllStudentProfiles(),
         )
         BackupResult.Success(payload)
     } catch (t: Throwable) {

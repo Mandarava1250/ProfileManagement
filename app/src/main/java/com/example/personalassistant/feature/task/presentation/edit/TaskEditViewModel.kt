@@ -7,7 +7,6 @@ import com.example.personalassistant.core.holiday.model.HolidayStrategy
 import com.example.personalassistant.core.notification.NotificationPermissionRequester
 import com.example.personalassistant.feature.task.domain.model.RepeatRule
 import com.example.personalassistant.feature.task.domain.model.RepeatType
-import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.domain.usecase.CancelReminderUseCase
@@ -203,10 +202,10 @@ open class TaskEditViewModel @Inject constructor(
     fun addSubTask() {
         val title = _uiState.value.newSubTaskInput.trim()
         if (title.isEmpty()) return
-        val item = SubTask(
+        val item = Task(
             parentTaskId = if (isNew) null else taskId,
             title = title,
-            order = _uiState.value.subTasks.size,
+            manualOrder = _uiState.value.subTasks.size.toLong(),
         )
         _uiState.update {
             it.copy(

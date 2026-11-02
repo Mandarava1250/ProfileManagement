@@ -48,9 +48,6 @@ sealed class Screen(val route: String) {
         const val ARG_EVENT_ID = "eventId"
     }
 
-    data object AddTransaction : Screen("finance/add")
-    data object MonthlyBudget : Screen("finance/budget")
-
     /**
      * Phase 13：分类管理（独立 route）
      *
