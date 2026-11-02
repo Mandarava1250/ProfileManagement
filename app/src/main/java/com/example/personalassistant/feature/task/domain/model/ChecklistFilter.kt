@@ -46,24 +46,41 @@ enum class ChecklistSort {
  * - sort：排序方式
  *
  * 分类与标签是「与」关系：两个都设了就取交集。
+ *
+ * ## Phase 19：expression
+ *
+ * `expression` 是**命名过滤器**套用进来的复合筛选条件（[FilterExpression] 树）。
+ * 它跟 category / tagId 是「与」关系 —— 套用一个命名过滤器时，
+ * 分类和标签会先被翻译成表达式，再跟 expression 合并。
+ *
+ * 为 null = 没用命名过滤器（普通状态）。
  */
 data class ChecklistFilter(
     val category: String? = null,
     val tagId: Long? = null,
     val group: ChecklistGroup = ChecklistGroup.NONE,
     val sort: ChecklistSort = ChecklistSort.MANUAL,
+    val expression: FilterExpression? = null,
 )
 
 /**
  * 套用筛选 + 排序（纯函数，便于单测覆盖）。
  *
  * 顺序：先筛后排 —— 分组用的就是排好序的列表。
+ *
+ * @param todayEndMillis 「今天结束」边界，供四象限判定用
  */
-internal fun ChecklistFilter.applyTo(items: List<ChecklistItem>): List<ChecklistItem> {
+internal fun ChecklistFilter.applyTo(
+    items: List<ChecklistItem>,
+    todayEndMillis: Long = dayEndMillis(),
+): List<ChecklistItem> {
     val filtered = items.filter { item ->
         val categoryOk = category == null || item.task.category == category
         val tagOk = tagId == null || item.tags.any { it.id == tagId }
-        categoryOk && tagOk
+        // Phase 19：命名过滤器的复合条件（null = 不额外筛）
+        val expressionOk = expression == null ||
+            expression.matchesItem(item, todayEndMillis)
+        categoryOk && tagOk && expressionOk
     }
     return sortItems(filtered)
 }

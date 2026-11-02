@@ -62,6 +62,8 @@ fun TaskScreen(
     val checklistState by checklistViewModel.uiState.collectAsStateWithLifecycle()
     // 四象限视图用 TaskViewModel 的数据（矩阵 + 显示偏好）
     val taskState by taskViewModel.uiState.collectAsStateWithLifecycle()
+    // Phase 19：命名过滤器（抽屉里的「筛选器」段）
+    val namedFilters by checklistViewModel.namedFilters.collectAsStateWithLifecycle()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -85,6 +87,14 @@ fun TaskScreen(
                         strategy = DeleteTaskListUseCase.DeleteStrategy.MOVE_TASKS_TO_INBOX,
                     )
                 },
+                // ===== Phase 19：筛选器 =====
+                namedFilters = namedFilters,
+                onApplyNamedFilter = { filter ->
+                    checklistViewModel.applyNamedFilter(filter)
+                    scope.launch { drawerState.close() }
+                },
+                onDeleteNamedFilter = { name -> checklistViewModel.deleteNamedFilter(name) },
+                onSaveNamedFilter = { name -> checklistViewModel.saveNamedFilter(name) },
             )
         },
     ) {

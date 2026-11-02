@@ -6,6 +6,7 @@ import com.example.personalassistant.feature.task.domain.model.ChecklistFilter
 import com.example.personalassistant.feature.task.domain.model.ChecklistGroup
 import com.example.personalassistant.feature.task.domain.model.ChecklistSort
 import com.example.personalassistant.feature.task.domain.model.ChecklistView
+import com.example.personalassistant.feature.task.domain.model.NamedFilter
 import com.example.personalassistant.feature.task.domain.model.SmartList
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskList
@@ -14,6 +15,9 @@ import com.example.personalassistant.feature.task.domain.model.applyTo
 import com.example.personalassistant.feature.task.domain.model.groupChecklistItems
 import com.example.personalassistant.feature.task.domain.model.matches
 import com.example.personalassistant.feature.task.domain.model.parseQuickInput
+import com.example.personalassistant.feature.task.domain.model.toExpression
+import com.example.personalassistant.feature.task.domain.model.toSpec
+import com.example.personalassistant.feature.task.domain.repository.NamedFilterRepository
 import com.example.personalassistant.feature.task.domain.repository.TaskListRepository
 import com.example.personalassistant.feature.task.domain.usecase.AddChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.AddNestedChecklistItemUseCase
@@ -70,6 +74,8 @@ class ChecklistViewModel @Inject constructor(
     private val createTaskList: CreateTaskListUseCase,
     private val renameTaskList: RenameTaskListUseCase,
     private val deleteTaskList: DeleteTaskListUseCase,
+    // ===== Phase 19：命名过滤器 =====
+    private val namedFilterRepository: NamedFilterRepository,
 ) : ViewModel() {
 
     /** 当前筛选条件（分类 / 标签 / 分组 / 排序）。 */
@@ -77,6 +83,19 @@ class ChecklistViewModel @Inject constructor(
 
     /** Phase 17：当前视图（智能清单 or 用户清单）。 */
     private val currentViewState = MutableStateFlow<ChecklistView>(ChecklistView.Default)
+
+    /**
+     * Phase 19：命名过滤器列表（用户保存的筛选条件组合）。
+     *
+     * 单独一个 StateFlow 而不是塞进 uiState —— 抽屉只关心这一份，
+     * 列表重算时不必带着它一起 combine。
+     */
+    val namedFilters: StateFlow<List<NamedFilter>> = namedFilterRepository.observe()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
 
     val uiState: StateFlow<ChecklistUiState> = combine(
         observeChecklistItems(),
@@ -346,5 +365,60 @@ class ChecklistViewModel @Inject constructor(
     /** 清空所有筛选条件（回到默认：不筛 / 不分组 / 手动顺序）。 */
     fun resetFilter() {
         filterState.value = ChecklistFilter()
+    }
+
+    // ===== Phase 19：命名过滤器 =====
+
+    /**
+     * 把**当前筛选条件**存成命名过滤器。
+     *
+     * 同名会覆盖旧的 —— 用户改完条件重新存同名是自然操作。
+     *
+     * @param name 过滤器名字（空名字直接忽略，不给用户存一条无名过滤器）
+     */
+    fun saveNamedFilter(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        val expression = filterState.value.toExpression()
+        viewModelScope.launch {
+            runCatching {
+                namedFilterRepository.save(
+                    NamedFilter(
+                        name = trimmed,
+                        expression = expression.toSpec(),
+                        sortOrder = namedFilters.value.size,
+                    ),
+                )
+            }
+        }
+    }
+
+    /**
+     * 套用一个命名过滤器。
+     *
+     * 会**替换**掉当前的分类 / 标签筛选 —— 命名过滤器就是「一组筛选条件」，
+     * 跟手动的分类 / 标签筛选混在一起会让用户搞不清当前到底筛了什么。
+     * 分组和排序保留（那是排布，不是筛选）。
+     */
+    fun applyNamedFilter(filter: NamedFilter) {
+        filterState.update { current ->
+            current.copy(
+                category = null,
+                tagId = null,
+                expression = filter.expression.toExpression(),
+            )
+        }
+    }
+
+    /** 取消套用命名过滤器（保留手动分类 / 标签筛选）。 */
+    fun clearNamedFilter() {
+        filterState.update { it.copy(expression = null) }
+    }
+
+    /** 删除一个命名过滤器。 */
+    fun deleteNamedFilter(name: String) {
+        viewModelScope.launch {
+            runCatching { namedFilterRepository.delete(name) }
+        }
     }
 }

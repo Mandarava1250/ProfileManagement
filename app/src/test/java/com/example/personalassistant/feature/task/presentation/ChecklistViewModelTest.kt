@@ -213,6 +213,8 @@ class ChecklistViewModelTest {
         createTaskList = CreateTaskListUseCase(listRepo),
         renameTaskList = RenameTaskListUseCase(listRepo),
         deleteTaskList = DeleteTaskListUseCase(listRepo),
+        // ===== Phase 19：命名过滤器 =====
+        namedFilterRepository = FakeNamedFilterRepository(),
     )
 
     private fun tag(id: Long): Tag = Tag(

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.DoneAll
+import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.ListAlt
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.task.domain.model.ChecklistView
+import com.example.personalassistant.feature.task.domain.model.NamedFilter
 import com.example.personalassistant.feature.task.domain.model.SmartList
 import com.example.personalassistant.feature.task.domain.model.TaskListWithCount
 
@@ -55,10 +57,14 @@ import com.example.personalassistant.feature.task.domain.model.TaskListWithCount
  * - **智能清单**：收集箱 / 今天 / 最近 7 天 / 全部 / 已完成（系统视图，不占存储）
  * - **清单**：用户自建的归属地，每行带未完成数徽标
  *
+ * Phase 19 加第三段：**筛选器**（用户保存的筛选条件组合，一键套用）。
+ *
  * @param currentView 当前视图（决定哪一行高亮）
  * @param lists 用户清单 + 未完成数
  * @param onSelect 切视图
  * @param onCreateList 新建清单（名字为空则忽略）
+ * @param namedFilters 用户保存的命名过滤器
+ * @param activeFilterName 当前套用的命名过滤器名字（高亮用；null = 没套用）
  */
 @Composable
 fun ChecklistDrawer(
@@ -70,10 +76,16 @@ fun ChecklistDrawer(
     onRenameList: ((Long, String) -> Unit)? = null,
     onDeleteList: ((Long) -> Unit)? = null,
     onArchiveList: ((Long) -> Unit)? = null,
+    namedFilters: List<NamedFilter> = emptyList(),
+    activeFilterName: String? = null,
+    onApplyNamedFilter: ((NamedFilter) -> Unit)? = null,
+    onDeleteNamedFilter: ((String) -> Unit)? = null,
+    onSaveNamedFilter: ((String) -> Unit)? = null,
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var renamingList by remember { mutableStateOf<TaskListWithCount?>(null) }
     var deletingList by remember { mutableStateOf<TaskListWithCount?>(null) }
+    var savingFilter by remember { mutableStateOf(false) }
 
     ModalDrawerSheet(modifier = modifier) {
         Column(
@@ -111,6 +123,52 @@ fun ChecklistDrawer(
                 selected = currentView == ChecklistView.Quadrant,
                 onClick = { onSelect(ChecklistView.Quadrant) },
             )
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+
+            // ===== Phase 19：筛选器 =====
+            // 滴答的「筛选器」= 用户把一组筛选条件存起来，起个名字，随时一键套用。
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "筛选器",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { savingFilter = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = "保存当前筛选",
+                    )
+                }
+            }
+
+            if (namedFilters.isEmpty()) {
+                Text(
+                    text = "还没有保存的筛选器",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+            } else {
+                namedFilters.forEach { filter ->
+                    DrawerRow(
+                        icon = Icons.Rounded.FilterAlt,
+                        label = filter.name,
+                        count = null,
+                        selected = filter.name == activeFilterName,
+                        onClick = { onApplyNamedFilter?.invoke(filter) },
+                        // 长按删除
+                        onLongClick = { onDeleteNamedFilter?.invoke(filter.name) },
+                    )
+                }
+            }
 
             Spacer(Modifier.height(12.dp))
             HorizontalDivider()
@@ -166,6 +224,16 @@ fun ChecklistDrawer(
                 if (name.isNotBlank()) onCreateList(name)
             },
             onDismiss = { showCreateDialog = false },
+        )
+    }
+
+    if (savingFilter) {
+        SaveFilterDialog(
+            onConfirm = { name ->
+                savingFilter = false
+                onSaveNamedFilter?.invoke(name)
+            },
+            onDismiss = { savingFilter = false },
         )
     }
 
@@ -313,6 +381,43 @@ private fun RenameListDialog(
                 onValueChange = { name = it },
                 singleLine = true,
                 label = { Text("清单名称") },
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(name.trim()) },
+                enabled = name.isNotBlank(),
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+/**
+ * Phase 19：保存当前筛选为命名过滤器
+ */
+@Composable
+private fun SaveFilterDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("保存当前筛选") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                singleLine = true,
+                label = { Text("筛选器名称") },
             )
         },
         confirmButton = {
