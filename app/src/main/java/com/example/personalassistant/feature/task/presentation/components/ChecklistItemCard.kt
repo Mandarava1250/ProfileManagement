@@ -64,32 +64,35 @@ fun ChecklistItemCard(
     val completedChildCount = item.children.count { it.isCompleted }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        ChecklistItemRow(
-            title = item.title,
-            isCompleted = item.isCompleted,
-            onToggleComplete = { onToggleComplete(item.id, it) },
-            onDelete = { onDelete(item) },
-            category = item.category,
-            dueDate = item.dueDate,
-            priority = item.priority,
-            amount = item.amount,
-            tags = item.tags,
-            onEdit = { onEdit(item) },
-            onLongPress = { onEdit(item) },
-            gestureKey = item.id,
-            trailingContent = if (childCount > 0) {
-                {
-                    ChildrenHeader(
-                        completedCount = completedChildCount,
-                        totalCount = childCount,
-                        expanded = expanded,
-                        onToggle = { onToggleExpand(item.id) },
-                    )
-                }
-            } else {
-                null
-            },
-        )
+        // Phase 18.5：左滑露出删除按钮
+        SwipeToDeleteBox(onDelete = { onDelete(item) }) {
+            ChecklistItemRow(
+                title = item.title,
+                isCompleted = item.isCompleted,
+                onToggleComplete = { onToggleComplete(item.id, it) },
+                onDelete = { onDelete(item) },
+                category = item.category,
+                dueDate = item.dueDate,
+                priority = item.priority,
+                amount = item.amount,
+                tags = item.tags,
+                onEdit = { onEdit(item) },
+                onLongPress = { onEdit(item) },
+                gestureKey = item.id,
+                trailingContent = if (childCount > 0) {
+                    {
+                        ChildrenHeader(
+                            completedCount = completedChildCount,
+                            totalCount = childCount,
+                            expanded = expanded,
+                            onToggle = { onToggleExpand(item.id) },
+                        )
+                    }
+                } else {
+                    null
+                },
+            )
+        }
 
         if (expanded && childCount > 0) {
             Column(

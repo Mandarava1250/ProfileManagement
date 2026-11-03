@@ -36,6 +36,7 @@ import com.example.personalassistant.feature.task.domain.usecase.ObserveChecklis
 import com.example.personalassistant.feature.task.domain.usecase.ObserveCompletionStatsUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveTaskListsUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RecordExpenseFromTaskUseCase
+import com.example.personalassistant.feature.task.domain.usecase.RestoreChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RenameTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.UpdateChecklistItemUseCase
@@ -90,6 +91,8 @@ class ChecklistViewModel @Inject constructor(
     private val observeCompletionStats: ObserveCompletionStatsUseCase,
     // ===== Phase 22.5：新建清单项的默认值 =====
     private val checklistDefaultsRepository: ChecklistDefaultsRepository,
+    // ===== Phase 18.7：撤销删除 =====
+    private val restoreChecklistItem: RestoreChecklistItemUseCase,
     // ===== Phase 21：清单 ↔ 记账联动 =====
     private val recordExpenseFromTask: RecordExpenseFromTaskUseCase,
     private val financeRepository: FinanceRepository,
@@ -449,11 +452,41 @@ class ChecklistViewModel @Inject constructor(
 
     // ===== 删 =====
 
+    /**
+     * Phase 18.7：刚被删掉的清单项（用来弹「撤销」）。
+     *
+     * 每次删除都会重新赋值 —— UI 侧靠 `LaunchedEffect` 监听这个值弹 Snackbar。
+     */
+    private val deletedItemState = MutableStateFlow<Task?>(null)
+    val deletedItem: StateFlow<Task?> = deletedItemState
+
     /** 删除清单项。 */
     fun deleteItem(item: Task) {
         viewModelScope.launch {
             runCatching { deleteChecklistItem(item) }
+                .onSuccess {
+                    // 记住它 —— 用户在 Snackbar 上点「撤销」时要能放回去
+                    deletedItemState.value = item
+                }
         }
+    }
+
+    /**
+     * Phase 18.7：撤销刚才的删除。
+     *
+     * 按**原 id** 放回去，恢复后 id 不变。
+     */
+    fun undoDelete() {
+        val item = deletedItemState.value ?: return
+        viewModelScope.launch {
+            runCatching { restoreChecklistItem(item) }
+            deletedItemState.value = null
+        }
+    }
+
+    /** 撤销窗口关闭（或超时）后清掉记录 —— 之后不能再撤。 */
+    fun clearDeletedItem() {
+        deletedItemState.value = null
     }
 
     // ===== 标签 =====

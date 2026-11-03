@@ -24,6 +24,7 @@ import com.example.personalassistant.feature.task.domain.usecase.ObserveCompleti
 import com.example.personalassistant.feature.task.domain.usecase.ObserveTaskListsUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RecordExpenseFromTaskUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RenameTaskListUseCase
+import com.example.personalassistant.feature.task.domain.usecase.RestoreChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.UpdateChecklistItemUseCase
 import com.example.personalassistant.feature.task.data.repository.FakeTaskListRepository
@@ -147,6 +148,12 @@ class ChecklistViewModelTest {
             itemsState.value = itemsState.value.filterNot { it.id == item.id }
         }
 
+        /** Phase 18.7：撤销删除 —— 按原 id 放回去 */
+        override suspend fun restoreItem(item: Task): Long {
+            itemsState.value = itemsState.value.filterNot { it.id == item.id } + item
+            return item.id
+        }
+
         override suspend fun toggleComplete(id: Long, completed: Boolean) {
             itemsState.value = itemsState.value.map {
                 if (it.id == id) it.copy(isCompleted = completed) else it
@@ -230,6 +237,8 @@ class ChecklistViewModelTest {
         // ===== Phase 21：清单 ↔ 记账联动 =====
         recordExpenseFromTask = RecordExpenseFromTaskUseCase(FakeFinanceRepository()),
         financeRepository = FakeFinanceRepository(),
+        // ===== Phase 18.7：撤销删除 =====
+        restoreChecklistItem = RestoreChecklistItemUseCase(repo),
     )
 
     private fun tag(id: Long): Tag = Tag(

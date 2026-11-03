@@ -15,11 +15,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -71,6 +76,23 @@ fun TaskScreen(
     // Phase 21：完成带金额的清单项后弹「记一笔？」
     val pendingExpenseTask by checklistViewModel.pendingExpenseTask.collectAsStateWithLifecycle()
     val expenseCategories by checklistViewModel.expenseCategories.collectAsStateWithLifecycle()
+    // Phase 18.7：删除后弹「撤销」
+    val deletedItem by checklistViewModel.deletedItem.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // 删了就弹一条 Snackbar，点「撤销」放回去；超时/关闭后这条记录作废
+    LaunchedEffect(deletedItem) {
+        val item = deletedItem ?: return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = "已删除「${item.title}」",
+            actionLabel = "撤销",
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            checklistViewModel.undoDelete()
+        } else {
+            checklistViewModel.clearDeletedItem()
+        }
+    }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -111,6 +133,7 @@ fun TaskScreen(
         },
     ) {
         Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 AppTopBar(
                     title = {

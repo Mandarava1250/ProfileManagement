@@ -67,6 +67,16 @@ interface ChecklistRepository {
     /** 全字段覆盖式更新（调用方负责带上完整字段）。 */
     suspend fun updateItem(item: Task)
 
+    /**
+     * Phase 18.7：撤销删除 —— 把清单项按**原 id** 放回去。
+     *
+     * 恢复后 id 不变，指向它的标签关联、流水弱引用都还对得上。
+     *
+     * ⚠️ 只恢复**这一项**本身：删父项时子项被 FK SET NULL 提升成顶层，
+     * 撤销不会把层级还原（那需要额外记一份子项快照）—— 18.8 单独提示这件事。
+     */
+    suspend fun restoreItem(item: Task): Long
+
     /** 删除清单项（它下面的嵌套子清单由 FK SET_NULL 自动提升为顶层项）。 */
     suspend fun deleteItem(item: Task)
 

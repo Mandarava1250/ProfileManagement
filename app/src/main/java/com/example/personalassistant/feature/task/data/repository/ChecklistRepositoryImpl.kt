@@ -114,6 +114,16 @@ class ChecklistRepositoryImpl @Inject constructor(
         dao.delete(item.toEntity())
     }
 
+    /**
+     * Phase 18.7：撤销删除 —— 把清单项按**原 id** 放回去。
+     *
+     * 用原 id 是关键：恢复后 id 不变，指向它的标签关联、流水弱引用都还对得上。
+     * `dao.insert` 是 REPLACE，所以直接插回去就是「复活」。
+     */
+    override suspend fun restoreItem(item: Task): Long = withContext(dispatcher) {
+        dao.insert(item.toEntity())
+    }
+
     override suspend fun toggleComplete(id: Long, completed: Boolean) = withContext(dispatcher) {
         dao.setCompleted(id, completed, System.currentTimeMillis())
     }
