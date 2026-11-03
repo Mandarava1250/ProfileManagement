@@ -31,6 +31,7 @@ import com.example.personalassistant.feature.task.presentation.ChecklistTab
 import com.example.personalassistant.feature.task.presentation.ChecklistViewModel
 import com.example.personalassistant.feature.task.presentation.TaskViewModel
 import com.example.personalassistant.feature.task.presentation.components.ChecklistDrawer
+import com.example.personalassistant.feature.task.presentation.components.RecordExpenseDialog
 import com.example.personalassistant.feature.task.presentation.components.TaskMatrixView
 import com.example.personalassistant.feature.task.domain.model.ChecklistView
 import com.example.personalassistant.feature.task.domain.usecase.DeleteTaskListUseCase
@@ -67,6 +68,9 @@ fun TaskScreen(
     val namedFilters by checklistViewModel.namedFilters.collectAsStateWithLifecycle()
     // Phase 22.6：完成率统计（清单页顶部那张卡片）
     val completionStats by checklistViewModel.completionStats.collectAsStateWithLifecycle()
+    // Phase 21：完成带金额的清单项后弹「记一笔？」
+    val pendingExpenseTask by checklistViewModel.pendingExpenseTask.collectAsStateWithLifecycle()
+    val expenseCategories by checklistViewModel.expenseCategories.collectAsStateWithLifecycle()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -210,6 +214,18 @@ fun TaskScreen(
                     modifier = Modifier.fillMaxSize(),
                     // Phase 22.6：完成率卡片
                     completionStats = completionStats,
+                    )
+                }
+
+                // Phase 21：完成带金额的清单项后弹「记一笔？」
+                pendingExpenseTask?.let { task ->
+                    RecordExpenseDialog(
+                        task = task,
+                        categories = expenseCategories,
+                        onConfirm = { categoryId ->
+                            checklistViewModel.confirmExpense(categoryId)
+                        },
+                        onDismiss = checklistViewModel::dismissExpense,
                     )
                 }
             }

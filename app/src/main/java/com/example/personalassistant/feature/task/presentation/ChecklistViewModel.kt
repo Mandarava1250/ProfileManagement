@@ -18,6 +18,9 @@ import com.example.personalassistant.feature.task.domain.model.matches
 import com.example.personalassistant.feature.task.domain.model.parseQuickInput
 import com.example.personalassistant.feature.task.domain.model.toExpression
 import com.example.personalassistant.feature.task.domain.model.toSpec
+import com.example.personalassistant.feature.finance.domain.model.Category
+import com.example.personalassistant.feature.finance.domain.model.TransactionType
+import com.example.personalassistant.feature.finance.domain.repository.FinanceRepository
 import com.example.personalassistant.feature.task.domain.repository.ChecklistDefaultsRepository
 import com.example.personalassistant.feature.task.domain.repository.NamedFilterRepository
 import com.example.personalassistant.feature.task.domain.repository.TaskListRepository
@@ -32,6 +35,7 @@ import com.example.personalassistant.feature.task.domain.usecase.ObserveAllTagsW
 import com.example.personalassistant.feature.task.domain.usecase.ObserveChecklistItemsUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveCompletionStatsUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveTaskListsUseCase
+import com.example.personalassistant.feature.task.domain.usecase.RecordExpenseFromTaskUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RenameTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.UpdateChecklistItemUseCase
@@ -86,7 +90,62 @@ class ChecklistViewModel @Inject constructor(
     private val observeCompletionStats: ObserveCompletionStatsUseCase,
     // ===== Phase 22.5：新建清单项的默认值 =====
     private val checklistDefaultsRepository: ChecklistDefaultsRepository,
+    // ===== Phase 21：清单 ↔ 记账联动 =====
+    private val recordExpenseFromTask: RecordExpenseFromTaskUseCase,
+    private val financeRepository: FinanceRepository,
 ) : ViewModel() {
+
+    // ===== Phase 21：清单 ↔ 记账联动 =====
+
+    /**
+     * 待记账的清单项（完成带金额的项时弹「记一笔？」）。
+     *
+     * null = 没有待记账的项（弹窗关着）。
+     */
+    private val pendingExpenseTaskState = MutableStateFlow<Task?>(null)
+    val pendingExpenseTask: StateFlow<Task?> = pendingExpenseTaskState
+
+    /** 支出分类（弹窗里让用户选一个）。 */
+    val expenseCategories: StateFlow<List<Category>> = financeRepository
+        .observeCategoriesByType(TransactionType.EXPENSE)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
+    /**
+     * 已经记过账的清单项 id 集合（Phase 21.4 防重复记账）。
+     *
+     * 靠 `transactions.linkedTaskId` 反查 —— 弱引用，清单项被删了流水还在，
+     * 所以这里只当作「这一项记过了，别再问」的标记。
+     */
+    val expenseRecordedTaskIds: StateFlow<Set<Long>> = financeRepository
+        .observeAllTransactions()
+        .map { txs -> txs.mapNotNull { it.linkedTaskId }.toSet() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptySet(),
+        )
+
+    /**
+     * 确认记账：把待记账的清单项记成一笔支出。
+     *
+     * 分类由用户选 —— 不擅自挑一个（Phase 21.3：分类缺失时让用户选，不静默失败）。
+     */
+    fun confirmExpense(categoryId: Long) {
+        val task = pendingExpenseTaskState.value ?: return
+        viewModelScope.launch {
+            runCatching { recordExpenseFromTask(task, categoryId) }
+            pendingExpenseTaskState.value = null
+        }
+    }
+
+    /** 放弃记账（「以后再说」）。 */
+    fun dismissExpense() {
+        pendingExpenseTaskState.value = null
+    }
 
     /** 当前筛选条件（分类 / 标签 / 分组 / 排序）。 */
     private val filterState = MutableStateFlow(ChecklistFilter())
@@ -368,10 +427,23 @@ class ChecklistViewModel @Inject constructor(
         }
     }
 
-    /** 勾选 / 取消勾选。 */
+    /**
+     * 勾选 / 取消勾选。
+     *
+     * Phase 21：完成**带金额**的清单项时问一句「记一笔？」——
+     * 这是滴答的清单 ↔ 记账联动。已经记过账的项不再问（Phase 21.4 防重复）。
+     */
     fun toggleComplete(id: Long, completed: Boolean) {
         viewModelScope.launch {
             runCatching { toggleChecklistItem(id, completed) }
+            if (!completed) return@launch
+
+            val task = uiState.value.items.firstOrNull { it.id == id }
+            val amount = task?.amount ?: return@launch
+            if (amount <= 0.0) return@launch
+            if (id in expenseRecordedTaskIds.value) return@launch
+
+            pendingExpenseTaskState.value = task
         }
     }
 

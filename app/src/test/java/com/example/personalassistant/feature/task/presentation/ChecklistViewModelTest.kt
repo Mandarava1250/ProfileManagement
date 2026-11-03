@@ -8,6 +8,7 @@ import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.Tag
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.data.repository.FakeTaskRepository
+import com.example.personalassistant.feature.finance.data.repository.FakeFinanceRepository
 import com.example.personalassistant.feature.task.domain.repository.ChecklistRepository
 import com.example.personalassistant.feature.task.domain.repository.TagRepository
 import com.example.personalassistant.feature.task.domain.usecase.AddChecklistItemUseCase
@@ -21,6 +22,7 @@ import com.example.personalassistant.feature.task.domain.usecase.ObserveAllTagsW
 import com.example.personalassistant.feature.task.domain.usecase.ObserveChecklistItemsUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveCompletionStatsUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveTaskListsUseCase
+import com.example.personalassistant.feature.task.domain.usecase.RecordExpenseFromTaskUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RenameTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.UpdateChecklistItemUseCase
@@ -225,6 +227,9 @@ class ChecklistViewModelTest {
         observeCompletionStats = ObserveCompletionStatsUseCase(FakeTaskRepository()),
         // ===== Phase 22.5：新建清单项的默认值 =====
         checklistDefaultsRepository = FakeChecklistDefaultsRepository(),
+        // ===== Phase 21：清单 ↔ 记账联动 =====
+        recordExpenseFromTask = RecordExpenseFromTaskUseCase(FakeFinanceRepository()),
+        financeRepository = FakeFinanceRepository(),
     )
 
     private fun tag(id: Long): Tag = Tag(
