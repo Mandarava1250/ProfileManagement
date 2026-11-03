@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.task.domain.repository
 
+import com.example.personalassistant.feature.task.data.local.DailyCompletionRow
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
@@ -90,6 +91,24 @@ interface TaskRepository {
      * 有真实实现；测试里要验证重建行为的请在 Fake 里覆盖它。
      */
     suspend fun getTasksWithReminders(): List<Task> = emptyList()
+
+    /**
+     * Phase 22.6：区间内按天的「计划数 / 完成数」。
+     *
+     * 以 `dueDate` 为准（截止在周几就算周几的计划），只算顶层任务。
+     *
+     * ⚠️ 默认实现返回空列表：绝大多数调用方不关心完成率统计。
+     * [com.example.personalassistant.feature.task.data.repository.TaskRepositoryImpl]
+     * 有真实实现；测试里要验证统计行为的请在 Fake 里覆盖它。
+     */
+    suspend fun getDailyCompletion(startMs: Long, endMs: Long): List<DailyCompletionRow> = emptyList()
+
+    /**
+     * Phase 22.6：区间内按天的「计划数 / 完成数」（连续完成天数用更宽的窗口）。
+     *
+     * @see getDailyCompletion
+     */
+    suspend fun getDailyCompletionUntil(startMs: Long, endMs: Long): List<DailyCompletionRow> = emptyList()
 
     // ===== 写操作 =====
 

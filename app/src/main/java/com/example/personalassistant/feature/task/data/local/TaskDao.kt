@@ -226,6 +226,54 @@ interface TaskDao {
     fun observeActiveCount(): Flow<Int>
 
     /**
+     * Phase 22.6：按天统计「计划数 / 完成数」。
+     *
+     * - 以 `dueDate` 为准（截止在周几就算周几的计划）
+     * - 只算顶层任务（`parentTaskId IS NULL`）—— 子项是任务的一部分，不是独立计划
+     * - SQLite 的 `date(x/1000, 'unixepoch', 'localtime')` 按本地时区取日期
+     *
+     * @param startMs 起始时间戳（含）
+     * @param endMs 结束时间戳（含）
+     */
+    @Query(
+        """
+        SELECT
+          CAST(strftime('%s', date(dueDate / 1000, 'unixepoch', 'localtime')) AS INTEGER) * 1000 AS dayStart,
+          COUNT(*) AS planned,
+          SUM(CASE WHEN isCompleted = 1 THEN 1 ELSE 0 END) AS completed
+        FROM tasks
+        WHERE parentTaskId IS NULL
+          AND dueDate IS NOT NULL
+          AND dueDate BETWEEN :startMs AND :endMs
+        GROUP BY dayStart
+        ORDER BY dayStart ASC
+        """
+    )
+    suspend fun getDailyCompletion(startMs: Long, endMs: Long): List<DailyCompletionRow>
+
+    /**
+     * Phase 22.6：区间内的每日统计（连续完成天数用）。
+     *
+     * 「连续完成天数」要跨更长的时间窗看（比如最近 365 天），
+     * 所以区间下界由调用方给 —— 不能把**所有**历史任务都拉出来（数据量大时慢）。
+     */
+    @Query(
+        """
+        SELECT
+          CAST(strftime('%s', date(dueDate / 1000, 'unixepoch', 'localtime')) AS INTEGER) * 1000 AS dayStart,
+          COUNT(*) AS planned,
+          SUM(CASE WHEN isCompleted = 1 THEN 1 ELSE 0 END) AS completed
+        FROM tasks
+        WHERE parentTaskId IS NULL
+          AND dueDate IS NOT NULL
+          AND dueDate BETWEEN :startMs AND :endMs
+        GROUP BY dayStart
+        ORDER BY dayStart ASC
+        """
+    )
+    suspend fun getDailyCompletionUntil(startMs: Long, endMs: Long): List<DailyCompletionRow>
+
+    /**
      * 删除任务。子任务由 FK SET NULL 自动提升为顶层（不删除子项内容）。
      */
     @Transaction

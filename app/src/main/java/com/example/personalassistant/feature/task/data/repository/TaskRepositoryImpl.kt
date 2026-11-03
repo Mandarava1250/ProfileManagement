@@ -3,6 +3,7 @@ package com.example.personalassistant.feature.task.data.repository
 import androidx.room.withTransaction
 import com.example.personalassistant.core.database.AppDatabase
 import com.example.personalassistant.core.di.IoDispatcher
+import com.example.personalassistant.feature.task.data.local.DailyCompletionRow
 import com.example.personalassistant.feature.task.data.local.TaskDao
 import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagDao
@@ -154,6 +155,18 @@ class TaskRepositoryImpl @Inject constructor(
             .map { it.toDomain() }
             .toList()
     }
+
+    /**
+     * Phase 22.6：区间内按天的「计划数 / 完成数」。
+     */
+    override suspend fun getDailyCompletion(startMs: Long, endMs: Long): List<DailyCompletionRow> =
+        withContext(dispatcher) { dao.getDailyCompletion(startMs, endMs) }
+
+    /**
+     * Phase 22.6：区间内按天的「计划数 / 完成数」（连续完成天数用宽窗口）。
+     */
+    override suspend fun getDailyCompletionUntil(startMs: Long, endMs: Long): List<DailyCompletionRow> =
+        withContext(dispatcher) { dao.getDailyCompletionUntil(startMs, endMs) }
 
     // ===== 写操作 =====
 

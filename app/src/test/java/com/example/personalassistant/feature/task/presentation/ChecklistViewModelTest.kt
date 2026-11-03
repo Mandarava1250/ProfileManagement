@@ -7,6 +7,7 @@ import com.example.personalassistant.feature.task.domain.model.ChecklistSort
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.Tag
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
+import com.example.personalassistant.feature.task.data.repository.FakeTaskRepository
 import com.example.personalassistant.feature.task.domain.repository.ChecklistRepository
 import com.example.personalassistant.feature.task.domain.repository.TagRepository
 import com.example.personalassistant.feature.task.domain.usecase.AddChecklistItemUseCase
@@ -18,6 +19,7 @@ import com.example.personalassistant.feature.task.domain.usecase.DeleteTaskListU
 import com.example.personalassistant.feature.task.domain.usecase.DetachTagFromChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveAllTagsWithCountUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveChecklistItemsUseCase
+import com.example.personalassistant.feature.task.domain.usecase.ObserveCompletionStatsUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveTaskListsUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RenameTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleChecklistItemUseCase
@@ -215,6 +217,10 @@ class ChecklistViewModelTest {
         deleteTaskList = DeleteTaskListUseCase(listRepo),
         // ===== Phase 19：命名过滤器 =====
         namedFilterRepository = FakeNamedFilterRepository(),
+        // ===== Phase 22.6：完成率统计 =====
+        // 完成率读的是 TaskRepository（跟清单页的 ChecklistRepository 两套接口，
+        // 但生产上都落在同一张 tasks 表）
+        observeCompletionStats = ObserveCompletionStatsUseCase(FakeTaskRepository()),
     )
 
     private fun tag(id: Long): Tag = Tag(

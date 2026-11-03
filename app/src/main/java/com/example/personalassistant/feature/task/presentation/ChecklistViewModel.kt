@@ -6,6 +6,7 @@ import com.example.personalassistant.feature.task.domain.model.ChecklistFilter
 import com.example.personalassistant.feature.task.domain.model.ChecklistGroup
 import com.example.personalassistant.feature.task.domain.model.ChecklistSort
 import com.example.personalassistant.feature.task.domain.model.ChecklistView
+import com.example.personalassistant.feature.task.domain.model.CompletionStats
 import com.example.personalassistant.feature.task.domain.model.NamedFilter
 import com.example.personalassistant.feature.task.domain.model.SmartList
 import com.example.personalassistant.feature.task.domain.model.Task
@@ -28,6 +29,7 @@ import com.example.personalassistant.feature.task.domain.usecase.DeleteTaskListU
 import com.example.personalassistant.feature.task.domain.usecase.DetachTagFromChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveAllTagsWithCountUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveChecklistItemsUseCase
+import com.example.personalassistant.feature.task.domain.usecase.ObserveCompletionStatsUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveTaskListsUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RenameTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleChecklistItemUseCase
@@ -37,6 +39,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -76,6 +80,8 @@ class ChecklistViewModel @Inject constructor(
     private val deleteTaskList: DeleteTaskListUseCase,
     // ===== Phase 19：命名过滤器 =====
     private val namedFilterRepository: NamedFilterRepository,
+    // ===== Phase 22.6：完成率统计 =====
+    private val observeCompletionStats: ObserveCompletionStatsUseCase,
 ) : ViewModel() {
 
     /** 当前筛选条件（分类 / 标签 / 分组 / 排序）。 */
@@ -126,6 +132,26 @@ class ChecklistViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = ChecklistUiState(),
     )
+
+    /**
+     * Phase 22.6：完成率统计（最近 7 天）。
+     *
+     * 刻意做成**独立** StateFlow 而不是塞进 [uiState] 的 combine ——
+     * uiState 已经有 5 路 combine，再加第 6 路就得用 vararg 版本做类型体操，
+     * 而完成率有自己的刷新节奏（按天聚合，跟筛选条件无关）。
+     *
+     * 刷新触发器 = 任务的 `updatedAt` 最大值 ——
+     * 改标题 / 勾完成 / 改截止时间都会让它变。
+     */
+    val completionStats: StateFlow<CompletionStats> = observeChecklistItems()
+        .map { items -> items.maxOfOrNull { it.task.updatedAt } ?: 0L }
+        .distinctUntilChanged()
+        .map { observeCompletionStats() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = CompletionStats(),
+        )
 
     // ===== Phase 17：视图切换 =====
 

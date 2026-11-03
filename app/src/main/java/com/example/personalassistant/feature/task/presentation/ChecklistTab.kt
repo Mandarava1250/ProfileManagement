@@ -44,8 +44,10 @@ import com.example.personalassistant.core.ui.components.EmptyState
 import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.feature.task.domain.model.ChecklistGroup
 import com.example.personalassistant.feature.task.domain.model.ChecklistSort
+import com.example.personalassistant.feature.task.domain.model.CompletionStats
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.presentation.components.ChecklistItemCard
+import com.example.personalassistant.feature.task.presentation.components.CompletionStatsCard
 import com.example.personalassistant.feature.task.presentation.components.FilterEntryButton
 
 /**
@@ -94,6 +96,8 @@ fun ChecklistTab(
     onSortChange: (ChecklistSort) -> Unit,
     onResetFilter: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Phase 22.6：完成率统计（列表上方那张卡片）。 */
+    completionStats: CompletionStats = CompletionStats(),
 ) {
     var input by rememberSaveable { mutableStateOf("") }
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -229,6 +233,12 @@ fun ChecklistTab(
 
             else -> {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    // Phase 22.6：完成率卡片（列表最上方）
+                    if (!completionStats.isEmpty) {
+                        item(key = "completion_stats") {
+                            CompletionStatsCard(stats = completionStats)
+                        }
+                    }
                     state.sections.forEach { section ->
                         if (section.items.isEmpty()) return@forEach
                         // 不分组时只有一个「全部」section，标题是废话 —— 不画。

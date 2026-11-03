@@ -65,6 +65,8 @@ fun TaskScreen(
     val taskState by taskViewModel.uiState.collectAsStateWithLifecycle()
     // Phase 19：命名过滤器（抽屉里的「筛选器」段）
     val namedFilters by checklistViewModel.namedFilters.collectAsStateWithLifecycle()
+    // Phase 22.6：完成率统计（清单页顶部那张卡片）
+    val completionStats by checklistViewModel.completionStats.collectAsStateWithLifecycle()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -201,6 +203,8 @@ fun TaskScreen(
                     onSortChange = checklistViewModel::setSort,
                     onResetFilter = checklistViewModel::resetFilter,
                     modifier = Modifier.fillMaxSize(),
+                    // Phase 22.6：完成率卡片
+                    completionStats = completionStats,
                     )
                 }
             }

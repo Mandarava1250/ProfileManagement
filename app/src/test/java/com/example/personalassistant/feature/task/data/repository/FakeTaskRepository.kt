@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.task.data.repository
 
+import com.example.personalassistant.feature.task.data.local.DailyCompletionRow
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
@@ -57,6 +58,18 @@ class FakeTaskRepository : TaskRepository {
     var tasksWithReminders: List<Task> = emptyList()
 
     override suspend fun getTasksWithReminders(): List<Task> = tasksWithReminders
+
+    /** Phase 22.6：可注入的每日计划 / 完成统计（完成率测试用） */
+    var dailyCompletion: List<DailyCompletionRow> = emptyList()
+
+    /** Phase 22.6：连续完成天数用的宽窗口统计 */
+    var dailyCompletionUntil: List<DailyCompletionRow> = emptyList()
+
+    override suspend fun getDailyCompletion(startMs: Long, endMs: Long): List<DailyCompletionRow> =
+        dailyCompletion
+
+    override suspend fun getDailyCompletionUntil(startMs: Long, endMs: Long): List<DailyCompletionRow> =
+        dailyCompletionUntil
 
     // ===== 写操作 =====
 

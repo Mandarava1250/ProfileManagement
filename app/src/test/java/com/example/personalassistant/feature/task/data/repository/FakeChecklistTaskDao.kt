@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.task.data.repository
 
+import com.example.personalassistant.feature.task.data.local.DailyCompletionRow
 import com.example.personalassistant.feature.task.data.local.TaskDao
 import com.example.personalassistant.feature.task.data.local.TaskEntity
 import kotlinx.coroutines.flow.Flow
@@ -207,6 +208,12 @@ class FakeChecklistTaskDao : TaskDao {
 
     override suspend fun getTodayCompletionRate(todayStart: Long): Double? =
         notUsed("getTodayCompletionRate")
+
+    override suspend fun getDailyCompletion(startMs: Long, endMs: Long): List<DailyCompletionRow> =
+        notUsed("getDailyCompletion")
+
+    override suspend fun getDailyCompletionUntil(startMs: Long, endMs: Long): List<DailyCompletionRow> =
+        notUsed("getDailyCompletionUntil")
 
     /** 清单测试里调用到任务列表相关 DAO 方法 = 代码写错了。 */
     private fun notUsed(name: String): Nothing =
