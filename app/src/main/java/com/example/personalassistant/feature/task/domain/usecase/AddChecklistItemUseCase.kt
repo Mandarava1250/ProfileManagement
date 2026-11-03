@@ -22,6 +22,8 @@ class AddChecklistItemUseCase @Inject constructor(
         priority: TaskPriority = TaskPriority.MEDIUM,
         amount: Double? = null,
         listId: Long = TaskList.INBOX_ID,
+        /** Phase 22.5：提醒时间（绝对毫秒时间戳，null = 不提醒）。 */
+        reminderTime: Long? = null,
     ): Long {
         val trimmed = title.trim()
         require(trimmed.isNotEmpty()) { "清单项内容不能为空" }
@@ -32,6 +34,7 @@ class AddChecklistItemUseCase @Inject constructor(
             priority = priority,
             amount = amount,
             listId = listId,
+            reminderTime = reminderTime,
         )
     }
 }

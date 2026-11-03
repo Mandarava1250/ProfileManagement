@@ -18,6 +18,7 @@ import com.example.personalassistant.feature.task.domain.model.matches
 import com.example.personalassistant.feature.task.domain.model.parseQuickInput
 import com.example.personalassistant.feature.task.domain.model.toExpression
 import com.example.personalassistant.feature.task.domain.model.toSpec
+import com.example.personalassistant.feature.task.domain.repository.ChecklistDefaultsRepository
 import com.example.personalassistant.feature.task.domain.repository.NamedFilterRepository
 import com.example.personalassistant.feature.task.domain.repository.TaskListRepository
 import com.example.personalassistant.feature.task.domain.usecase.AddChecklistItemUseCase
@@ -40,6 +41,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -82,6 +84,8 @@ class ChecklistViewModel @Inject constructor(
     private val namedFilterRepository: NamedFilterRepository,
     // ===== Phase 22.6：完成率统计 =====
     private val observeCompletionStats: ObserveCompletionStatsUseCase,
+    // ===== Phase 22.5：新建清单项的默认值 =====
+    private val checklistDefaultsRepository: ChecklistDefaultsRepository,
 ) : ViewModel() {
 
     /** 当前筛选条件（分类 / 标签 / 分组 / 排序）。 */
@@ -229,9 +233,39 @@ class ChecklistViewModel @Inject constructor(
      * 新增清单项（只有标题）。
      *
      * 保留单参数签名：现有 UI（`onAdd = checklistViewModel::addItem`）直接用它。
+     *
+     * Phase 22.5：**快速添加**会套用设置页里的默认值（默认清单 / 默认优先级 / 默认提醒）。
+     * 编辑面板那条路（[addItemWithDetails]）不套 —— 那边用户已经明确选过值了，
+     * 再覆盖一遍是添乱。
      */
     fun addItem(title: String) {
-        addItemWithDetails(title)
+        viewModelScope.launch {
+            runCatching {
+                val defaults = checklistDefaultsRepository.observe().first()
+                val parsed = parseQuickInput(
+                    input = title,
+                    today = LocalDate.now(),
+                    zoneId = ZoneId.systemDefault(),
+                )
+                val finalTitle = parsed?.title?.takeIf { it.isNotBlank() } ?: title
+                val finalDueDate = parsed?.dueDate
+
+                // 默认提醒：只在**有截止时间**时才算得出来提醒点
+                val reminderTime = defaults.defaultReminderMinutesBefore
+                    ?.let { minutes -> finalDueDate?.minus(minutes * 60_000L) }
+
+                addChecklistItem(
+                    title = finalTitle,
+                    category = null,
+                    dueDate = finalDueDate,
+                    priority = defaults.defaultPriority,
+                    amount = null,
+                    // 默认清单：设了就一律落到那儿，没设就跟着当前视图
+                    listId = defaults.defaultListId ?: targetListId(),
+                    reminderTime = reminderTime,
+                )
+            }
+        }
     }
 
     /**

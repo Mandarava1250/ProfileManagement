@@ -109,6 +109,7 @@ class ChecklistViewModelTest {
             priority: TaskPriority,
             amount: Double?,
             listId: Long,
+            reminderTime: Long?,
         ): Long {
             val id = nextId++
             itemsState.value = itemsState.value + Task(
@@ -121,6 +122,7 @@ class ChecklistViewModelTest {
                 dueDate = dueDate,
                 priority = priority,
                 amount = amount,
+                reminderTime = reminderTime,
             )
             return id
         }
@@ -221,6 +223,8 @@ class ChecklistViewModelTest {
         // 完成率读的是 TaskRepository（跟清单页的 ChecklistRepository 两套接口，
         // 但生产上都落在同一张 tasks 表）
         observeCompletionStats = ObserveCompletionStatsUseCase(FakeTaskRepository()),
+        // ===== Phase 22.5：新建清单项的默认值 =====
+        checklistDefaultsRepository = FakeChecklistDefaultsRepository(),
     )
 
     private fun tag(id: Long): Tag = Tag(

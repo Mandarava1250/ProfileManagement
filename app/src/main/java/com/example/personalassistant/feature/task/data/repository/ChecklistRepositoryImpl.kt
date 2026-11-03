@@ -71,6 +71,7 @@ class ChecklistRepositoryImpl @Inject constructor(
         priority: TaskPriority,
         amount: Double?,
         listId: Long,
+        reminderTime: Long?,
     ): Long = withContext(dispatcher) {
         // 追加到末尾（max + 1），修掉「order 恒为 0，新项全挤在最前面」的旧问题
         val nextOrder = (dao.getMaxTopLevelOrder() ?: -1L) + 1
@@ -84,6 +85,8 @@ class ChecklistRepositoryImpl @Inject constructor(
                 dueDate = dueDate,
                 priority = priority.dbValue,
                 amount = amount,
+                // Phase 22.5：默认提醒
+                reminderTime = reminderTime,
             ),
         )
     }

@@ -50,6 +50,7 @@ import com.example.personalassistant.feature.settings.dialogs.HolidaySyncPromptD
 import com.example.personalassistant.feature.settings.dialogs.LongPressConfirmDialog
 import com.example.personalassistant.feature.settings.dialogs.SuggestBackupBeforeResetDialog
 import com.example.personalassistant.feature.settings.sections.CalendarSection
+import com.example.personalassistant.feature.settings.sections.ChecklistSection
 import com.example.personalassistant.feature.settings.sections.FinanceSection
 import com.example.personalassistant.feature.settings.sections.ProfileSection
 import com.example.personalassistant.feature.settings.sections.TaskSection
@@ -236,6 +237,11 @@ fun SettingsScreen(
                 // ===== 任务 =====
                 item(key = "section_task") {
                     TaskSection()
+                }
+
+                // ===== Phase 22.5：清单 =====
+                item(key = "section_checklist") {
+                    ChecklistSection()
                 }
 
                 // ===== 记账 =====

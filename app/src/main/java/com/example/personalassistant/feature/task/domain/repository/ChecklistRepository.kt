@@ -53,6 +53,8 @@ interface ChecklistRepository {
         priority: TaskPriority = TaskPriority.MEDIUM,
         amount: Double? = null,
         listId: Long = TaskList.INBOX_ID,
+        /** Phase 22.5：提醒时间（绝对毫秒时间戳，null = 不提醒）。 */
+        reminderTime: Long? = null,
     ): Long
 
     /**

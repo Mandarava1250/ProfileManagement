@@ -1,6 +1,8 @@
 package com.example.personalassistant.feature.task.di
 
+import com.example.personalassistant.feature.task.data.preferences.ChecklistDefaultsRepositoryImpl
 import com.example.personalassistant.feature.task.data.preferences.TaskDisplayRepositoryImpl
+import com.example.personalassistant.feature.task.domain.repository.ChecklistDefaultsRepository
 import com.example.personalassistant.feature.task.domain.repository.TaskDisplayRepository
 import dagger.Binds
 import dagger.Module
@@ -22,4 +24,15 @@ abstract class TaskDisplayModule {
     @Binds
     @Singleton
     abstract fun bindTaskDisplayRepository(impl: TaskDisplayRepositoryImpl): TaskDisplayRepository
+
+    /**
+     * Phase 22.5：新建清单项的默认参数。
+     *
+     * 跟显示偏好一样走 DataStore，所以放在同一个模块里。
+     */
+    @Binds
+    @Singleton
+    abstract fun bindChecklistDefaultsRepository(
+        impl: ChecklistDefaultsRepositoryImpl,
+    ): ChecklistDefaultsRepository
 }
