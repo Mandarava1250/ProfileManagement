@@ -31,6 +31,8 @@ import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.core.ui.theme.onColorFor
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.calendar.domain.util.CalendarTaskFilter
+import com.example.personalassistant.feature.calendar.domain.util.CalendarTimeRange
 import com.example.personalassistant.feature.calendar.domain.util.TimeBlockLayout
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
@@ -50,6 +52,8 @@ import java.time.ZoneId
  * @param filled true = 实底（课程），false = 淡底（事件 / 任务）
  * @param isCompleted true = 已完成（划线 + 淡化）。Phase 15 P0-1.3 补的字段 ——
  *   之前这个块根本没有完成态，于是时间轴上的任务永远不会变灰
+ * @param crossesMidnight Phase 20.7：这块属于一个**跨午夜**的时段
+ *   （当天这半截画到 24:00，次日那半截从 00:00 开始），UI 上标「跨天」
  */
 data class TimelineBlock(
     val key: String,
@@ -60,6 +64,7 @@ data class TimelineBlock(
     val color: Color,
     val filled: Boolean = false,
     val isCompleted: Boolean = false,
+    val crossesMidnight: Boolean = false,
 )
 
 /**
@@ -75,6 +80,8 @@ data class TimelineBlock(
  * @param timedEvents 当天带时间的事件
  * @param tasks 当天的任务（带截止时间才会落到轴上）
  * @param emptyHint 空轴时的提示文案
+ * @param dayStart 当天 00:00 的时间戳 —— 给了它才会做跨午夜的切段（Phase 20.7）
+ *   与「带时间段的清单项按真实时段占位」（Phase 20.4）
  */
 @Composable
 fun DayTimelineView(
@@ -83,11 +90,12 @@ fun DayTimelineView(
     tasks: List<Task> = emptyList(),
     emptyHint: String = "今天没有课程和日程",
     showNowLine: Boolean = false,
+    dayStart: Long? = null,
     modifier: Modifier = Modifier,
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
-    val blocks = remember(courses, timedEvents, tasks, primaryColor) {
-        buildTimelineBlocks(courses, timedEvents, tasks, primaryColor)
+    val blocks = remember(courses, timedEvents, tasks, primaryColor, dayStart) {
+        buildTimelineBlocks(courses, timedEvents, tasks, primaryColor, dayStart)
     }
 
     if (blocks.isEmpty()) {
@@ -156,10 +164,17 @@ fun DayTimelineView(
                 blocks.forEachIndexed { index, block ->
                     val span = TimeBlockLayout.toRowSpan(block.startMinute, block.endMinute)
                     val placement = placements[index]
+                    // Phase 20.7：跨午夜的块标一下「跨天」——
+                    // 它在另一头还有一截（当天的画到 24:00，次日的从 00:00 开始）
+                    val timeText = buildString {
+                        append(DateUtils.formatMinutesOfDay(block.startMinute))
+                        append(" - ")
+                        append(DateUtils.formatMinutesOfDay(block.endMinute))
+                        if (block.crossesMidnight) append(" · 跨天")
+                    }
                     TimelineBlockCard(
                         block = block,
-                        timeText = "${DateUtils.formatMinutesOfDay(block.startMinute)} - " +
-                            DateUtils.formatMinutesOfDay(block.endMinute),
+                        timeText = timeText,
                         modifier = Modifier
                             .offset(
                                 x = (columnWidth + columnGap) * placement.columnIndex,
@@ -179,12 +194,18 @@ fun DayTimelineView(
  *
  * 单独抽出来是为了能脱离 Compose 直接测 —— 「任务该落在几点」这种事，
  * 光看界面是验证不了的。
+ *
+ * @param dayStart 当天 00:00 的时间戳。给了它：
+ * - 事件按「跨天条」切段（Phase 20.7，跨午夜不截断）
+ * - 带时间段的清单项按真实时段占位（Phase 20.4，与课程同一条轴）
+ * 不给（null）= 走 Phase 14/15 的老路径（按「当天分钟数」换算）
  */
 internal fun buildTimelineBlocks(
     courses: List<Course>,
     timedEvents: List<Event>,
     tasks: List<Task>,
     primaryColor: Color,
+    dayStart: Long? = null,
 ): List<TimelineBlock> {
     val courseBlocks = courses.map { course ->
         TimelineBlock(
@@ -203,7 +224,25 @@ internal fun buildTimelineBlocks(
         // 之前这里写的是 `event.startTime?.toInt()` —— 把毫秒戳直接截断成 Int 当分钟数用，
         // 2026 年的毫秒戳截断后是个大乱数，事件在时间轴上的位置全是错的。
         // 现在统一走 minuteOfDay，把毫秒转成当天分钟数。
-        val start = event.startTime?.let { minuteOfDay(it) } ?: return@mapNotNull null
+        val startMillis = event.startTime ?: return@mapNotNull null
+
+        if (dayStart != null) {
+            // Phase 20.7：按「跨天条」切段 —— 跨午夜不截断
+            val endMillis = event.endTime ?: startMillis
+            val segment = CalendarTimeRange
+                .segmentOn(startMillis, endMillis, dayStart) ?: return@mapNotNull null
+            return@mapNotNull TimelineBlock(
+                key = "event-${event.id}",
+                title = event.title,
+                subtitle = event.category,
+                startMinute = segment.startMinute,
+                endMinute = segment.endMinute,
+                color = Color(event.color),
+                crossesMidnight = segment.crossesMidnight,
+            )
+        }
+
+        val start = minuteOfDay(startMillis) ?: return@mapNotNull null
         // 结束时间：取不到（没填 / 正好落在 00:00）或落在次日导致比开始还早 —— 都按 1 小时算
         // （零高度的块在屏幕上等于不存在）
         val rawEnd = event.endTime?.let { minuteOfDay(it) }
@@ -218,6 +257,24 @@ internal fun buildTimelineBlocks(
         )
     }
     val taskBlocks = tasks.mapNotNull { task ->
+        // Phase 20.4 + 20.2：带时间段的清单项按**真实时段**占位（与课程同一条轴）
+        if (dayStart != null &&
+            CalendarTaskFilter.isTimed(task)
+        ) {
+            val segment = CalendarTaskFilter
+                .segmentOn(task, dayStart) ?: return@mapNotNull null
+            return@mapNotNull TimelineBlock(
+                key = "task-${task.id}",
+                title = task.title,
+                subtitle = task.priority.label,
+                startMinute = segment.startMinute,
+                endMinute = segment.endMinute,
+                color = primaryColor,
+                isCompleted = task.isCompleted,
+                crossesMidnight = segment.crossesMidnight,
+            )
+        }
+        // 没填时间段的清单项：按截止时刻占 1 小时（Phase 14 的老行为）
         val due = task.dueDate ?: return@mapNotNull null
         val minute = minuteOfDay(due) ?: return@mapNotNull null
         TimelineBlock(

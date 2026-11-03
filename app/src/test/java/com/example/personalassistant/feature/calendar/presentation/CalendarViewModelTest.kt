@@ -2,9 +2,10 @@ package com.example.personalassistant.feature.calendar.presentation
 
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.core.lunar.DefaultLunarCalendar
+import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarDisplayRepository
 import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarRepository
 import com.example.personalassistant.feature.calendar.data.repository.FakeEventCategoryRepository
-import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthEventsUseCase
+import com.example.personalassistant.feature.calendar.data.repository.FakeHabitDisplayRepository
 import com.example.personalassistant.feature.finance.data.repository.FakeFinanceRepository
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveGlobalMonthlySumsUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveMonthlyBudgetUseCase
@@ -28,6 +29,7 @@ import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayD
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveEventCategoriesUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEventReminderUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.SetTaskTimeRangeUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpsertEventCategoryUseCase
 import com.example.personalassistant.feature.task.domain.reminder.ReminderInfo
@@ -215,7 +217,10 @@ class CalendarViewModelTest {
             // Phase 14：周视图（课表风格）
             observeCurrentSemester = ObserveCurrentSemesterUseCase(FakeTimetableRepository()),
             getCoursesByWeek = GetCoursesByWeekUseCase(FakeTimetableRepository()),
-            observeMonthEvents = ObserveMonthEventsUseCase(repo),
+            // Phase 20.3：日历「显示设置」+ Phase 20.1：清单项时间段
+            calendarDisplayRepository = FakeCalendarDisplayRepository(),
+            habitDisplayRepository = FakeHabitDisplayRepository(),
+            setTaskTimeRange = SetTaskTimeRangeUseCase(repo),
         )
     }
 

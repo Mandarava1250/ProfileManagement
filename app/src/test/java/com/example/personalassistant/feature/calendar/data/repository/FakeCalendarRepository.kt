@@ -124,6 +124,18 @@ class FakeCalendarRepository : CalendarRepository {
             }
         }
 
+    // ===== Phase 20.1：清单项时间段 =====
+
+    /**
+     * 测试用：记录最后一次写入的时间段
+     */
+    var lastTaskTimeRange: Triple<Long, Long?, Long?>? = null
+        private set
+
+    override suspend fun setTaskTimeRange(taskId: Long, startAt: Long?, endAt: Long?) {
+        lastTaskTimeRange = Triple(taskId, startAt, endAt)
+    }
+
     // ===== 测试辅助 helpers =====
 
     /** 直接注入一条带 id 的事件（跳过自增），便于测试 */

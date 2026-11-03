@@ -4,13 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.personalassistant.core.lunar.LunarCalendar
 import com.example.personalassistant.core.utils.DateUtils
+import com.example.personalassistant.feature.calendar.domain.model.CalendarConflictEntry
 import com.example.personalassistant.feature.calendar.domain.model.CalendarDayCell
+import com.example.personalassistant.feature.calendar.domain.model.CalendarDisplayPreferences
 import com.example.personalassistant.feature.calendar.domain.model.CalendarViewType
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.model.EventCategory
 import com.example.personalassistant.feature.calendar.domain.model.EventConflictInfo
 import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
+import com.example.personalassistant.feature.calendar.domain.repository.CalendarDisplayRepository
 import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.CancelEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.DeleteEventCategoryUseCase
@@ -19,15 +22,18 @@ import com.example.personalassistant.feature.calendar.domain.usecase.DetectEvent
 import com.example.personalassistant.feature.calendar.domain.usecase.DetectEventSavedConflictsUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveDayDetailUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveEventCategoriesUseCase
-import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthEventsUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEventReminderUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.SetTaskTimeRangeUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpsertEventCategoryUseCase
+import com.example.personalassistant.feature.calendar.domain.util.CalendarConflictDetector
+import com.example.personalassistant.feature.calendar.domain.util.CalendarTaskFilter
 import com.example.personalassistant.feature.calendar.domain.util.WeekCalculator
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveGlobalMonthlySumsUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveMonthlyBudgetUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveTodayPoolUseCase
+import com.example.personalassistant.feature.habit.domain.repository.HabitDisplayRepository
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.usecase.ToggleTaskCompleteUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.GetCoursesByWeekUseCase
@@ -95,7 +101,12 @@ class CalendarViewModel @Inject constructor(
     // Phase 14：周视图（课表风格）—— 跨 feature 取课表与事件数据
     private val observeCurrentSemester: ObserveCurrentSemesterUseCase,
     private val getCoursesByWeek: GetCoursesByWeekUseCase,
-    private val observeMonthEvents: ObserveMonthEventsUseCase,
+    // Phase 20.3：日历「显示设置」（课程 / 清单项 / 已完成）
+    private val calendarDisplayRepository: CalendarDisplayRepository,
+    // Phase 20.3：「习惯打卡」开关复用习惯模块的（key = habit_show_in_calendar）
+    private val habitDisplayRepository: HabitDisplayRepository,
+    // Phase 20.1：给清单项设置 / 清除时间段
+    private val setTaskTimeRange: SetTaskTimeRangeUseCase,
 ) : ViewModel() {
 
     private val _currentYearMonth = MutableStateFlow(DateUtils.currentYearMonth())
@@ -123,6 +134,14 @@ class CalendarViewModel @Inject constructor(
     val editorError: StateFlow<String?> = _editorError.asStateFlow()
 
     /**
+     * Phase 20.1：正在编辑「时间段」的清单项（null = 编辑器关闭）
+     *
+     * 与事件的 [_editingState] 分开 —— 两者是两套完全不同的表单。
+     */
+    private val _editingTaskTimeRange = MutableStateFlow<Task?>(null)
+    val editingTaskTimeRange: StateFlow<Task?> = _editingTaskTimeRange.asStateFlow()
+
+    /**
      * Phase 8 Sub-step 9：事件分类列表（Flow）
      *
      * - 由 EventCategoryRepository.observeAll() 提供
@@ -133,6 +152,25 @@ class CalendarViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList(),
+        )
+
+    /**
+     * Phase 20.3：日历「显示设置」
+     *
+     * - 课程 / 清单项 / 已完成 三个开关走日历自己的 DataStore
+     * - 习惯打卡开关复用习惯模块的 HabitDisplayRepository（key = habit_show_in_calendar），
+     *   两边共用同一个 key，用户只看到一个开关
+     *
+     * UI 用：CalendarDisplaySettingsSheet
+     */
+    val displayPreferences: StateFlow<CalendarDisplayPreferences> = combine(
+        calendarDisplayRepository.observe(),
+        habitDisplayRepository.observeShowInCalendar(),
+    ) { prefs, showHabits -> prefs.copy(showHabits = showHabits) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = CalendarDisplayPreferences(),
         )
 
     /**
@@ -235,6 +273,30 @@ class CalendarViewModel @Inject constructor(
                 started = SharingStarted.WhileSubscribed(5_000),
                 initialValue = null,
             )
+
+    /**
+     * Phase 20.5：当天「清单项 ↔ 课程」的冲突
+     *
+     * - 只算**带时间段**的清单项（没时段的清单项不占轴，也谈不上冲突）
+     * - 课程取当天那份（已按周次规则过滤）
+     * - UI 用：复用 ConflictWarningBanner（转成 EventConflictInfo 喂给它）
+     */
+    val dayConflicts: StateFlow<List<CalendarConflictEntry>> = selectedDayDetail
+        .map { detail ->
+            detail?.let {
+                CalendarConflictDetector.detect(
+                    dayStart = it.date,
+                    courses = it.courses,
+                    timedTasks = it.tasks.filter { task -> CalendarTaskFilter.isTimed(task) },
+                    weekNumber = it.weekNumber,
+                )
+            } ?: emptyList()
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
 
     /**
      * 周视图 7 个 cell（基于当前选中日期所在的周）
@@ -598,44 +660,109 @@ class CalendarViewModel @Inject constructor(
         }
     }
 
+    // ===== Phase 20.3：日历「显示设置」 =====
+
+    /**
+     * 课程在日历里显不显示
+     */
+    fun setShowCourses(enabled: Boolean) {
+        viewModelScope.launch { calendarDisplayRepository.setShowCourses(enabled) }
+    }
+
+    /**
+     * 清单项在日历里显不显示
+     */
+    fun setShowTasks(enabled: Boolean) {
+        viewModelScope.launch { calendarDisplayRepository.setShowTasks(enabled) }
+    }
+
+    /**
+     * 已完成的清单项在日历里显不显示
+     */
+    fun setShowCompleted(enabled: Boolean) {
+        viewModelScope.launch { calendarDisplayRepository.setShowCompleted(enabled) }
+    }
+
+    /**
+     * 习惯打卡在日历里显不显示
+     *
+     * 走习惯模块的 HabitDisplayRepository（key = habit_show_in_calendar）——
+     * 与习惯页共用同一个开关。
+     */
+    fun setShowHabits(enabled: Boolean) {
+        viewModelScope.launch { habitDisplayRepository.setShowInCalendar(enabled) }
+    }
+
+    // ===== Phase 20.1：清单项时间段 =====
+
+    /**
+     * 打开「设置时间段」编辑器
+     */
+    fun startEditTaskTimeRange(task: Task) {
+        _editingTaskTimeRange.value = task
+    }
+
+    /**
+     * 关闭「设置时间段」编辑器
+     */
+    fun clearTaskTimeRangeEditor() {
+        _editingTaskTimeRange.value = null
+    }
+
+    /**
+     * 保存清单项的时间段
+     *
+     * @param startAt / endAt 都传 null = 清除时间段
+     */
+    fun saveTaskTimeRange(taskId: Long, startAt: Long?, endAt: Long?) {
+        viewModelScope.launch {
+            setTaskTimeRange(taskId, startAt, endAt)
+            _editingTaskTimeRange.value = null
+        }
+    }
+
     // ===== 内部 =====
 
     /**
-     * 周视图数据源：本周 7 天，每天的课程 + 事件
+     * 周视图数据源：本周 7 天，每天的课程 + 事件 + 清单项
      */
     private fun observeWeekTimeline(date: Long): Flow<WeekTimeline> {
-        val (weekStart, weekEndExclusive) = computeWeekRange(date)
+        val (weekStart, _) = computeWeekRange(date)
         return combine(
             observeCurrentSemester(),
-            observeMonthEvents(weekStart, weekEndExclusive),
             observeWeekDayDetails(weekStart),
-        ) { semester, events, dayDetails -> Triple(semester, events, dayDetails) }
-            .flatMapLatest { (semester, events, dayDetails) ->
+            // Phase 20.3：「课程」开关也要管到周视图 ——
+            // 否则关掉课程后日视图没了、周视图还有，月/周/日就对不上了。
+            displayPreferences,
+        ) { semester, dayDetails, prefs -> Triple(semester, dayDetails, prefs) }
+            .flatMapLatest { (semester, dayDetails, prefs) ->
                 val weekNumber = semester?.let {
                     WeekCalculator.weekNumber(date, it.startDate, it.endDate)
                 }
-                // 没有学期或不在学期内 → 这一周没有课（周视图只显示事件）
+                // 没有学期或不在学期内 → 这一周没有课（周视图只显示事件与清单项）
                 val coursesFlow = if (semester != null && weekNumber != null) {
                     getCoursesByWeek(semester.name, weekNumber)
                 } else {
                     flowOf(emptyList())
                 }
                 coursesFlow.map { courses ->
+                    val visibleCourses = if (prefs.showCourses) courses else emptyList()
                     WeekTimeline(
                         weekStart = weekStart,
                         days = (0 until WeekTimeline.DAY_COUNT).map { offset ->
                             val dayOfWeek = offset + 1
                             val dayDate = weekStart + offset * WeekTimeline.ONE_DAY_MILLIS
+                            // Phase 20.2（过滤点 3）：事件与清单项都取「这一天自己的 DayDetail」——
+                            // 1) 清单项按它占用天归位（带时间段的落在时段覆盖的那些天）
+                            // 2) 跨午夜的事件在第二天也能看到它的尾巴（Phase 20.7）
+                            // 3) 与日视图同源 —— 不会出现「日视图有、周视图没有」
+                            val dayDetail = dayDetails.getOrNull(offset)
                             WeekDayColumn(
                                 date = dayDate,
                                 dayOfWeek = dayOfWeek,
-                                courses = courses.filter { it.dayOfWeek == dayOfWeek },
-                                events = events.filter { it.date == dayDate },
-                                // Phase 14：任务必须落在它自己的那一列，
-                                // 否则周视图里任务的位置和日期对不上。
-                                // dayDetails 是按周一~周日顺序给的，第 offset 个就是这一天 ——
-                                // 按顺序取，不依赖 DayDetail.date 的口径。
-                                tasks = dayDetails.getOrNull(offset)?.tasks.orEmpty(),
+                                courses = visibleCourses.filter { it.dayOfWeek == dayOfWeek },
+                                events = dayDetail?.events.orEmpty(),
+                                tasks = dayDetail?.tasks.orEmpty(),
                             )
                         },
                     )

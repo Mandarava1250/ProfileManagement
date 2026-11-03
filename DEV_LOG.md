@@ -2839,3 +2839,39 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 | 版本 | 变更 | 快照 |
 |---|---|---|
 | v17 | `habits` + `habit_checkins` 两张新表（习惯打卡） | `17.json` |
+
+---
+
+## 📓 Phase 20（清单 ↔ 日历同体 · 课表今日聚合）
+
+> 分支：`feature/phase-16-checklist-rebuild`｜Room 版本不变（17）
+> 验证门槛：`assembleDebug` + `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全绿
+
+### 已完成
+
+| 项 | 主题 | 关键产出 |
+|---|---|---|
+| 20.1 | 时间段编辑入口 | `TaskTimeRangeSheet` + `SetTaskTimeRangeUseCase`（写 `tasks.startAt` / `endAt`） |
+| 20.2 | 时段块渲染 | 口径统一收在 `CalendarTaskFilter`（带时段 = `startAt` 与 `endAt` **都有值**；按**占用天**归属，跨午夜占两天）；三处过滤点 `observeDayDetail` / `observeMonthSummary` / `observeWeekTimeline` 都调它 |
+| 20.3 | 显示设置开关 | DataStore（**不新增 Room 表**）：`calendar_show_courses` / `calendar_show_tasks` / `calendar_show_completed`；「习惯打卡」**复用习惯模块的 `habit_show_in_calendar`**，两边同一把开关。入口在顶栏 `Tune` 图标 |
+| 20.4 | 今日聚合同轴 | `DayTimelineView` 给 `dayStart` 后，课程（当天分钟数）+ 带时段清单项（真实时段）+ 无时段清单项（截止占 1 小时）一起 `sortedBy { startMinute }` 排进**同一条 24 小时轴** |
+| 20.5 | 冲突提示 | `CalendarConflictDetector`（纯函数，闭开区间相交）→ 复用既有 `ConflictWarningBanner` |
+| 20.6 | 跳转清单项详情 | 日视图「今日待办」点标题 → `Screen.DetailTask.build(id)` |
+| 20.7 | 跨午夜不截断 | `CalendarTimeRange` 把时段切成「每天一段」（23:00→次日 01:00 = 23:00-24:00 + 00:00-01:00）；每段带 `crossesMidnight` 标记 |
+
+### 关键决策
+
+14. **三处过滤点共用一个口径函数** —— 计划文件特意点了「漏一处会导致月/周/日视图不一致」，
+    所以把判定收进 `CalendarTaskFilter`，三处都调它，不各写各的。
+15. **跨午夜的判据是「落在两个不同自然日」，不是「end > start」** —— 后者会把
+    「没有结束时间、按 1 小时补齐」的普通时段误标成跨天。
+16. **「习惯打卡」开关复用习惯模块那把** —— 日历侧本来没有通用显示设置，
+    造第二把会让用户困惑「我关了怎么还在」。
+
+### 已知不一致（报告未改）
+
+- 月汇总 `observeBetween` 排除已完成、日视图含已完成 → 徽章数与当天列表数本来就对不上，
+  「已完成」开关也因此对月视图徽章无效。
+- 性能未实测：`observeDayDetail` 多订阅一路整表 `observeAll()`，周视图订阅 7 个 DayDetail
+  → 7 路整表扫描。个人 App 量级可接受，清单项上千条时值得再优化。
+- 习惯打卡在日历里**只做了开关位，还没渲染打卡数据** —— 那是 Phase 23.6 的活。

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Today
 import androidx.compose.material.icons.rounded.DateRange
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -55,6 +56,8 @@ import com.example.personalassistant.feature.calendar.presentation.components.Mo
 import com.example.personalassistant.feature.calendar.presentation.components.MonthTagList
 import com.example.personalassistant.feature.calendar.presentation.components.MonthPickerSheet
 import com.example.personalassistant.feature.calendar.presentation.components.WeekCalendarView
+import com.example.personalassistant.feature.calendar.presentation.components.CalendarDisplaySettingsSheet
+import com.example.personalassistant.feature.calendar.presentation.components.TaskTimeRangeSheet
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -94,6 +97,12 @@ fun CalendarScreen(
     val todayOverview by viewModel.todayOverview.collectAsStateWithLifecycle()
     // Phase 14：周视图（课表风格）数据
     val weekTimeline by viewModel.weekTimeline.collectAsStateWithLifecycle()
+    // Phase 20.3：日历「显示设置」
+    val displayPreferences by viewModel.displayPreferences.collectAsStateWithLifecycle()
+    // Phase 20.5：当天「清单项 ↔ 课程」的冲突
+    val dayConflicts by viewModel.dayConflicts.collectAsStateWithLifecycle()
+    // Phase 20.1：正在编辑时间段的清单项
+    val editingTaskTimeRange by viewModel.editingTaskTimeRange.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -107,6 +116,9 @@ fun CalendarScreen(
     // Phase 15 P1-2.3：月份选择器的开关
     var showMonthPicker by remember { mutableStateOf(false) }
 
+    // Phase 20.3：日历「显示设置」的开关
+    var showDisplaySettings by remember { mutableStateOf(false) }
+
     // Phase 15 P1-2.3：月份选择器（ModalBottomSheet 走独立 dialog 窗口，放在 Scaffold 前后都行）
     if (showMonthPicker) {
         MonthPickerSheet(
@@ -116,6 +128,29 @@ fun CalendarScreen(
                 showMonthPicker = false
             },
             onDismiss = { showMonthPicker = false },
+        )
+    }
+
+    // Phase 20.3：日历「显示设置」（课程 / 清单项 / 已完成 / 习惯打卡）
+    if (showDisplaySettings) {
+        CalendarDisplaySettingsSheet(
+            preferences = displayPreferences,
+            onShowCoursesChange = viewModel::setShowCourses,
+            onShowTasksChange = viewModel::setShowTasks,
+            onShowCompletedChange = viewModel::setShowCompleted,
+            onShowHabitsChange = viewModel::setShowHabits,
+            onDismiss = { showDisplaySettings = false },
+        )
+    }
+
+    // Phase 20.1：给清单项设置时间段的面板
+    editingTaskTimeRange?.let { task ->
+        TaskTimeRangeSheet(
+            task = task,
+            defaultDayStart = selectedDate ?: DateUtils.todayStartMillis(),
+            onSave = { startAt, endAt -> viewModel.saveTaskTimeRange(task.id, startAt, endAt) },
+            onClear = { viewModel.saveTaskTimeRange(task.id, null, null) },
+            onDismiss = { viewModel.clearTaskTimeRangeEditor() },
         )
     }
 
@@ -129,6 +164,11 @@ fun CalendarScreen(
                     }
                 },
                 actions = {
+
+                    // Phase 20.3：日历「显示设置」—— 决定日历里显示课程 / 清单项 / 已完成 / 习惯打卡
+                    IconButton(onClick = { showDisplaySettings = true }) {
+                        Icon(Icons.Rounded.Tune, contentDescription = "显示设置")
+                    }
 
                     // Phase 15 P1-2.3：月视图右上角加「选择月份」—— 原来只能一格格挪
                     if (viewType == CalendarViewType.MONTH) {
@@ -225,6 +265,14 @@ IconButton(onClick = { viewModel.goToCurrent() }) {
                                 // Phase 15 P0-1.1：走 navigateToTab —— 之前是裸 navigate，
                                 // 会把记账页压在日历之上，导致用户点底栏「日历」回不来
                                 onBudgetClick = { navController.navigateToTab(Screen.Finance.route) },
+                                // Phase 20.6：点标题跳清单项详情
+                                onTaskClick = { task ->
+                                    navController.navigate(Screen.DetailTask.build(task.id))
+                                },
+                                // Phase 20.1：点时钟图标设置清单项的时间段
+                                onTaskTimeRangeClick = { task -> viewModel.startEditTaskTimeRange(task) },
+                                // Phase 20.5：清单项 ↔ 课程 的冲突提示
+                                conflicts = dayConflicts,
                             )
                         } else {
                             EmptyViewPlaceholder(text = "请回到今天")

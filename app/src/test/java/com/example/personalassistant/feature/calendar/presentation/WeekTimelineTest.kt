@@ -2,8 +2,10 @@ package com.example.personalassistant.feature.calendar.presentation
 
 import com.example.personalassistant.core.holiday.usecase.IsHolidayUseCase
 import com.example.personalassistant.core.lunar.DefaultLunarCalendar
+import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarDisplayRepository
 import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarRepository
 import com.example.personalassistant.feature.calendar.data.repository.FakeEventCategoryRepository
+import com.example.personalassistant.feature.calendar.data.repository.FakeHabitDisplayRepository
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.repository.CalendarRepository
 import com.example.personalassistant.feature.calendar.domain.usecase.AddEventUseCase
@@ -17,6 +19,7 @@ import com.example.personalassistant.feature.calendar.domain.usecase.ObserveEven
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthEventsUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEventReminderUseCase
+import com.example.personalassistant.feature.calendar.domain.usecase.SetTaskTimeRangeUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpsertEventCategoryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.fake.FakeCourseDao
@@ -231,7 +234,10 @@ class WeekTimelineTest {
             toggleTaskComplete = ToggleTaskCompleteUseCase(FakeTaskRepository()),
             observeCurrentSemester = ObserveCurrentSemesterUseCase(FakeTimetableRepository()),
             getCoursesByWeek = GetCoursesByWeekUseCase(FakeTimetableRepository()),
-            observeMonthEvents = ObserveMonthEventsUseCase(calendarRepository),
+            // Phase 20.3：日历「显示设置」+ Phase 20.1：清单项时间段
+            calendarDisplayRepository = FakeCalendarDisplayRepository(),
+            habitDisplayRepository = FakeHabitDisplayRepository(),
+            setTaskTimeRange = SetTaskTimeRangeUseCase(calendarRepository),
         )
     }
 
