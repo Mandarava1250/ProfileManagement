@@ -80,4 +80,22 @@ data class Task(
 
     /** 置顶（恒在列表最前）。 */
     val isPinned: Boolean = false,
+
+    // ===== Phase 22.2：搜索命中来源（纯展示用，不落库） =====
+
+    /**
+     * 所属清单名。
+     *
+     * 只有搜索结果会填 —— 搜「Work」时，清单项标题里可能没有 Work，
+     * 它是在 Work 清单里才命中的，不说清楚用户会懵。
+     * null = 未知或未填。
+     */
+    val listName: String? = null,
+
+    /**
+     * 标签名（搜索命中来源）。
+     *
+     * 同 [listName] —— 只在搜索结果里填，普通查询路径留空。
+     */
+    val tagNames: List<String> = emptyList(),
 )

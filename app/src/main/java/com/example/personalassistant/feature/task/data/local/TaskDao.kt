@@ -98,18 +98,45 @@ interface TaskDao {
      * - :keyword 为原始关键字，调用方负责 prepend/append `%`
      * - 大小写敏感（与 FinanceDao.searchTransactions 一致）
      * - 排序：priority DESC, dueDate ASC NULLS LAST, updatedAt DESC
+     *
+     * ## Phase 22.2：命中来源扩到标签名 / 清单名
+     *
+     * 用户搜「Work」时，想要的是**打了 Work 标签**或**在 Work 清单里**的清单项，
+     * 哪怕清单项本身标题里没有「Work」两个字。
+     *
+     * 用 `EXISTS` 子查询而不是 JOIN：
+     * - JOIN 会让一个任务命中多个标签时**重复出现**（还得 DISTINCT 兜）
+     * - EXISTS 只回答「有没有」，语义正好
      */
     @Query(
         """
-        SELECT * FROM tasks
-        WHERE parentTaskId IS NULL
-          AND (title LIKE :keyword
-            OR description LIKE :keyword
-            OR category LIKE :keyword)
-        ORDER BY priority DESC, dueDate IS NULL, dueDate ASC, updatedAt DESC
+        SELECT t.*,
+          (SELECT GROUP_CONCAT(tg.displayName, ' / ')
+             FROM task_tag_cross_ref ref
+             INNER JOIN tags tg ON tg.id = ref.tagId
+             WHERE ref.taskId = t.id AND tg.displayName LIKE :keyword) AS matchedTagNames,
+          (SELECT tl.displayName FROM task_lists tl
+             WHERE tl.id = t.listId AND tl.displayName LIKE :keyword) AS matchedListName
+        FROM tasks t
+        WHERE t.parentTaskId IS NULL
+          AND (t.title LIKE :keyword
+            OR t.description LIKE :keyword
+            OR t.category LIKE :keyword
+            OR EXISTS (
+              SELECT 1 FROM task_tag_cross_ref ref
+              INNER JOIN tags tg ON tg.id = ref.tagId
+              WHERE ref.taskId = t.id
+                AND tg.displayName LIKE :keyword
+            )
+            OR EXISTS (
+              SELECT 1 FROM task_lists tl
+              WHERE tl.id = t.listId
+                AND tl.displayName LIKE :keyword
+            ))
+        ORDER BY t.priority DESC, t.dueDate IS NULL, t.dueDate ASC, t.updatedAt DESC
         """
     )
-    fun searchTasks(keyword: String): Flow<List<TaskEntity>>
+    fun searchTasks(keyword: String): Flow<List<TaskSearchRow>>
 
     @Query("UPDATE tasks SET isCompleted = :completed, updatedAt = :now WHERE id = :id")
     suspend fun setCompleted(id: Long, completed: Boolean, now: Long = System.currentTimeMillis())

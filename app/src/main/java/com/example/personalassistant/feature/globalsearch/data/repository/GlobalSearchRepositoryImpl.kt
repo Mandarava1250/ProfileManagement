@@ -8,6 +8,7 @@ import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSea
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHitType
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchResult
 import com.example.personalassistant.feature.globalsearch.domain.repository.GlobalSearchRepository
+import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.repository.TaskRepository
 import com.example.personalassistant.feature.timetable.domain.repository.TimetableRepository
 import javax.inject.Inject
@@ -59,7 +60,7 @@ class GlobalSearchRepositoryImpl @Inject constructor(
                         type = GlobalSearchHitType.TASK,
                         entityId = task.id,
                         title = task.title,
-                        subtitle = task.description ?: task.category,
+                        subtitle = taskSubtitle(task),
                         highlight = task.description,
                         timestamp = task.dueDate ?: task.updatedAt,
                     )
@@ -102,4 +103,26 @@ class GlobalSearchRepositoryImpl @Inject constructor(
             )
         }.distinctUntilChanged()
     }
+}
+
+/**
+ * Phase 22.2：清单项的搜索结果副标题。
+ *
+ * 优先级：
+ * 1. 靠标签名 / 清单名命中的 → 显示命中来源（「标签：Work」「清单：Work」）
+ * 2. 否则 → 备注 / 分类
+ *
+ * 第 1 条很关键：搜「Work」出来的清单项标题里可能压根没有 Work，
+ * 不说清楚它为什么出现，用户会以为搜错了。
+ */
+private fun taskSubtitle(task: Task): String? {
+    val sources = buildList {
+        if (task.tagNames.isNotEmpty()) {
+            add("标签：${task.tagNames.joinToString(" / ")}")
+        }
+        task.listName?.let { add("清单：$it") }
+    }
+    if (sources.isNotEmpty()) return sources.joinToString("　")
+
+    return task.description ?: task.category
 }

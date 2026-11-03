@@ -3,6 +3,7 @@ package com.example.personalassistant.feature.task.data.repository
 import com.example.personalassistant.feature.task.data.local.DailyCompletionRow
 import com.example.personalassistant.feature.task.data.local.TaskDao
 import com.example.personalassistant.feature.task.data.local.TaskEntity
+import com.example.personalassistant.feature.task.data.local.TaskSearchRow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -204,7 +205,7 @@ class FakeChecklistTaskDao : TaskDao {
     override fun observeBetweenIncludingCompleted(start: Long, end: Long): Flow<List<TaskEntity>> =
         notUsed("observeBetweenIncludingCompleted")
 
-    override fun searchTasks(keyword: String): Flow<List<TaskEntity>> = notUsed("searchTasks")
+    override fun searchTasks(keyword: String): Flow<List<TaskSearchRow>> = notUsed("searchTasks")
 
     override suspend fun getTodayCompletionRate(todayStart: Long): Double? =
         notUsed("getTodayCompletionRate")

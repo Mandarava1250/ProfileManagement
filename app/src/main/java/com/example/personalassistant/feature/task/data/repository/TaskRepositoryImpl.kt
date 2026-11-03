@@ -48,6 +48,13 @@ import javax.inject.Singleton
  * 「独立清单项」= 顶层任务（`parentTaskId IS NULL`）。
  */
 @Singleton
+/**
+ * Phase 22.2：搜索结果里多个标签名的分隔符。
+ *
+ * 必须与 DAO 里 `GROUP_CONCAT(tg.displayName, ' / ')` 的分隔符一致 —— 否则切不开。
+ */
+private const val TAG_NAME_SEPARATOR = " / "
+
 class TaskRepositoryImpl @Inject constructor(
     private val dao: TaskDao,
     private val taskTagDao: TaskTagDao,
@@ -267,8 +274,29 @@ class TaskRepositoryImpl @Inject constructor(
 
     // ===== Phase 8 Sub-step 3 全局搜索 =====
 
+    /**
+     * Phase 22.2：搜索命中来源。
+     *
+     * DAO 的搜索投影带两个「命中来源」字段：
+     * - `matchedTagNames`：靠标签名命中的那些标签
+     * - `matchedListName`：靠清单名命中的那个清单
+     *
+     * 两者填进 domain [Task] 的展示字段（[Task.listName] / [Task.tagNames]），
+     * 全局搜索拿它显示「标签：Work」「清单：Work」。
+     */
     override fun searchTasks(keyword: String): Flow<List<Task>> =
-        dao.searchTasks(keyword).map { list -> list.map { it.toDomain() } }
+        dao.searchTasks(keyword).map { rows ->
+            rows.map { row ->
+                val task = row.task.toDomain()
+                task.copy(
+                    listName = row.matchedListName,
+                    tagNames = row.matchedTagNames
+                        ?.split(TAG_NAME_SEPARATOR)
+                        ?.filter { it.isNotBlank() }
+                        .orEmpty(),
+                )
+            }
+        }
 
     // ===== filter 辅助 =====
     // Phase 6c：[FilterExpression] 的评估函数（matches / 等））
