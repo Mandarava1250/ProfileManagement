@@ -1,7 +1,9 @@
 package com.example.personalassistant.feature.globalsearch.data.repository
 
 import com.example.personalassistant.feature.calendar.domain.repository.CalendarRepository
+import com.example.personalassistant.feature.finance.domain.model.TransactionType
 import com.example.personalassistant.feature.finance.domain.repository.FinanceRepository
+import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHit
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHitType
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchResult
@@ -77,7 +79,12 @@ class GlobalSearchRepositoryImpl @Inject constructor(
                         type = GlobalSearchHitType.TRANSACTION,
                         entityId = tx.id,
                         title = tx.note ?: "(无备注)",
-                        subtitle = "${tx.amount}",
+                        // Phase 22.4：走 MoneyFormat —— 裸数字（"12.5"）看不出金额格式，
+                        // 也分不清是收入还是支出
+                        subtitle = buildString {
+                            append(if (tx.type == TransactionType.EXPENSE) "支出 " else "收入 ")
+                            append(MoneyFormat.format(tx.amount))
+                        },
                         highlight = tx.note,
                         timestamp = tx.date,
                     )

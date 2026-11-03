@@ -2731,3 +2731,57 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 - **APK 未在真机上安装运行过** —— 已验证的是「构建成功 + 签名有效 + GitHub 附件与本地构建逐字节一致」，真机安装与运行仍待验证。
 - **v13 → v14 迁移未在设备上实测**。
 - **定向 baseline profile 未采集**（APK 内为 AGP 自动生成的通用 profile）。
+
+---
+
+## 📓 Phase 16 ~ 22（清单体系对标滴答清单）执行记录
+
+> 本轮起点：`.cyrene/docs/plan-20261101-234612.md`
+> 分支：`feature/phase-16-checklist-rebuild`
+> 验证门槛：`assembleDebug` + `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全绿
+
+### 已完成
+
+| Phase | 主题 | 关键产出 | 状态 |
+|---|---|---|---|
+| 16 | 清单体系合并 | Room v15：`sub_tasks` 整表并入 `tasks`；新建 `task_lists`（内置收集箱 id=1）；`tasks` 加 7 列；备份 15 表 / FORMAT_VERSION=2 | ✅ @`d7a2519` |
+| 17 | 清单模块重构 | 底栏去双 Tab → 单页 + 左侧抽屉；智能清单（收集箱/今天/最近 7 天/全部/已完成）；用户清单 CRUD + 未完成数徽标；四象限接回 | ✅ @`ecdd5e8` |
+| 18a | 自然语言日期 | `QuickInputParser`：标题末尾「明天 / 下周三 / 3/15」等拆成截止时间 | ✅ @`ecdd5e8` |
+| 19 | 命名过滤器 | `FilterDsl` + `FilterExpression` 树；`NamedFilter` + `FilterExpressionSpec`（DataStore 持久化）；抽屉「筛选器」段一键套用 | ✅ @`513e93d` |
+| 20a | 清单 ↔ 日历同体 | `MonthTagList` 补任务 / 课程点击；日历里点任务跳详情、点课程跳编辑 | ✅ @`b065002` |
+| 21 | 清单 ↔ 记账联动 | Room v16：`transactions.linkedTaskId`（弱引用，不加外键）；`RecordExpenseFromTaskUseCase`（清单项一键记账） | ✅ 数据层 @`b065002` |
+| 22.1 | 全局搜索入口 | TaskScreen 顶栏搜索图标 → GlobalSearchScreen（路由早已注册，但此前无可达入口） | ✅ @`38fba0d` |
+| 22.3 | 搜索关键字高亮 | `SearchHighlight`（domain 纯函数）+ `HighlightedText`（AnnotatedString + SpanStyle） | ✅ @`38fba0d` |
+| 22.4 | 流水命中金额格式 | 搜索结果里的流水 subtitle 改走 `MoneyFormat`，并标出支出 / 收入 | ✅ @本轮 |
+| 22.6 | 完成率统计 | `CompletionStats` + `CompletionCalculator`（纯函数）：完成率 = 完成 ÷ 原计划、拖延数、连续完成天数 | ✅ @`5038812` |
+| 22.7 | **修提醒重启不重建** | `BootReceiver` 启动后扫全表重建任务提醒（此前依赖「用户打开 App」，不打开就永远不响） | ✅ @`75a0218` |
+
+### 本轮关键决策
+
+1. **`FilterExpression.matches` 不改** —— 它对 `ActiveOnly` / `CompletedOnly` 返回 `true` 是**刻意设计**
+   （完成状态过滤交给 SQL 层做，测试名就叫 "filter only"）。
+   清单页是内存过滤，另写 `matchesItem` 判完成状态，两边语义故意不同。
+2. **`linkedTaskId` 不加外键** —— 删清单项时流水应该留下（钱花出去的事实不该消失），
+   所以是弱引用；只加索引。
+3. **`TaskRepository.getTasksWithReminders()` 用接口默认实现**（返回空列表）——
+   避免 5 个匿名 `object : TaskRepository` 测试替身全部要改；`TaskRepositoryImpl` 有真实实现。
+4. **`CompletionCalculator.streak` 今天没做时从昨天数** —— 今天没过完，
+   不该把昨天的连续段清零（否则用户早上看到 0 会很挫败）。
+5. **全局搜索入口放顶栏而非「更多」面板** —— 跟滴答清单的习惯一致，且 Phase 17 改单页后
+   底栏已无「更多」。
+
+### 未完成（留给后续 Phase）
+
+- **22.2** 搜索覆盖清单项的标签 / 清单名命中
+- **22.5** 设置页新增「清单」分区（默认清单 / 默认优先级 / 默认提醒时间）
+- **22.6 UI** 完成率还没接到清单页（目前只有领域模型 + 计算逻辑）
+- **Phase 18** 滑动删除 + 撤销、批量选择、拖拽排序
+- **Phase 20** 课表今日聚合
+- **Phase 21 UI** 清单项一键记账的入口（数据层已就绪）
+
+### Room schema 版本历史（本轮）
+
+| 版本 | 变更 | 快照 |
+|---|---|---|
+| v15 | `task_lists` 新建 + `tasks` 加 7 列 + `sub_tasks` 并入 `tasks` | `15.json` |
+| v16 | `transactions.linkedTaskId` 列 + 索引 | `16.json` |
