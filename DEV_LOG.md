@@ -2875,3 +2875,42 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 - 性能未实测：`observeDayDetail` 多订阅一路整表 `observeAll()`，周视图订阅 7 个 DayDetail
   → 7 路整表扫描。个人 App 量级可接受，清单项上千条时值得再优化。
 - 习惯打卡在日历里**只做了开关位，还没渲染打卡数据** —— 那是 Phase 23.6 的活。
+
+---
+
+## 📓 Phase 18 收尾（拖拽排序 / 批量操作 / 子项提升提示）
+
+> 分支：`feature/phase-16-checklist-rebuild`｜Room 版本不变（17）
+
+### 已完成
+
+| 项 | 主题 | 关键产出 |
+|---|---|---|
+| 18.4 | 清单项拖拽排序 | 复用任务页的 `ReorderableTaskListViewModel`（`hiltViewModel(key = "reorder-checklist")`），落库仍走 `TaskRepository.reorderTasks` → `tasks.manualOrder`；本地顺序存**全局顶层顺序**（`ChecklistUiState.allTopLevelIds`），在某个清单里拖动不影响别的清单的槽位 |
+| 18.6 | 批量操作 | **长按抬手 = 进入多选**（长按后继续竖拖 = 排序）；批量支持 5 项：改日期 / 改优先级 / 移入清单 / 加标签 / 删除（二次确认） |
+| 18.8 | 子项提升提示 | 跟 18.7 的「撤销」合在一条 Snackbar：单删「已删除「买牛奶」，2 个子项已提升为顶层项」；批量删「已删除 3 项，1 个子项已提升为顶层项」。子项数 = 删除前数的**直接子项**个数，对齐 FK SET NULL 语义 |
+
+### 关键决策
+
+17. **手势仲裁层套在滑动删除外面**（`ChecklistItemGestureBox`）——
+    内层 `detectHorizontalDragGestures` 一旦消费位移，外层立刻退出，不会出现「滑一半变拖拽」。
+18. **不用 `detectTapGestures` + `detectDragGesturesAfterLongPress` 组合** ——
+    这两个 API 在同一个长按超时上同时触发，分不清「多选」和「拖拽」。
+19. **拖拽有启用条件**（排序=手动 + 不分组 + 无筛选 + 非多选）——
+    否则拖的是「子集」，会把全局顺序搅乱。
+20. **长按改为进入多选，不再打开编辑面板** —— 编辑面板仍可从铅笔图标进。
+
+### 行为边界
+
+- 拖拽只对**顶层项**生效；筛选 / 分组 / 非手动排序 / 多选模式下不可拖。
+- 批量改日期只有快捷选项（无自定义日期选择器）；批量加标签**只支持添加**（不支持移除）；
+  「移入清单」是移动不是复制。
+- 18.5 左滑只保留了删除，未扩展「改日期 / 移入清单 / 右滑完成置顶」。
+
+### 发现的既有 bug（报告未改）
+
+1. `ReorderableTaskItem`（任务页）用 `pointerInput` 记的 `recordCenterY` 取的是**项自身高度的一半**，
+   不是视口位置 —— 命中判定实质是「位移超过一行高度」而非按位置命中。
+2. 任务页拖拽把 `manualOrder` 按「象限内下标」写，会和象限外任务撞值
+   （清单侧用全局数组重排规避了，任务页未动）。
+3. `SwipeToDeleteBox` 的删除图标 `contentDescription` 硬编码「删除」，未走 strings.xml。

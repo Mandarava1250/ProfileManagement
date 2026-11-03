@@ -9,10 +9,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -27,7 +29,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,7 +43,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.personalassistant.R
 import com.example.personalassistant.core.ui.components.EmptyState
 import com.example.personalassistant.core.ui.theme.AppRadii
@@ -46,9 +53,18 @@ import com.example.personalassistant.feature.task.domain.model.ChecklistGroup
 import com.example.personalassistant.feature.task.domain.model.ChecklistSort
 import com.example.personalassistant.feature.task.domain.model.CompletionStats
 import com.example.personalassistant.feature.task.domain.model.Task
+import com.example.personalassistant.feature.task.domain.model.TaskPriority
+import com.example.personalassistant.feature.task.presentation.components.ChecklistBatchBar
+import com.example.personalassistant.feature.task.presentation.components.ChecklistBatchDateSheet
+import com.example.personalassistant.feature.task.presentation.components.ChecklistBatchDeleteDialog
+import com.example.personalassistant.feature.task.presentation.components.ChecklistBatchListSheet
+import com.example.personalassistant.feature.task.presentation.components.ChecklistBatchPrioritySheet
+import com.example.personalassistant.feature.task.presentation.components.ChecklistBatchTagSheet
 import com.example.personalassistant.feature.task.presentation.components.ChecklistItemCard
 import com.example.personalassistant.feature.task.presentation.components.CompletionStatsCard
 import com.example.personalassistant.feature.task.presentation.components.FilterEntryButton
+import com.example.personalassistant.feature.task.presentation.list.ReorderableTaskListViewModel
+import kotlin.math.roundToInt
 
 /**
  * 清单 Tab 内容（Phase 15 重做首屏）。
@@ -64,6 +80,15 @@ import com.example.personalassistant.feature.task.presentation.components.Filter
  * 筛选 / 分组 / 排序全部收进 [ChecklistFilterSheet]（复用任务页 `TaskFilterSheet` 的视觉语言），
  * 首屏只留一个入口按钮 + 徽标 —— 徽标告诉用户「现在有几个条件生效着」。
  *
+ * ## Phase 18.4 / 18.6：拖拽排序与多选
+ *
+ * - **拖拽排序**：长按后竖直拖动。复用任务页那套 [ReorderableTaskListViewModel]
+ *   （拖拽中的本地顺序 + 结束时一次性落库 `TaskRepository.reorderTasks`）。
+ *   本地顺序存的是**全局**顺序（[ChecklistUiState.allTopLevelIds]），
+ *   所以在某个清单里拖动时，其它清单里的项不会被挤位。
+ * - **多选**：长按后抬手进入多选（见 [com.example.personalassistant.feature.task.presentation.components.ChecklistItemGestureBox]），
+ *   顶部出现批量操作条：改日期 / 改优先级 / 移入清单 / 加标签 / 删除。
+ *
  * @param state 清单页状态
  * @param onToggleComplete 勾选 / 取消勾选
  * @param onDelete 删除清单项
@@ -78,6 +103,14 @@ import com.example.personalassistant.feature.task.presentation.components.Filter
  * @param onGroupChange 分组方式
  * @param onSortChange 排序方式
  * @param onResetFilter 重置筛选
+ * @param selectedIds Phase 18.6：当前选中的清单项 id
+ * @param onToggleSelect Phase 18.6：选中 / 取消选中某一项
+ * @param onClearSelection Phase 18.6：退出多选
+ * @param onBatchSetDueDate Phase 18.6：批量改截止时间（null = 清除）
+ * @param onBatchSetPriority Phase 18.6：批量改优先级
+ * @param onBatchMoveToList Phase 18.6：批量移入清单
+ * @param onBatchAttachTag Phase 18.6：批量加标签
+ * @param onBatchDelete Phase 18.6：批量删除
  */
 @Composable
 fun ChecklistTab(
@@ -98,6 +131,15 @@ fun ChecklistTab(
     modifier: Modifier = Modifier,
     /** Phase 22.6：完成率统计（列表上方那张卡片）。 */
     completionStats: CompletionStats = CompletionStats(),
+    // ===== Phase 18.6：多选 + 批量操作 =====
+    selectedIds: Set<Long> = emptySet(),
+    onToggleSelect: (Long) -> Unit = {},
+    onClearSelection: () -> Unit = {},
+    onBatchSetDueDate: (Long?) -> Unit = {},
+    onBatchSetPriority: (TaskPriority) -> Unit = {},
+    onBatchMoveToList: (Long) -> Unit = {},
+    onBatchAttachTag: (Long) -> Unit = {},
+    onBatchDelete: () -> Unit = {},
 ) {
     var input by rememberSaveable { mutableStateOf("") }
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -107,7 +149,110 @@ fun ChecklistTab(
     var creatingItem by remember { mutableStateOf(false) }
     var expandedIds by remember { mutableStateOf(emptySet<Long>()) }
 
+    // Phase 18.6：批量操作面板的开关
+    var showDateSheet by remember { mutableStateOf(false) }
+    var showPrioritySheet by remember { mutableStateOf(false) }
+    var showListSheet by remember { mutableStateOf(false) }
+    var showTagSheet by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    val selectionMode = selectedIds.isNotEmpty()
     val canSubmit = input.isNotBlank()
+
+    // ===== Phase 18.4：拖拽排序 =====
+    // 复用任务页那套拖拽状态机：拖拽过程中只动本地顺序，
+    // 结束时一次性把新顺序写进 `tasks.manualOrder`（TaskRepository.reorderTasks）。
+    val reorderVm: ReorderableTaskListViewModel = hiltViewModel(key = "reorder-checklist")
+    val globalIds = state.allTopLevelIds
+    LaunchedEffect(globalIds) { reorderVm.resetLocalOrder(globalIds) }
+    val localOrder by reorderVm.localOrder.collectAsState()
+    val lazyState = rememberLazyListState()
+
+    // 正在被拖的那一项 + 它跟手的视觉偏移
+    var draggingId by remember { mutableStateOf<Long?>(null) }
+    var dragOffsetY by remember { mutableFloatStateOf(0f) }
+    // 本次拖拽开始时的顺序（落库时用它判断「顺序到底变没变」）
+    var dragSnapshot by remember { mutableStateOf<List<Long>>(emptyList()) }
+
+    // 当前视图下的顶层项（可见、可拖的那些）
+    val visibleItems = state.itemDetails
+    val visibleIdSet = remember(visibleItems) { visibleItems.map { it.id }.toSet() }
+
+    /**
+     * 能不能拖：
+     * - 手动排序（否则拖了也没意义）
+     * - 不分组（分组后跨组换位没有语义）
+     * - 没有筛选条件（筛出来的只是子集，动子集会打乱全局顺序）
+     */
+    val canReorder = !selectionMode &&
+        state.filter.group == ChecklistGroup.NONE &&
+        state.filter.sort == ChecklistSort.MANUAL &&
+        state.filter.category == null &&
+        state.filter.tagId == null &&
+        state.filter.expression == null
+
+    // 拖拽中 / 刚落库还没回写：一直按本地（全局）顺序显示 —— 否则会闪一下旧顺序
+    val displayItems: List<ChecklistItemUi> = if (canReorder && localOrder.isNotEmpty()) {
+        val byId = visibleItems.associateBy { it.id }
+        localOrder.filter { it in visibleIdSet }.mapNotNull { byId[it] }
+    } else {
+        visibleItems
+    }
+
+    // 某个清单项在列表里的高度（像素）—— 用来判断「拖过半行就换位」
+    val itemHeight: (Long) -> Int = { id ->
+        lazyState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "item-$id" }?.size ?: 0
+    }
+
+    val onItemDragStart: (Long) -> Unit = { id ->
+        draggingId = id
+        dragOffsetY = 0f
+        // 从当前本地顺序开始（上一轮拖完还没回写 DB 时，别把顺序弹回去）
+        val current = reorderVm.localOrder.value
+        val snapshot = if (current.isEmpty()) globalIds else current
+        dragSnapshot = snapshot
+        reorderVm.beginDrag(snapshot)
+    }
+
+    val onItemDrag: (Long, Float) -> Unit = { _, deltaY ->
+        dragOffsetY += deltaY
+        val dragged = draggingId
+        if (dragged != null) {
+            // 一次拖拽可能连着越过好几行 —— 用循环把能换的都换了
+            var guard = 0
+            while (guard++ < 32) {
+                val order = reorderVm.localOrder.value
+                val visible = order.filter { it in visibleIdSet }
+                val index = visible.indexOf(dragged)
+                if (index < 0) break
+                // 向下
+                val nextId = visible.getOrNull(index + 1)
+                val nextHeight = nextId?.let { itemHeight(it) } ?: 0
+                if (nextId != null && nextHeight > 0 && dragOffsetY > nextHeight / 2f) {
+                    reorderVm.moveLocal(order.indexOf(dragged), order.indexOf(nextId))
+                    // 布局跟着上移了一行 —— 补偿掉视觉偏移，被拖的项才不会跳一下
+                    dragOffsetY -= nextHeight
+                    continue
+                }
+                // 向上
+                val prevId = visible.getOrNull(index - 1)
+                val prevHeight = prevId?.let { itemHeight(it) } ?: 0
+                if (prevId != null && prevHeight > 0 && dragOffsetY < -prevHeight / 2f) {
+                    reorderVm.moveLocal(order.indexOf(dragged), order.indexOf(prevId))
+                    dragOffsetY += prevHeight
+                    continue
+                }
+                break
+            }
+        }
+    }
+
+    val onItemDragEnd: () -> Unit = {
+        // 一次性落库（manualOrder）；顺序没变的话 VM 会跳过这次写入
+        reorderVm.endDrag(dragSnapshot)
+        draggingId = null
+        dragOffsetY = 0f
+    }
 
     // 生效的筛选条件条数 —— 徽标上显示的数字
     // 直接数四个布尔值，省掉每次重组都要新建的临时 List
@@ -203,6 +348,19 @@ fun ChecklistTab(
             )
         }
 
+        // ===== Phase 18.6：多选模式下的批量操作条 =====
+        if (selectionMode) {
+            ChecklistBatchBar(
+                selectedCount = selectedIds.size,
+                onChangeDate = { showDateSheet = true },
+                onChangePriority = { showPrioritySheet = true },
+                onMoveToList = { showListSheet = true },
+                onAttachTag = { showTagSheet = true },
+                onDelete = { showDeleteDialog = true },
+                onCancel = onClearSelection,
+            )
+        }
+
         HorizontalDivider()
 
         // ===== 列表 =====
@@ -232,29 +390,17 @@ fun ChecklistTab(
             }
 
             else -> {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(state = lazyState, modifier = Modifier.fillMaxSize()) {
                     // Phase 22.6：完成率卡片（列表最上方）
                     if (!completionStats.isEmpty) {
                         item(key = "completion_stats") {
                             CompletionStatsCard(stats = completionStats)
                         }
                     }
-                    state.sections.forEach { section ->
-                        if (section.items.isEmpty()) return@forEach
-                        // 不分组时只有一个「全部」section，标题是废话 —— 不画。
-                        if (state.filter.group != ChecklistGroup.NONE) {
-                            item(key = "section-${section.key}") {
-                                ChecklistSectionHeader(
-                                    title = sectionTitle(section),
-                                    count = section.items.size,
-                                )
-                            }
-                        }
-                        items(
-                            items = section.items,
-                            key = { "item-${it.id}" },
-                        ) { item ->
-                            ChecklistItemCard(
+                    if (canReorder) {
+                        // 单组 + 手动排序：整段可以拖拽排序
+                        items(displayItems, key = { "item-${it.id}" }) { item ->
+                            ChecklistListItemCard(
                                 item = item,
                                 expandedIds = expandedIds,
                                 onToggleExpand = { id ->
@@ -267,8 +413,64 @@ fun ChecklistTab(
                                 onToggleComplete = onToggleComplete,
                                 onDelete = { onDelete(it.toSubTask()) },
                                 onEdit = { editingItem = it },
-                                onAddChild = { parentId, title -> onAddSubTask(parentId, title) },
+                                onAddSubTask = { parentId, title -> onAddSubTask(parentId, title) },
+                                selectionMode = selectionMode,
+                                selectedIds = selectedIds,
+                                onToggleSelect = { id -> onToggleSelect(id) },
+                                dragEnabled = true,
+                                isDragging = draggingId == item.id,
+                                modifier = if (draggingId == item.id) {
+                                    // Phase 18.4：被拖的项跟着手指走
+                                    Modifier.offset { IntOffset(0, dragOffsetY.roundToInt()) }
+                                } else {
+                                    Modifier
+                                },
+                                onDragStart = { onItemDragStart(item.id) },
+                                onDrag = { delta -> onItemDrag(item.id, delta) },
+                                onDragEnd = onItemDragEnd,
                             )
+                        }
+                    } else {
+                        state.sections.forEach { section ->
+                            if (section.items.isEmpty()) return@forEach
+                            // 不分组时只有一个「全部」section，标题是废话 —— 不画。
+                            if (state.filter.group != ChecklistGroup.NONE) {
+                                item(key = "section-${section.key}") {
+                                    ChecklistSectionHeader(
+                                        title = sectionTitle(section),
+                                        count = section.items.size,
+                                    )
+                                }
+                            }
+                            items(
+                                items = section.items,
+                                key = { "item-${it.id}" },
+                            ) { item ->
+                                ChecklistListItemCard(
+                                    item = item,
+                                    expandedIds = expandedIds,
+                                    onToggleExpand = { id ->
+                                        expandedIds = if (expandedIds.contains(id)) {
+                                            expandedIds - id
+                                        } else {
+                                            expandedIds + id
+                                        }
+                                    },
+                                    onToggleComplete = onToggleComplete,
+                                    onDelete = { onDelete(it.toSubTask()) },
+                                    onEdit = { editingItem = it },
+                                    onAddSubTask = { parentId, title -> onAddSubTask(parentId, title) },
+                                    selectionMode = selectionMode,
+                                    selectedIds = selectedIds,
+                                    onToggleSelect = { onToggleSelect(item.id) },
+                                    dragEnabled = false,
+                                    isDragging = false,
+                                    modifier = Modifier,
+                                    onDragStart = {},
+                                    onDrag = {},
+                                    onDragEnd = {},
+                                )
+                            }
                         }
                     }
                     item(key = "bottom_spacer") {
@@ -290,6 +492,56 @@ fun ChecklistTab(
             onSortChange = onSortChange,
             onReset = onResetFilter,
             onDismiss = { showFilterSheet = false },
+        )
+    }
+
+    // ===== Phase 18.6：批量操作面板 =====
+    if (showDateSheet) {
+        ChecklistBatchDateSheet(
+            onPick = { dueDate ->
+                showDateSheet = false
+                onBatchSetDueDate(dueDate)
+            },
+            onDismiss = { showDateSheet = false },
+        )
+    }
+    if (showPrioritySheet) {
+        ChecklistBatchPrioritySheet(
+            onPick = { priority ->
+                showPrioritySheet = false
+                onBatchSetPriority(priority)
+            },
+            onDismiss = { showPrioritySheet = false },
+        )
+    }
+    if (showListSheet) {
+        ChecklistBatchListSheet(
+            lists = state.lists,
+            onPick = { listId ->
+                showListSheet = false
+                onBatchMoveToList(listId)
+            },
+            onDismiss = { showListSheet = false },
+        )
+    }
+    if (showTagSheet) {
+        ChecklistBatchTagSheet(
+            tags = state.availableTags,
+            onPick = { tagId ->
+                showTagSheet = false
+                onBatchAttachTag(tagId)
+            },
+            onDismiss = { showTagSheet = false },
+        )
+    }
+    if (showDeleteDialog) {
+        ChecklistBatchDeleteDialog(
+            count = selectedIds.size,
+            onConfirm = {
+                showDeleteDialog = false
+                onBatchDelete()
+            },
+            onDismiss = { showDeleteDialog = false },
         )
     }
 
@@ -315,6 +567,52 @@ fun ChecklistTab(
             onDetachTag = { tagId -> currentEdit?.let { onDetachTag(it.id, tagId) } },
         )
     }
+}
+
+/**
+ * 列表里的清单项卡片（两条渲染路径共用一份画法）。
+ *
+ * @param modifier 列表项的外层修饰符（拖拽时在这里挂跟手的偏移）
+ */
+@Composable
+private fun ChecklistListItemCard(
+    item: ChecklistItemUi,
+    expandedIds: Set<Long>,
+    onToggleExpand: (Long) -> Unit,
+    onToggleComplete: (Long, Boolean) -> Unit,
+    onDelete: (ChecklistItemUi) -> Unit,
+    onEdit: (ChecklistItemUi) -> Unit,
+    onAddSubTask: (Long, String) -> Unit,
+    selectionMode: Boolean,
+    selectedIds: Set<Long>,
+    onToggleSelect: (Long) -> Unit,
+    dragEnabled: Boolean,
+    isDragging: Boolean,
+    modifier: Modifier,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+) {
+    ChecklistItemCard(
+        item = item,
+        expandedIds = expandedIds,
+        onToggleExpand = onToggleExpand,
+        onToggleComplete = onToggleComplete,
+        onDelete = onDelete,
+        onEdit = onEdit,
+        onAddChild = { parentId, title -> onAddSubTask(parentId, title) },
+        modifier = modifier,
+        // ===== Phase 18.6：多选 =====
+        selectionMode = selectionMode,
+        selectedIds = selectedIds,
+        onToggleSelect = onToggleSelect,
+        // ===== Phase 18.4：拖拽排序 =====
+        dragEnabled = dragEnabled,
+        isDragging = isDragging,
+        onDragStart = onDragStart,
+        onDrag = onDrag,
+        onDragEnd = onDragEnd,
+    )
 }
 
 /**

@@ -22,6 +22,11 @@ import com.example.personalassistant.feature.task.domain.model.Tag
  *
  * - [currentView]：当前看的视图（智能清单 or 用户清单）—— 抽屉选中项
  * - [lists]：全部未归档清单 + 未完成数（抽屉的「清单」区）
+ *
+ * ## Phase 18.4 扩展
+ *
+ * - [allTopLevelIds]：**全部**顶层清单项的 id（按手动顺序）——
+ *   拖拽排序时用它保住没被拖动的那几项的位置。
  */
 data class ChecklistUiState(
     val isLoading: Boolean = true,
@@ -39,6 +44,13 @@ data class ChecklistUiState(
     val currentView: ChecklistView = ChecklistView.Default,
     /** Phase 17：全部未归档清单 + 未完成数。 */
     val lists: List<TaskListWithCount> = emptyList(),
+    /**
+     * Phase 18.4：全部顶层清单项的 id（**不按视图过滤**，按手动顺序）。
+     *
+     * 拖拽排序时，被拖的那几项在自己的视图里换位，
+     * 但在全局顺序里占的位置不能变 —— 用这份全局顺序把新顺序填回去。
+     */
+    val allTopLevelIds: List<Long> = emptyList(),
 ) {
     /**
      * Phase 17：当前视图的标题（顶栏显示）。
@@ -53,3 +65,18 @@ data class ChecklistUiState(
             is ChecklistView.Quadrant -> "四象限"
         }
 }
+
+/**
+ * Phase 18.7 / 18.8：**删除通知**。
+ *
+ * UI 侧靠 `LaunchedEffect` 监听这个值弹 Snackbar（「已删除 … / 撤销」）。
+ *
+ * @param items 本次被删掉的清单项（撤销时按**原 id** 放回去）
+ * @param promotedChildCount 因为删除而被 **FK SET NULL 提升为顶层项**的子项数量。
+ *        Phase 18.8：数据层已经是这个语义（删父项，子项不被删，只是升到顶层），
+ *        UI 得把这件事说出来 —— 否则用户以为子项也一起没了。
+ */
+data class ChecklistDeleteNotice(
+    val items: List<Task>,
+    val promotedChildCount: Int = 0,
+)

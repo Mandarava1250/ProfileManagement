@@ -536,4 +536,127 @@ class ChecklistViewModelTest {
 
         assertEquals(listOf("父", "子"), state.items.map { it.title })
     }
+
+    // ===== Phase 18.6：多选 + 批量操作 =====
+
+    @Test
+    fun toggleSelectionTracksSelectedItems() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "项")))
+        val vm = makeVm(repo)
+
+        vm.toggleSelection(1L)
+        assertEquals(setOf(1L), vm.selectedIds.value)
+
+        vm.toggleSelection(1L)
+        assertTrue("再点一次就取消选中", vm.selectedIds.value.isEmpty())
+    }
+
+    @Test
+    fun batchSetPriorityUpdatesEverySelectedItem() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(
+            listOf(
+                Task(id = 1L, parentTaskId = null, title = "A", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = null, title = "B", manualOrder = 1L),
+                Task(id = 3L, parentTaskId = null, title = "C", manualOrder = 2L),
+            ),
+        )
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.toggleSelection(1L)
+        vm.toggleSelection(3L)
+        vm.batchSetPriority(TaskPriority.URGENT)
+
+        assertEquals(TaskPriority.URGENT, repo.items.first { it.id == 1L }.priority)
+        assertEquals(TaskPriority.URGENT, repo.items.first { it.id == 3L }.priority)
+        assertEquals("没选中的那项不该动", TaskPriority.MEDIUM, repo.items.first { it.id == 2L }.priority)
+        assertTrue("批量操作后退出多选", vm.selectedIds.value.isEmpty())
+    }
+
+    @Test
+    fun batchMoveToListUpdatesListId() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "项", listId = 1L)))
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.toggleSelection(1L)
+        vm.batchMoveToList(7L)
+
+        assertEquals(7L, repo.items.first { it.id == 1L }.listId)
+    }
+
+    @Test
+    fun batchDeleteRemovesSelectedItemsOnly() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(
+            listOf(
+                Task(id = 1L, parentTaskId = null, title = "A", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = null, title = "B", manualOrder = 1L),
+                Task(id = 3L, parentTaskId = null, title = "C", manualOrder = 2L),
+            ),
+        )
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.toggleSelection(1L)
+        vm.toggleSelection(2L)
+        vm.batchDelete()
+
+        assertTrue(repo.items.none { it.id == 1L || it.id == 2L })
+        assertEquals("没选中的那项不该被删", 1, repo.items.size)
+        assertEquals(2, vm.deleteNotice.value?.items?.size)
+    }
+
+    // ===== Phase 18.8：子项被提升为顶层项的提示 =====
+
+    @Test
+    fun deleteItemReportsPromotedChildCount() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(
+            listOf(
+                Task(id = 1L, parentTaskId = null, title = "父", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = 1L, title = "子", manualOrder = 0L),
+            ),
+        )
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.deleteItem(repo.items.first { it.id == 1L })
+
+        val notice = vm.deleteNotice.value
+        assertEquals("删父项时子项会被提升为顶层项", 1, notice?.promotedChildCount)
+        assertEquals("父", notice?.items?.first()?.title)
+    }
+
+    @Test
+    fun deleteItemWithoutChildrenReportsNoPromotion() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "独苗")))
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.deleteItem(repo.items.first { it.id == 1L })
+
+        assertEquals(0, vm.deleteNotice.value?.promotedChildCount)
+    }
+
+    @Test
+    fun undoDeleteRestoresDeletedItem() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "项")))
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.deleteItem(repo.items.single())
+        assertTrue(repo.items.isEmpty())
+
+        vm.undoDelete()
+
+        assertEquals(1, repo.items.size)
+        assertEquals("项", repo.items.single().title)
+        assertNull(vm.deleteNotice.value)
+    }
 }

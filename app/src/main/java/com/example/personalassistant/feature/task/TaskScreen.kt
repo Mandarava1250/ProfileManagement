@@ -76,21 +76,34 @@ fun TaskScreen(
     // Phase 21：完成带金额的清单项后弹「记一笔？」
     val pendingExpenseTask by checklistViewModel.pendingExpenseTask.collectAsStateWithLifecycle()
     val expenseCategories by checklistViewModel.expenseCategories.collectAsStateWithLifecycle()
-    // Phase 18.7：删除后弹「撤销」
-    val deletedItem by checklistViewModel.deletedItem.collectAsStateWithLifecycle()
+    // Phase 18.7 / 18.8：删除后弹「撤销」（子项被提升为顶层时也在文案里说明）
+    val deleteNotice by checklistViewModel.deleteNotice.collectAsStateWithLifecycle()
+    // Phase 18.6：多选（长按清单项进入）
+    val selectedIds by checklistViewModel.selectedIds.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // 删了就弹一条 Snackbar，点「撤销」放回去；超时/关闭后这条记录作废
-    LaunchedEffect(deletedItem) {
-        val item = deletedItem ?: return@LaunchedEffect
+    LaunchedEffect(deleteNotice) {
+        val notice = deleteNotice ?: return@LaunchedEffect
+        val message = buildString {
+            if (notice.items.size == 1) {
+                append("已删除「${notice.items.first().title}」")
+            } else {
+                append("已删除 ${notice.items.size} 项")
+            }
+            // Phase 18.8：子项没被删，只是被 FK SET NULL 提升成了顶层项 —— 得说清楚
+            if (notice.promotedChildCount > 0) {
+                append("，${notice.promotedChildCount} 个子项已提升为顶层项")
+            }
+        }
         val result = snackbarHostState.showSnackbar(
-            message = "已删除「${item.title}」",
+            message = message,
             actionLabel = "撤销",
         )
         if (result == SnackbarResult.ActionPerformed) {
             checklistViewModel.undoDelete()
         } else {
-            checklistViewModel.clearDeletedItem()
+            checklistViewModel.clearDeleteNotice()
         }
     }
 
@@ -237,6 +250,15 @@ fun TaskScreen(
                     modifier = Modifier.fillMaxSize(),
                     // Phase 22.6：完成率卡片
                     completionStats = completionStats,
+                    // ===== Phase 18.6：多选 + 批量操作 =====
+                    selectedIds = selectedIds,
+                    onToggleSelect = checklistViewModel::toggleSelection,
+                    onClearSelection = checklistViewModel::clearSelection,
+                    onBatchSetDueDate = checklistViewModel::batchSetDueDate,
+                    onBatchSetPriority = checklistViewModel::batchSetPriority,
+                    onBatchMoveToList = checklistViewModel::batchMoveToList,
+                    onBatchAttachTag = checklistViewModel::batchAttachTag,
+                    onBatchDelete = checklistViewModel::batchDelete,
                     )
                 }
 

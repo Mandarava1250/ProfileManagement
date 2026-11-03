@@ -34,11 +34,21 @@ import kotlin.math.roundToInt
  * Material3 的 `SwipeToDismissBox` 在不同版本里参数名改过好几轮
  * （`state` / `enableDismissFromStartToEnd` / `backgroundContent`），锁版本很脆。
  * 自己写就只依赖 `detectHorizontalDragGestures` + `Animatable` —— 这两个 API 一直很稳。
+ *
+ * ## 与拖拽排序（Phase 18.4）的手势分工
+ *
+ * 本组件只吃**横向**位移；竖向位移它不消费（`awaitHorizontalTouchSlopOrCancellation`
+ * 在竖向超阈值时会放弃），所以竖拖排序不会被它抢走。
+ * 反过来，本组件一旦消费了位移，外层的手势仲裁层（[ChecklistItemGestureBox]）
+ * 就会看到「已被消费」而退出 —— 横滑删除与竖拖排序不会同时发生。
+ *
+ * @param enabled 是否启用左滑（多选模式下关掉，避免误删）
  */
 @Composable
 fun SwipeToDeleteBox(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val offsetX = remember { Animatable(0f) }
@@ -72,7 +82,8 @@ fun SwipeToDeleteBox(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .pointerInput(Unit) {
+                .pointerInput(enabled) {
+                    if (!enabled) return@pointerInput
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             scope.launch {

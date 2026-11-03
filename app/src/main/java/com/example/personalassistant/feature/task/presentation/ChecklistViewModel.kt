@@ -192,6 +192,8 @@ class ChecklistViewModel @Inject constructor(
             availableTags = tags,
             currentView = view,
             lists = lists,
+            // Phase 18.4：全局手动顺序（**不按视图过滤**）—— 拖拽排序靠它保住别项的位置
+            allTopLevelIds = items.map { it.task.id },
         )
     }.stateIn(
         scope = viewModelScope,
@@ -386,6 +388,8 @@ class ChecklistViewModel @Inject constructor(
      * 部分更新清单项。
      *
      * 传 null = 不改那个字段；要**清空**分类 / 截止时间 / 金额请用 [clearItemFields]。
+     *
+     * Phase 18.6：多了 [listId]（批量「移入清单」要用）。
      */
     fun updateItem(
         id: Long,
@@ -394,6 +398,7 @@ class ChecklistViewModel @Inject constructor(
         dueDate: Long? = null,
         priority: TaskPriority? = null,
         amount: Double? = null,
+        listId: Long? = null,
     ) {
         viewModelScope.launch {
             runCatching {
@@ -404,6 +409,7 @@ class ChecklistViewModel @Inject constructor(
                     dueDate = dueDate,
                     priority = priority,
                     amount = amount,
+                    listId = listId,
                 )
             }
         }
@@ -453,20 +459,31 @@ class ChecklistViewModel @Inject constructor(
     // ===== 删 =====
 
     /**
-     * Phase 18.7：刚被删掉的清单项（用来弹「撤销」）。
+     * Phase 18.7 / 18.8：删除通知（UI 侧弹 Snackbar）。
      *
      * 每次删除都会重新赋值 —— UI 侧靠 `LaunchedEffect` 监听这个值弹 Snackbar。
      */
-    private val deletedItemState = MutableStateFlow<Task?>(null)
-    val deletedItem: StateFlow<Task?> = deletedItemState
+    private val deleteNoticeState = MutableStateFlow<ChecklistDeleteNotice?>(null)
+    val deleteNotice: StateFlow<ChecklistDeleteNotice?> = deleteNoticeState
 
-    /** 删除清单项。 */
+    /**
+     * 删除清单项。
+     *
+     * Phase 18.8：删之前先数一数它有几个子项 —— 数据层靠 FK SET NULL 把子项
+     * **提升为顶层项**（内容不丢），UI 得把这件事说出来。
+     */
     fun deleteItem(item: Task) {
         viewModelScope.launch {
-            runCatching { deleteChecklistItem(item) }
+            val promoted = promotedChildCount(setOf(item.id))
+            // 用数据层的真实对象删 —— 撤销要按原样放回去
+            val real = uiState.value.items.firstOrNull { it.id == item.id } ?: item
+            runCatching { deleteChecklistItem(real) }
                 .onSuccess {
                     // 记住它 —— 用户在 Snackbar 上点「撤销」时要能放回去
-                    deletedItemState.value = item
+                    deleteNoticeState.value = ChecklistDeleteNotice(
+                        items = listOf(real),
+                        promotedChildCount = promoted,
+                    )
                 }
         }
     }
@@ -474,19 +491,29 @@ class ChecklistViewModel @Inject constructor(
     /**
      * Phase 18.7：撤销刚才的删除。
      *
-     * 按**原 id** 放回去，恢复后 id 不变。
+     * 按**原 id** 放回去，恢复后 id 不变；批量删除时逐个放回。
      */
     fun undoDelete() {
-        val item = deletedItemState.value ?: return
+        val notice = deleteNoticeState.value ?: return
         viewModelScope.launch {
-            runCatching { restoreChecklistItem(item) }
-            deletedItemState.value = null
+            notice.items.forEach { item -> runCatching { restoreChecklistItem(item) } }
+            deleteNoticeState.value = null
         }
     }
 
     /** 撤销窗口关闭（或超时）后清掉记录 —— 之后不能再撤。 */
-    fun clearDeletedItem() {
-        deletedItemState.value = null
+    fun clearDeleteNotice() {
+        deleteNoticeState.value = null
+    }
+
+    /**
+     * Phase 18.8：这些项被删后，有多少个子项会被 **FK SET NULL 提升为顶层项**。
+     *
+     * 只数**直接子项** —— 孙项跟着各自的父项走，仍然挂在父项下面。
+     */
+    private fun promotedChildCount(ids: Set<Long>): Int {
+        val byId = uiState.value.itemDetails.associateBy { it.id }
+        return ids.sumOf { id -> byId[id]?.children?.size ?: 0 }
     }
 
     // ===== 标签 =====
@@ -503,6 +530,127 @@ class ChecklistViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { detachTagFromItem(subTaskId, tagId) }
         }
+    }
+
+    // ===== Phase 18.6：多选 + 批量操作 =====
+
+    /**
+     * 当前选中的清单项 id。
+     *
+     * 集合非空 = 多选模式（UI 会显示批量操作条，卡片左边的勾选框变成「选中」框）。
+     */
+    private val selectionState = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedIds: StateFlow<Set<Long>> = selectionState
+
+    /** 切换某一项的选中状态（长按进入多选 / 点勾选框切换）。 */
+    fun toggleSelection(id: Long) {
+        selectionState.update { if (id in it) it - id else it + id }
+    }
+
+    /** 退出多选模式。 */
+    fun clearSelection() {
+        selectionState.value = emptySet()
+    }
+
+    /** 全选（传入当前视图下的项 id）。 */
+    fun selectAll(ids: List<Long>) {
+        selectionState.value = ids.toSet()
+    }
+
+    /**
+     * Phase 18.6：批量改截止时间。
+     *
+     * @param dueDate null = 清除截止时间
+     */
+    fun batchSetDueDate(dueDate: Long?) {
+        val ids = selectionState.value
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            ids.forEach { id ->
+                runCatching {
+                    updateChecklistItem(
+                        id = id,
+                        dueDate = dueDate,
+                        clearDueDate = dueDate == null,
+                    )
+                }
+            }
+            clearSelection()
+        }
+    }
+
+    /** Phase 18.6：批量改优先级。 */
+    fun batchSetPriority(priority: TaskPriority) {
+        val ids = selectionState.value
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            ids.forEach { id -> runCatching { updateChecklistItem(id = id, priority = priority) } }
+            clearSelection()
+        }
+    }
+
+    /** Phase 18.6：批量移入别的清单（归属地）。 */
+    fun batchMoveToList(listId: Long) {
+        val ids = selectionState.value
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            ids.forEach { id -> runCatching { updateChecklistItem(id = id, listId = listId) } }
+            clearSelection()
+        }
+    }
+
+    /** Phase 18.6：批量加标签。 */
+    fun batchAttachTag(tagId: Long) {
+        val ids = selectionState.value
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            ids.forEach { id -> runCatching { attachTagToItem(id, tagId) } }
+            clearSelection()
+        }
+    }
+
+    /**
+     * Phase 18.6：批量删除。
+     *
+     * Phase 18.8：删之前先数一数被删项的子项 —— 它们会被 FK SET NULL 提升为顶层项，
+     * 所以 Snackbar 里要写明「N 个子项已提升为顶层项」。
+     */
+    fun batchDelete() {
+        val ids = selectionState.value
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            val tasks = resolveTasks(ids)
+            val promoted = promotedChildCount(ids)
+            tasks.forEach { task -> runCatching { deleteChecklistItem(task) } }
+            clearSelection()
+            deleteNoticeState.value = ChecklistDeleteNotice(
+                items = tasks,
+                promotedChildCount = promoted,
+            )
+        }
+    }
+
+    /**
+     * 选中项 → 可删除的 [Task]。
+     *
+     * 顶层项用数据层的真实对象（字段全，撤销能原样放回去）；
+     * 嵌套子项在扁平列表里没有，用 UI 模型还原（删除只按主键匹配，够用）。
+     */
+    private fun resolveTasks(ids: Set<Long>): List<Task> {
+        val flat = uiState.value.items.associateBy { it.id }
+        val tree = uiState.value.itemDetails
+        return ids.mapNotNull { id ->
+            flat[id] ?: findInTree(tree, id)?.toSubTask()
+        }
+    }
+
+    /** 在「顶层项 + 嵌套子项」的树里找某个 id。 */
+    private fun findInTree(items: List<ChecklistItemUi>, id: Long): ChecklistItemUi? {
+        for (item in items) {
+            if (item.id == id) return item
+            findInTree(item.children, id)?.let { return it }
+        }
+        return null
     }
 
     // ===== 筛选 / 分组 / 排序 =====

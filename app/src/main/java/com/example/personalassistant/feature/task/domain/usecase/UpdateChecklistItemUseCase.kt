@@ -14,6 +14,10 @@ import javax.inject.Inject
  *
  * 之所以要额外的 clear 开关：null 同时表示「不改」和「清空」的话，
  * UI 就没法把分类/截止时间/金额删掉了。
+ *
+ * ## Phase 18.6：批量操作多了 `listId`
+ *
+ * 批量「移入清单」要用 —— `listId` 同样遵循「null = 不改」的约定。
  */
 class UpdateChecklistItemUseCase @Inject constructor(
     private val repository: ChecklistRepository,
@@ -25,6 +29,7 @@ class UpdateChecklistItemUseCase @Inject constructor(
         dueDate: Long? = null,
         priority: TaskPriority? = null,
         amount: Double? = null,
+        listId: Long? = null,
         clearCategory: Boolean = false,
         clearDueDate: Boolean = false,
         clearAmount: Boolean = false,
@@ -38,6 +43,7 @@ class UpdateChecklistItemUseCase @Inject constructor(
                 dueDate = if (clearDueDate) null else dueDate ?: current.dueDate,
                 priority = priority ?: current.priority,
                 amount = if (clearAmount) null else amount ?: current.amount,
+                listId = listId ?: current.listId,
             ),
         )
     }

@@ -107,6 +107,9 @@ fun ChecklistItem(
  *
  * @param gestureKey 长按手势的 key（一般传清单项 id）—— 变了才重启手势检测，
  *                    避免每次重组都把长按打断
+ * @param selectionMode Phase 18.6：多选模式（左侧勾选框变成「选中」框，尾部按钮隐藏）
+ * @param selected 多选模式下该项是否被选中
+ * @param onToggleSelect 多选模式下点勾选框的回调
  */
 @Composable
 internal fun ChecklistItemRow(
@@ -125,6 +128,10 @@ internal fun ChecklistItemRow(
     onTagClick: ((Long) -> Unit)? = null,
     gestureKey: Any? = null,
     trailingContent: (@Composable () -> Unit)? = null,
+    // ===== Phase 18.6：多选 =====
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelect: (() -> Unit)? = null,
 ) {
     // rememberUpdatedState：手势检测只在 gestureKey 变化时重启，
     // 但回调要永远拿到最新的一份，否则长按会调到旧数据。
@@ -136,10 +143,18 @@ internal fun ChecklistItemRow(
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(
-                checked = isCompleted,
-                onCheckedChange = onToggleComplete,
-            )
+            if (selectionMode) {
+                // 多选模式：勾选框变成「选中」框
+                Checkbox(
+                    checked = selected,
+                    onCheckedChange = { onToggleSelect?.invoke() },
+                )
+            } else {
+                Checkbox(
+                    checked = isCompleted,
+                    onCheckedChange = onToggleComplete,
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Box(
                     modifier = if (currentLongPress != null) {
@@ -173,22 +188,25 @@ internal fun ChecklistItemRow(
                     onTagClick = onTagClick,
                 )
             }
-            if (onEdit != null) {
-                IconButton(onClick = onEdit) {
+            // 多选模式：编辑 / 删除按钮让位给「选中」语义
+            if (!selectionMode) {
+                if (onEdit != null) {
+                    IconButton(onClick = onEdit) {
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = stringResource(R.string.checklist_item_edit),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = onDelete) {
                     Icon(
-                        imageVector = Icons.Rounded.Edit,
-                        contentDescription = stringResource(R.string.checklist_item_edit),
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = stringResource(R.string.action_delete),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-            }
-            Spacer(Modifier.width(4.dp))
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Rounded.Delete,
-                    contentDescription = stringResource(R.string.action_delete),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
         trailingContent?.invoke()
