@@ -98,6 +98,11 @@ fun TaskScreen(
                 },
                 onDeleteNamedFilter = { name -> checklistViewModel.deleteNamedFilter(name) },
                 onSaveNamedFilter = { name -> checklistViewModel.saveNamedFilter(name) },
+                // Phase 23：习惯页入口
+                onOpenHabits = {
+                    scope.launch { drawerState.close() }
+                    navController.navigate(Screen.Habits.route)
+                },
             )
         },
     ) {

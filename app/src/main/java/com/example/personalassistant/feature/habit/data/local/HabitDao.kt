@@ -50,4 +50,28 @@ interface HabitDao {
 
     @Query("UPDATE habits SET isArchived = :archived WHERE id = :id")
     suspend fun setArchived(id: Long, archived: Boolean)
+
+    // ===== 备份导出 / 导入（Phase 23 接入备份） =====
+
+    /**
+     * 全部习惯（含归档）—— 备份导出用。
+     *
+     * 查询条件与 [observeAll] 逐字一致，只是把 Flow 换成一次性 suspend
+     * （备份是一次性快照，不需要持续观察）。
+     */
+    @Query("SELECT * FROM habits ORDER BY sortOrder ASC, createdAt ASC")
+    suspend fun getAll(): List<HabitEntity>
+
+    /**
+     * 批量插入习惯（备份导入用）。
+     *
+     * ⚠️ 冲突策略必须与 [insert] **逐字一致**（REPLACE ↔ REPLACE）——
+     *    否则「逐条插」与「批量插」会落出不同的库。
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(habits: List<HabitEntity>): List<Long>
+
+    /** 清空习惯表（备份导入用）。 */
+    @Query("DELETE FROM habits")
+    suspend fun clearAll(): Int
 }

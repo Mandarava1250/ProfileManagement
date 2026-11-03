@@ -7,6 +7,8 @@ import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.habit.data.local.HabitCheckInEntity
+import com.example.personalassistant.feature.habit.data.local.HabitEntity
 import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskEntity
@@ -23,8 +25,9 @@ import kotlinx.serialization.Serializable
  * [BackupSerializer] 从 Room 拉出全表数据，组装成 [BackupPayload]，
  * 再序列化为 JSON 写入 ZIP 各文件。
  *
- * - 15 张表，全部以 List<*Entity> 形式承载
- *   （Phase 3 新增 user_profiles；Phase 16 删 sub_tasks、加 task_lists / event_categories / student_profile）
+ * - 17 张表，全部以 List<*Entity> 形式承载
+ *   （Phase 3 新增 user_profiles；Phase 16 删 sub_tasks、加 task_lists / event_categories / student_profile；
+ *   Phase 23 加 habits / habit_checkins）
  * - 空表也写空 JSON `[]`，让导入端知道表清单完整没遗漏
  * - 所有 List 字段默认空 list，不会出现 null
  *
@@ -40,6 +43,14 @@ import kotlinx.serialization.Serializable
  * 「清单项」不再是独立表 —— 它的字段（金额 / 起止时间 / 嵌套父指针 / 置顶）
  * 全部并进 `tasks`，子项改由 `tasks.parentTaskId` 自引用表达。
  * 少一张表 = 少一份需要同步的 schema、少一条导入顺序约束。
+ *
+ * ## Phase 23：习惯打卡两张表
+ * `habits` 是习惯本体，`habit_checkins` 是打卡记录（`habitId` → `habits.id`，CASCADE）。
+ * 习惯数据是用户长期积累的成果，不备份就等于清零 —— 所以两张表都要进备份。
+ *
+ * 两个字段都带 `= emptyList()` 默认值：旧备份（formatVersion ≤ 2）里根本没有
+ * 这两个 JSON 条目，解出来是空列表，导入端据此判断「备份没带这两张表」→
+ * 不清空用户现有的习惯数据（见 [com.example.personalassistant.core.backup.importer.BackupImporter]）。
  */
 @Serializable
 data class BackupPayload(
@@ -63,6 +74,10 @@ data class BackupPayload(
     val holidays: List<HolidayEntity> = emptyList(),
     // Phase 16：「我」档案（一账户一行，主键 accountId → user_profiles.id）
     val studentProfile: List<StudentProfileEntity> = emptyList(),
+    // Phase 23：习惯本体（habit_checkins 的父表，必须排在 habit_checkins 前）
+    val habits: List<HabitEntity> = emptyList(),
+    // Phase 23：习惯打卡记录（habitId → habits.id，CASCADE）
+    val habitCheckIns: List<HabitCheckInEntity> = emptyList(),
 ) {
     /**
      * 总记录数（用于 manifest 报告 / 调试 / UI 展示）
@@ -71,5 +86,6 @@ data class BackupPayload(
         get() = userProfiles.size + semesters.size + courses.size + tags.size +
                 taskLists.size + tasks.size + taskTagCrossRefs.size +
                 events.size + eventCategories.size + categories.size + monthlyBudgets.size +
-                dailyPools.size + transactions.size + holidays.size + studentProfile.size
+                dailyPools.size + transactions.size + holidays.size + studentProfile.size +
+                habits.size + habitCheckIns.size
 }

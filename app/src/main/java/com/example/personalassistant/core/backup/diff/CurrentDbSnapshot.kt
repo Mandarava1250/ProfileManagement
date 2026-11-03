@@ -8,6 +8,8 @@ import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.habit.data.local.HabitCheckInEntity
+import com.example.personalassistant.feature.habit.data.local.HabitEntity
 import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
@@ -33,6 +35,7 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
  * 保持一致，便于差异计算器一一对照。
  *
  * Phase 16：15 张表（原 13 张 - sub_tasks + task_lists + event_categories + student_profile）。
+ * Phase 23：17 张表（+ habits + habit_checkins）。
  */
 data class CurrentDbSnapshot(
     val userProfiles: List<UserProfileEntity> = emptyList(),
@@ -50,4 +53,6 @@ data class CurrentDbSnapshot(
     val transactions: List<TransactionEntity> = emptyList(),
     val holidays: List<HolidayEntity> = emptyList(),
     val studentProfile: List<StudentProfileEntity> = emptyList(),
+    val habits: List<HabitEntity> = emptyList(),
+    val habitCheckIns: List<HabitCheckInEntity> = emptyList(),
 )

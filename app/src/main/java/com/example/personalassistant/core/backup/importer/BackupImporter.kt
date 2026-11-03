@@ -21,6 +21,10 @@ import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.habit.data.local.HabitCheckInDao
+import com.example.personalassistant.feature.habit.data.local.HabitCheckInEntity
+import com.example.personalassistant.feature.habit.data.local.HabitDao
+import com.example.personalassistant.feature.habit.data.local.HabitEntity
 import com.example.personalassistant.feature.me.data.local.StudentProfileDao
 import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.task.data.local.TagDao
@@ -60,10 +64,10 @@ import javax.inject.Singleton
  *
  * 关键不变量：
  * - 整个写入过程是原子的（要么全成功，要么全回滚）
- * - 外键依赖顺序（Phase 16 起 15 张表，与 BackupManifest.DEFAULT_TABLES 一致）：
+ * - 外键依赖顺序（Phase 23 起 17 张表，与 BackupManifest.DEFAULT_TABLES 一致）：
  *   user_profiles → semesters → courses → tags → task_lists → tasks → task_tag_cross_ref
  *   → events → event_categories → categories → monthly_budgets → daily_pools → transactions
- *   → holidays → student_profile
+ *   → holidays → student_profile → habits → habit_checkins
  *
  * ## Phase 3：账户表与「当前账户」的一致性
  * - 新备份带 user_profiles.json → 整表替换，账户清单随备份走。
@@ -178,6 +182,16 @@ class BackupImporter @Inject constructor(
                     bundle.tableBytes["student_profile"],
                     ListSerializer(StudentProfileEntity.serializer()),
                 ),
+                // Phase 23：习惯本体（旧备份缺这个条目 → decodeTable 返回空列表）
+                habits = decodeTable(
+                    bundle.tableBytes["habits"],
+                    ListSerializer(HabitEntity.serializer()),
+                ),
+                // Phase 23：习惯打卡记录（旧备份缺这个条目 → decodeTable 返回空列表）
+                habitCheckIns = decodeTable(
+                    bundle.tableBytes["habit_checkins"],
+                    ListSerializer(HabitCheckInEntity.serializer()),
+                ),
             )
         } catch (t: Throwable) {
             return BackupResult.Failure(
@@ -192,6 +206,10 @@ class BackupImporter @Inject constructor(
         val hasTaskLists = bundle.tableBytes.containsKey("task_lists")
         val hasEventCategories = bundle.tableBytes.containsKey("event_categories")
         val hasStudentProfile = bundle.tableBytes.containsKey("student_profile")
+        // Phase 23：习惯两张表同理 —— 旧备份没有这两个条目，
+        // 无条件清空 = 把用户攒了很久的习惯与打卡历史删光，而备份里又没有数据可写回来。
+        val hasHabits = bundle.tableBytes.containsKey("habits")
+        val hasHabitCheckIns = bundle.tableBytes.containsKey("habit_checkins")
 
         // ===== Room 事务批量写入 =====
         return try {
@@ -212,6 +230,9 @@ class BackupImporter @Inject constructor(
                     val holidayDao: HolidayDao = database.holidayDao()
                     val userProfileDao: UserProfileDao = database.userProfileDao()
                     val studentProfileDao: StudentProfileDao = database.studentProfileDao()
+                    // Phase 23：习惯两张表的 DAO（habit_checkins 的父表 habits 必须先清）
+                    val habitDao: HabitDao = database.habitDao()
+                    val habitCheckInDao: HabitCheckInDao = database.habitCheckInDao()
 
                     // ===== 清空所有表（按 manifest.DEFAULT_TABLES 反序）=====
                     //
@@ -220,14 +241,25 @@ class BackupImporter @Inject constructor(
                     // 10 万次读 + 10 万次 DELETE。整表删除与「读回全表再逐行删」语义完全一致
                     // （都是把该表清空），但 IO 往返从 O(N) 降到 O(1)。
                     //
-                    // Phase 16：15 张表，清空顺序 = DEFAULT_TABLES 的**反序**（先删子表、再删父表）。
+                    // Phase 23：17 张表，清空顺序 = DEFAULT_TABLES 的**反序**（先删子表、再删父表）。
                     // ⚠️ task_lists 排在 tasks 之后清 —— tasks.listId → task_lists.id 是 CASCADE，
                     //    反过来清会把清单下的任务一起带走。
+                    // ⚠️ habits 排在 habit_checkins 之后清 —— habit_checkins.habitId → habits.id 是 CASCADE，
+                    //    反过来清会把习惯下的打卡记录一起带走（虽然这里两张表都要清，
+                    //    但顺序保持「子表先删」的一致性，将来任一张表单独清时不会踩坑）。
                     //
                     // Phase 16 的三张新表（task_lists / event_categories / student_profile）
                     // 只在**备份里确实带了这些表**时才整表替换：旧备份（formatVersion=1）
                     // 根本没有这些条目，无条件清空 = 把用户现有的清单 / 日历分类 / 档案删光，
                     // 而备份里又没有对应数据可写回来 = 纯数据丢失。
+                    //
+                    // Phase 23 的习惯两张表同理 —— 旧备份不带它们，就绝不能清空用户的习惯数据。
+                    if (hasHabitCheckIns) {
+                        clearTable { habitCheckInDao.clearAll() }
+                    }
+                    if (hasHabits) {
+                        clearTable { habitDao.clearAll() }
+                    }
                     if (hasStudentProfile) {
                         clearTable { studentProfileDao.clearAll() }
                     }
@@ -302,6 +334,14 @@ class BackupImporter @Inject constructor(
                     }
                     if (payload.studentProfile.isNotEmpty()) {
                         studentProfileDao.insertAll(payload.studentProfile)
+                    }
+                    // Phase 23：习惯本体 —— habit_checkins 的父表，必须先于打卡记录落库
+                    if (payload.habits.isNotEmpty()) {
+                        habitDao.insertAll(payload.habits)
+                    }
+                    // Phase 23：习惯打卡记录 —— habitId 指向 habits.id，父行已就位
+                    if (payload.habitCheckIns.isNotEmpty()) {
+                        habitCheckInDao.insertAll(payload.habitCheckIns)
                     }
                 } finally {
                     database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
@@ -395,6 +435,9 @@ class BackupImporter @Inject constructor(
                     val holidayDao: HolidayDao = database.holidayDao()
                     val userProfileDao: UserProfileDao = database.userProfileDao()
                     val studentProfileDao: StudentProfileDao = database.studentProfileDao()
+                    // Phase 23：习惯两张表的 DAO（habit_checkins 依赖 habits，写入顺序不能反）
+                    val habitDao: HabitDao = database.habitDao()
+                    val habitCheckInDao: HabitCheckInDao = database.habitCheckInDao()
 
                     // ===== user_profiles =====
                     strategyByTable["user_profiles"]?.let { diff ->
@@ -495,10 +538,24 @@ class BackupImporter @Inject constructor(
                         }
                     }
 
-                    // ===== student_profile =====（Phase 16：叶子表，最后写）
+                    // ===== student_profile =====（Phase 16：叶子表）
                     strategyByTable["student_profile"]?.let { diff ->
                         if (shouldWrite(diff)) {
                             mergeStudentProfile(studentProfileDao, diff as TableDiff<StudentProfileEntity>)
+                        }
+                    }
+
+                    // ===== habits =====（Phase 23：habit_checkins 的父表，必须排在打卡记录前）
+                    strategyByTable["habits"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeHabits(habitDao, diff as TableDiff<HabitEntity>)
+                        }
+                    }
+
+                    // ===== habit_checkins =====（Phase 23：叶子表，最后写）
+                    strategyByTable["habit_checkins"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeHabitCheckIns(habitCheckInDao, diff as TableDiff<HabitCheckInEntity>)
                         }
                     }
                 } finally {
@@ -717,6 +774,43 @@ class BackupImporter @Inject constructor(
             ImportStrategy.ADD -> dao.insertAll(diff.toAdd)
             ImportStrategy.OVERWRITE -> {
                 diff.toOverwrite.forEach { dao.upsert(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    /**
+     * Phase 23：习惯本体合并写入
+     *
+     * HabitDao.insertAll 是 REPLACE 语义（与单条 insert 逐字一致）；
+     * OVERWRITE 用 `update` 按主键覆盖 —— 不做「删后重插」，
+     * 因为 `habit_checkins.habitId → habits.id` 是 CASCADE，
+     * 删习惯会把打卡记录一起带走（那是「合并」不该有的副作用）。
+     */
+    private suspend fun mergeHabits(dao: HabitDao, diff: TableDiff<HabitEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> dao.insertAll(diff.toAdd)
+            ImportStrategy.OVERWRITE -> {
+                dao.insertAll(diff.toAdd)
+                diff.toOverwrite.forEach { dao.update(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    /**
+     * Phase 23：习惯打卡记录合并写入
+     *
+     * HabitCheckInDao.insertAll 是 IGNORE 语义（与单条 insert 逐字一致）：
+     * `(habitId, date)` 唯一索引冲突时静默跳过 —— ADD 策略保持保守，不覆盖已有打卡。
+     * OVERWRITE 走 `update` 按主键覆盖。
+     */
+    private suspend fun mergeHabitCheckIns(dao: HabitCheckInDao, diff: TableDiff<HabitCheckInEntity>) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> dao.insertAll(diff.toAdd)
+            ImportStrategy.OVERWRITE -> {
+                dao.insertAll(diff.toAdd)
+                diff.toOverwrite.forEach { dao.update(it) }
             }
             ImportStrategy.SKIP -> Unit
         }

@@ -14,6 +14,8 @@ import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.habit.data.local.HabitCheckInEntity
+import com.example.personalassistant.feature.habit.data.local.HabitEntity
 import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskEntity
@@ -37,6 +39,7 @@ import javax.inject.Singleton
  * 把 [BackupPayload] 序列化为 JSON 写入 ZIP 压缩包，并写入 manifest / checksums。
  *
  * Phase 16：15 张表（原 13 张 - `sub_tasks` + `task_lists` + `event_categories` + `student_profile`）。
+ * Phase 23：17 张表（+ `habits` + `habit_checkins`）。
  * 写出顺序与 [BackupManifest.DEFAULT_TABLES] 保持一致 —— 父表先写，导入侧读回来时顺序才对得上。
  */
 @Singleton
@@ -69,8 +72,12 @@ class BackupExporter @Inject constructor(
                 writeDailyPools(zipOut, payload.dailyPools, checksums)
                 writeTransactions(zipOut, payload.transactions, checksums)
                 writeHolidays(zipOut, payload.holidays, checksums)
-                // Phase 16：「我」档案 —— 叶子表，最后写
+                // Phase 16：「我」档案 —— 叶子表
                 writeStudentProfile(zipOut, payload.studentProfile, checksums)
+                // Phase 23：习惯本体 —— habit_checkins 的父表，必须先写
+                writeHabits(zipOut, payload.habits, checksums)
+                // Phase 23：习惯打卡记录 —— 叶子表，最后写
+                writeHabitCheckIns(zipOut, payload.habitCheckIns, checksums)
 
                 val manifest = BackupManifest(
                     application = BackupFormatVersion.APPLICATION,
@@ -99,7 +106,7 @@ class BackupExporter @Inject constructor(
         }
     }
 
-    // 15 张表分别 dispatch（用唯一方法名避免 JVM signature clash）
+    // 17 张表分别 dispatch（用唯一方法名避免 JVM signature clash）
     private fun writeUserProfiles(zipOut: ZipOutputStream, data: List<UserProfileEntity>, checksums: MutableMap<String, String>) =
         writeBytes(zipOut, "user_profiles",
             json.encodeToString(ListSerializer(UserProfileEntity.serializer()), data).toByteArray(Charsets.UTF_8),
@@ -176,6 +183,18 @@ class BackupExporter @Inject constructor(
     private fun writeStudentProfile(zipOut: ZipOutputStream, data: List<StudentProfileEntity>, checksums: MutableMap<String, String>) =
         writeBytes(zipOut, "student_profile",
             json.encodeToString(ListSerializer(StudentProfileEntity.serializer()), data).toByteArray(Charsets.UTF_8),
+            checksums)
+
+    /** Phase 23：习惯本体（habit_checkins 的父表） */
+    private fun writeHabits(zipOut: ZipOutputStream, data: List<HabitEntity>, checksums: MutableMap<String, String>) =
+        writeBytes(zipOut, "habits",
+            json.encodeToString(ListSerializer(HabitEntity.serializer()), data).toByteArray(Charsets.UTF_8),
+            checksums)
+
+    /** Phase 23：习惯打卡记录 */
+    private fun writeHabitCheckIns(zipOut: ZipOutputStream, data: List<HabitCheckInEntity>, checksums: MutableMap<String, String>) =
+        writeBytes(zipOut, "habit_checkins",
+            json.encodeToString(ListSerializer(HabitCheckInEntity.serializer()), data).toByteArray(Charsets.UTF_8),
             checksums)
 
     private fun writeBytes(

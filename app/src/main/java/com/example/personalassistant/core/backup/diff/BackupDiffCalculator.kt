@@ -12,6 +12,8 @@ import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.habit.data.local.HabitCheckInEntity
+import com.example.personalassistant.feature.habit.data.local.HabitEntity
 import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
@@ -27,7 +29,7 @@ import javax.inject.Singleton
  * Phase 8 Sub-step 4'（plan 8f'）：备份 vs 当前数据库差异计算器（纯函数）
  *
  * 给一份 [BackupPayload] + [CurrentDbSnapshot]，产出 [BackupPreview]：
- * - 15 张表各自的 toAdd / toOverwrite 列表
+ * - 17 张表各自的 toAdd / toOverwrite 列表
  * - 默认策略 = [ImportStrategy.ADD]（最保守：只增不覆盖）
  * - 外键级联 SKIP：上游表 SKIP → 下游表自动 SKIP，写入器无法违反 FK 约束
  *
@@ -51,8 +53,9 @@ import javax.inject.Singleton
  * tags ──────────── (tagId)  ── task_tag_cross_ref
  * event_categories ─ (categoryId) ── events
  * categories ────── (parentId 自引用，可选)
+ * habits ─────────── (habitId) ── habit_checkins
  * ```
- * 拓扑用「硬编码 adjacency list」写死，15 个节点很小，不值得跑真正的图算法。
+ * 拓扑用「硬编码 adjacency list」写死，17 个节点很小，不值得跑真正的图算法。
  *
  * ⚠️ Phase 16：`events → event_categories` 是**语义依赖**（DB 层没有这条 FK，
  * `events.categoryId` 只是引用），而 DEFAULT_TABLES 里 events 排在 event_categories 之前。
@@ -72,7 +75,7 @@ class BackupDiffCalculator @Inject constructor() {
      *
      * @param payload 解析后的备份内容（来自 [com.example.personalassistant.core.backup.importer.BackupImporter] 的中间产物）
      * @param manifest 备份清单（仅读 manifest 头信息；payload 已 contains 完整清单）
-     * @param current 当前 DB 的 15 张表全量快照
+     * @param current 当前 DB 的 17 张表全量快照
      */
     fun compute(
         payload: BackupPayload,
@@ -175,6 +178,21 @@ class BackupDiffCalculator @Inject constructor() {
             currentIds = current.studentProfile.map { it.accountId }.toSet(),
             idOf = { it.accountId },
         )
+        // Phase 23：习惯本体（habit_checkins 的父表）
+        val habitsDiff = diffById(
+            tableName = "habits",
+            backup = payload.habits,
+            currentIds = current.habits.map { it.id }.toSet(),
+            idOf = { it.id },
+        )
+        // Phase 23：习惯打卡记录（主键是自增 id，按 id 判等；
+        // `(habitId, date)` 唯一索引是业务层约束，不参与差异判定）
+        val habitCheckInsDiff = diffById(
+            tableName = "habit_checkins",
+            backup = payload.habitCheckIns,
+            currentIds = current.habitCheckIns.map { it.id }.toSet(),
+            idOf = { it.id },
+        )
 
         val rawPerTable = listOf(
             userProfilesDiff,
@@ -192,6 +210,8 @@ class BackupDiffCalculator @Inject constructor() {
             transactionsDiff,
             holidaysDiff,
             studentProfileDiff,
+            habitsDiff,
+            habitCheckInsDiff,
         )
 
         // ===== 2. 外键级联 SKIP 推断 =====
@@ -338,9 +358,15 @@ class BackupDiffCalculator @Inject constructor() {
          * - 新增 `events → event_categories`（语义依赖：events.categoryId 引用分类 id）
          * - 新增 `event_categories`（根表）、`student_profile → user_profiles`（accountId）
          *
+         * Phase 23 变化：
+         * - 新增 `habits`（根表）、`habit_checkins → habits`（habitId → habits.id，CASCADE）
+         *
          * 注意：`events → event_categories` 是**语义依赖**（DB 层没有这条 FK），
          * 而 DEFAULT_TABLES 里 events 排在 event_categories 之前，
          * 单遍扫描的级联推断覆盖不到「排在后面的父表」——详见类 KDoc 的说明。
+         *
+         * `habit_checkins → habits` 没有这个问题：habits 排在 habit_checkins **之前**，
+         * 所以 habits 被 SKIP 时级联推断能正常把 habit_checkins 也标成 SKIP。
          */
         val TABLE_FK_GRAPH: Map<String, Set<String>> = mapOf(
             "user_profiles" to emptySet(),                       // 根表，不依赖任何表
@@ -358,6 +384,8 @@ class BackupDiffCalculator @Inject constructor() {
             "transactions" to setOf("user_profiles", "categories"), // transactions.accountId + categoryId
             "holidays" to emptySet(),                            // 节假日表无 FK
             "student_profile" to setOf("user_profiles"),         // student_profile.accountId → user_profiles.id
+            "habits" to emptySet(),                              // 习惯本体自身无父表
+            "habit_checkins" to setOf("habits"),                 // habit_checkins.habitId → habits.id
         )
     }
 }

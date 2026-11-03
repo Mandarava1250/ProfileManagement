@@ -13,6 +13,8 @@ import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.habit.data.local.HabitCheckInEntity
+import com.example.personalassistant.feature.habit.data.local.HabitEntity
 import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
@@ -37,11 +39,12 @@ import org.junit.Test
  * - 默认策略必须是 ADD（最保守，绝不静默覆盖用户数据）
  * - 联合主键表（task_tag_cross_ref）不能走 id 等价
  * - sampleRowIds 的上限与去重
- * - 15 张表的完整性与顺序（与 [BackupManifest.DEFAULT_TABLES] 对齐）
+ * - 17 张表的完整性与顺序（与 [BackupManifest.DEFAULT_TABLES] 对齐）
  * - 外键拓扑表 [BackupDiffCalculator.TABLE_FK_GRAPH] 自身的一致性
  *
  * Phase 16：sub_tasks 已删表（子任务并入 tasks.parentTaskId），
  * 新增 task_lists / event_categories / student_profile 三张表。
+ * Phase 23：新增 habits / habit_checkins 两张表。
  */
 class BackupDiffCalculatorTest {
 
@@ -138,6 +141,17 @@ class BackupDiffCalculatorTest {
         year = 2026,
     )
 
+    /** Phase 23：习惯本体 */
+    private fun habit(id: Long) = HabitEntity(id = id, name = "习惯$id")
+
+    /** Phase 23：习惯打卡记录（挂在习惯 1 上） */
+    private fun habitCheckIn(id: Long, habitId: Long = 1L) = HabitCheckInEntity(
+        id = id,
+        habitId = habitId,
+        date = 1_000L,
+        count = 1,
+    )
+
     /** 按表名从预览里取差异；缺失即失败（避免测试静默跳过） */
     private fun BackupPreview.diffOf(tableName: String) =
         perTable.firstOrNull { it.tableName == tableName }
@@ -151,7 +165,7 @@ class BackupDiffCalculatorTest {
     // ---------- 完整性 ----------
 
     @Test
-    fun `compute 空备份空库 产出 15 张表且全部为空`() {
+    fun `compute 空备份空库 产出 17 张表且全部为空`() {
         val preview = compute(BackupPayload())
 
         assertEquals(
@@ -159,7 +173,7 @@ class BackupDiffCalculatorTest {
             BackupManifest.DEFAULT_TABLES.size,
             preview.perTable.size,
         )
-        assertEquals(15, preview.perTable.size)
+        assertEquals(17, preview.perTable.size)
         assertEquals(0, preview.totalToAdd)
         assertEquals(0, preview.totalToOverwrite)
         assertEquals(0, preview.totalSkippedTables)
@@ -359,7 +373,7 @@ class BackupDiffCalculatorTest {
     }
 
     @Test
-    fun `15 张表都能各自算出差异`() {
+    fun `17 张表都能各自算出差异`() {
         val payload = BackupPayload(
             userProfiles = listOf(profile(1)),
             semesters = listOf(semester(1)),
@@ -376,13 +390,16 @@ class BackupDiffCalculatorTest {
             transactions = listOf(transaction(1)),
             holidays = listOf(holiday(1)),
             studentProfile = listOf(studentProfile(1)),
+            // Phase 23：习惯打卡两张表
+            habits = listOf(habit(1)),
+            habitCheckIns = listOf(habitCheckIn(1)),
         )
         val preview = compute(payload)
 
-        assertEquals(15, preview.perTable.size)
+        assertEquals(17, preview.perTable.size)
         assertEquals(
             "每张表各 1 行全新数据",
-            15,
+            17,
             preview.totalToAdd,
         )
         preview.perTable.forEach { diff ->

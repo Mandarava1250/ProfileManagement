@@ -81,6 +81,13 @@ fun ChecklistDrawer(
     onApplyNamedFilter: ((NamedFilter) -> Unit)? = null,
     onDeleteNamedFilter: ((String) -> Unit)? = null,
     onSaveNamedFilter: ((String) -> Unit)? = null,
+    /**
+     * Phase 23：打开习惯页。
+     *
+     * 用**可选回调**而不是直接引用 habit 模块的组件 ——
+     * task 模块不反向依赖 habit，依赖方向保持单向。
+     */
+    onOpenHabits: (() -> Unit)? = null,
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var renamingList by remember { mutableStateOf<TaskListWithCount?>(null) }
@@ -123,6 +130,17 @@ fun ChecklistDrawer(
                 selected = currentView == ChecklistView.Quadrant,
                 onClick = { onSelect(ChecklistView.Quadrant) },
             )
+
+            // Phase 23：习惯（独立页面，不是清单视图 —— 所以不放 selected 态）
+            if (onOpenHabits != null) {
+                DrawerRow(
+                    icon = Icons.Rounded.DoneAll,
+                    label = "习惯",
+                    count = null,
+                    selected = false,
+                    onClick = { onOpenHabits.invoke() },
+                )
+            }
 
             Spacer(Modifier.height(12.dp))
             HorizontalDivider()

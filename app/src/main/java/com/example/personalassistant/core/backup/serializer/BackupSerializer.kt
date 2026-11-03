@@ -24,6 +24,7 @@ import javax.inject.Singleton
  * 导入侧的 [BackupImporter] 负责把 ZIP 数据写回 Room。
  *
  * Phase 16：15 张表 = 原 13 张 - `sub_tasks` + `task_lists` + `event_categories` + `student_profile`。
+ * Phase 23：17 张表 = 15 张 + `habits` + `habit_checkins`（习惯打卡）。
  *
  * 测试策略：mock 全部 DAO，验证 snapshot() 正确返回各表数据。
  */
@@ -47,7 +48,7 @@ class BackupSerializer @Inject constructor(
     private val database: AppDatabase,
 ) {
     /**
-     * 全量快照：从 Room 拉出 15 张表全部数据
+     * 全量快照：从 Room 拉出 17 张表全部数据
      *
      * 全部是**跨账户全量**：备份语义 = 导出所有账户的所有数据（含账户清单本身）。
      */
@@ -71,6 +72,10 @@ class BackupSerializer @Inject constructor(
             holidays = holidayDao.getAll(),
             // Phase 16：「我」档案 —— 一账户一行
             studentProfile = database.studentProfileDao().getAllStudentProfiles(),
+            // Phase 23：习惯本体 —— habit_checkins 的父表
+            habits = database.habitDao().getAll(),
+            // Phase 23：习惯打卡记录
+            habitCheckIns = database.habitCheckInDao().getAll(),
         )
         BackupResult.Success(payload)
     } catch (t: Throwable) {

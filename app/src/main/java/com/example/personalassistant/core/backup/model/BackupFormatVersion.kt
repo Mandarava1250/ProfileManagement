@@ -33,7 +33,9 @@ import com.example.personalassistant.core.database.APP_DATABASE_VERSION
  *     ├── daily_pools.json
  *     ├── transactions.json
  *     ├── holidays.json         ← Phase 8 Sub-step 7 新增（v6 起）
- *     └── student_profile.json  ← Phase 16 新增（「我」档案，一账户一行）
+ *     ├── student_profile.json  ← Phase 16 新增（「我」档案，一账户一行）
+ *     ├── habits.json           ← Phase 23 新增（习惯本体）
+ *     └── habit_checkins.json   ← Phase 23 新增（习惯打卡记录）
  * ```
  */
 object BackupFormatVersion {
@@ -52,6 +54,15 @@ object BackupFormatVersion {
      *
      * 新增表（task_lists / event_categories / student_profile）本身不构成升版理由 ——
      * 它们都有 `@Serializable` 默认值，旧 JSON 缺字段时解出空列表即可。
+     *
+     * Phase 23：**没升它**（仍是 2）。理由与 Phase 3 的 user_profiles 完全一样 ——
+     * 本次只是**新增两张表**（habits / habit_checkins），没有删字段、没有改字段语义，
+     * 按 [BackupManifest] 的增量规则「新增表：往 tables 加一项，FORMAT_VERSION 不必升」。
+     * 两个新字段都有 `@Serializable` 默认值（`= emptyList()`），
+     * 旧备份（formatVersion ≤ 2）解出来是空列表 → 导入端据此判断「备份没带这两张表」
+     * → 不清空用户现有的习惯数据。
+     *
+     * ⚠️ 什么时候才需要升 v3：删字段 / 改字段语义 / 改表集合的**既有**表结构时。
      */
     const val FORMAT_VERSION: Int = 2
 

@@ -47,6 +47,32 @@ interface HabitCheckInDao {
     @Query("DELETE FROM habit_checkins WHERE habitId = :habitId AND `date` = :date")
     suspend fun deleteByHabitAndDate(habitId: Long, date: Long)
 
+    // ===== 备份导出 / 导入（Phase 23 接入备份） =====
+
+    /**
+     * 全部打卡记录 —— 备份导出用。
+     *
+     * 按 id 升序，保证同一份库导出的备份字节稳定（便于校验和比对）。
+     */
+    @Query("SELECT * FROM habit_checkins ORDER BY id ASC")
+    suspend fun getAll(): List<HabitCheckInEntity>
+
+    /**
+     * 批量插入打卡记录（备份导入用）。
+     *
+     * ⚠️ 冲突策略必须与 [insert] **逐字一致**（IGNORE ↔ IGNORE）。
+     *
+     * 这里是 IGNORE 而不是 REPLACE：`habit_checkins` 上有 `(habitId, date)` 唯一索引，
+     * IGNORE 让「合并模式」的 ADD 策略保持保守（同一天重复打卡不覆盖已有行），
+     * 与单条 [insert] 语义完全对齐。
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(checkIns: List<HabitCheckInEntity>): List<Long>
+
+    /** 清空打卡记录表（备份导入用）。 */
+    @Query("DELETE FROM habit_checkins")
+    suspend fun clearAll(): Int
+
     /**
      * 打卡 / 撤销打卡：读-改-写必须在一个事务里。
      *

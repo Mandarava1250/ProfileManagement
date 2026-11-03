@@ -5,6 +5,8 @@ import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.habit.data.local.HabitCheckInEntity
+import com.example.personalassistant.feature.habit.data.local.HabitEntity
 import com.example.personalassistant.feature.profile.data.local.AccountIds
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
@@ -214,6 +216,46 @@ class BackupLegacyCompatTest {
         assertEquals(0, payload.totalRecordCount)
     }
 
+    /**
+     * Phase 23：旧备份（formatVersion ≤ 2）里根本没有 habits / habit_checkins 两个条目。
+     *
+     * 两个新字段都有 `@Serializable` 默认值（`= emptyList()`），
+     * 所以旧 JSON 解出来是**空列表**而不是缺字段报错 —— 这是旧备份仍能被导入的前提。
+     *
+     * 导入端靠「备份里有没有这两个条目」（`bundle.tableBytes.containsKey(...)`）
+     * 决定要不要清空用户现有的习惯数据；解出空列表 ≠ 备份带了空表。
+     */
+    @Test
+    fun `旧备份没有 habits 与 habit_checkins 时解出空列表`() {
+        val prePhase23 = "{\"tasks\":[],\"events\":[]}"
+
+        val payload = backupJson.decodeFromString(BackupPayload.serializer(), prePhase23)
+
+        assertTrue("旧备份不应凭空解出习惯", payload.habits.isEmpty())
+        assertTrue("旧备份不应凭空解出打卡记录", payload.habitCheckIns.isEmpty())
+        assertEquals(0, payload.totalRecordCount)
+    }
+
+    @Test
+    fun `带 habits 与 habit_checkins 的 payload 可完整 round-trip`() {
+        val payload = BackupPayload(
+            habits = listOf(
+                HabitEntity(id = 1L, name = "喝水", iconKey = "water", sortOrder = 3L),
+            ),
+            habitCheckIns = listOf(
+                HabitCheckInEntity(id = 1L, habitId = 1L, date = 1_700_000_000_000L, count = 2),
+            ),
+        )
+
+        val text = backupJson.encodeToString(BackupPayload.serializer(), payload)
+        val decoded = backupJson.decodeFromString(BackupPayload.serializer(), text)
+
+        assertEquals(payload, decoded)
+        assertEquals(2, decoded.totalRecordCount)
+        assertEquals("喝水", decoded.habits.single().name)
+        assertEquals(2, decoded.habitCheckIns.single().count)
+    }
+
     @Test
     fun `空数组 JSON 解出空列表而非 null`() {
         // exporter 对空表写 "[]"，导入端必须解成 emptyList，不能让 null 漏进 payload
@@ -226,19 +268,26 @@ class BackupLegacyCompatTest {
     // ---------- 表清单不变量 ----------
 
     @Test
-    fun `DEFAULT_TABLES 为 15 张且顺序与内容固定`() {
-        assertEquals(15, BackupManifest.DEFAULT_TABLES.size)
+    fun `DEFAULT_TABLES 为 17 张且顺序与内容固定`() {
+        assertEquals(17, BackupManifest.DEFAULT_TABLES.size)
         assertEquals("user_profiles", BackupManifest.DEFAULT_TABLES.first())
-        assertEquals("student_profile", BackupManifest.DEFAULT_TABLES.last())
+        // Phase 23：习惯打卡两张表排在最后，habit_checkins 是最后一张
+        assertEquals("habit_checkins", BackupManifest.DEFAULT_TABLES.last())
         assertEquals(
-            "表清单去重后仍应是 15 项",
-            15,
+            "表清单去重后仍应是 17 项",
+            17,
             BackupManifest.DEFAULT_TABLES.distinct().size,
+        )
+        // 外键依赖顺序：父表必须在子表之前（habits → habit_checkins）
+        val tables = BackupManifest.DEFAULT_TABLES
+        assertTrue(
+            "habits 必须排在 habit_checkins 之前",
+            tables.indexOf("habits") < tables.indexOf("habit_checkins"),
         )
     }
 
     @Test
-    fun `manifest 带全部 15 张表可 round-trip`() {
+    fun `manifest 带全部 17 张表可 round-trip`() {
         val manifest = BackupManifest(
             application = "com.example.personalassistant",
             formatVersion = BackupFormatVersion.FORMAT_VERSION,

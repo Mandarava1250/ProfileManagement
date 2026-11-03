@@ -120,8 +120,9 @@ class BackupPreviewViewModelTest {
         )
         val ready = state as BackupPreviewViewModel.PreviewUiState.Ready
         assertEquals(
-            "BackupPreview 应包含 15 张表的 perTable",
-            15,
+            // Phase 23：加了 habits / habit_checkins 两张表，15 → 17
+            "BackupPreview 应包含 17 张表的 perTable",
+            17,
             ready.preview.perTable.size,
         )
         assertEquals(

@@ -36,6 +36,10 @@ data class BackupManifest(
          * - 加 `event_categories`：日历事件分类（`events.categoryId` 指向它）
          * - 加 `student_profile`：「我」档案（一账户一行，主键 accountId）
          *
+         * Phase 23：**17 张表**（+ `habits` + `habit_checkins`）
+         * - 加 `habits`：习惯本体
+         * - 加 `habit_checkins`：习惯打卡记录（`habitId` → `habits.id`，CASCADE）
+         *
          * 排序规则：**父表在前、子表在后** —— 本顺序同时决定三件事：
          * ① **导出顺序** —— [com.example.personalassistant.core.backup.exporter.BackupExporter]
          *    按本顺序逐张写 ZIP，父表先写，读回来时顺序才对得上；
@@ -47,7 +51,8 @@ data class BackupManifest(
          * - `user_profiles` 排最前 —— 记账 4 表与 `student_profile` 的 accountId 指向它
          * - `task_lists` 排在 `tasks` 前 —— `tasks.listId` → `task_lists.id`（CASCADE）
          * - `task_tag_cross_ref` 排在 `tasks` / `tags` 后 —— (taskId, tagId) 联合外键
-         * - `student_profile` 排最后 —— 叶子表（accountId → `user_profiles`）
+         * - `habits` 排在 `habit_checkins` 前 —— `habit_checkins.habitId` → `habits.id`（CASCADE）
+         * - `student_profile` / `habits` / `habit_checkins` 都是叶子表，排在最后
          */
         val DEFAULT_TABLES: List<String> = listOf(
             // Phase 3：账户表排最前 —— 记账 4 表的 accountId 指向它，必须先就位
@@ -68,8 +73,12 @@ data class BackupManifest(
             "transactions",
             // Phase 8 Sub-step 7：节假日表（v6 新增）
             "holidays",
-            // Phase 16：「我」档案 —— accountId → user_profiles，叶子表排最后
+            // Phase 16：「我」档案 —— accountId → user_profiles，叶子表
             "student_profile",
+            // Phase 23：习惯本体 —— habit_checkins.habitId 指向它，必须排在 habit_checkins 前
+            "habits",
+            // Phase 23：习惯打卡记录 —— 叶子表，排最后
+            "habit_checkins",
         )
     }
 }
