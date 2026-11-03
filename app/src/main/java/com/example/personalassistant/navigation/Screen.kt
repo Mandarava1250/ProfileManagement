@@ -92,6 +92,14 @@ sealed class Screen(val route: String) {
      *  - 行为：改完即时生效（写 DataStore → 顶层重新套色板）
      */
     data object Appearance : Screen("me/appearance")
+
+    /**
+     * Phase 23：习惯打卡页
+     *
+     *  - 入口：清单抽屉里的「习惯」项（ChecklistDrawer，Phase 17）
+     *  - 行为：二级页，无 BottomBar
+     */
+    data object Habits : Screen("habits")
 }
 
 /**

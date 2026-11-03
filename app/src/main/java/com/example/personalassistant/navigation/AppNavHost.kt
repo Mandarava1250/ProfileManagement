@@ -54,6 +54,7 @@ import com.example.personalassistant.feature.finance.presentation.budget.BudgetS
 import com.example.personalassistant.feature.finance.presentation.category.CategoryManagementScreen
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHitType
 import com.example.personalassistant.feature.globalsearch.presentation.GlobalSearchScreen
+import com.example.personalassistant.feature.habit.presentation.HabitScreen
 import com.example.personalassistant.feature.me.MeScreen
 import com.example.personalassistant.feature.me.presentation.GpaRuleEditScreen
 import com.example.personalassistant.feature.settings.SettingsScreen
@@ -271,6 +272,14 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
             }
             composable(Screen.FinanceBudget.route) {
                 BudgetScreen(onBack = { navController.popBackStack() })
+            }
+
+            // === Phase 23：习惯打卡 ===
+            //
+            // 入口在清单抽屉（feature/task 的 ChecklistDrawer）里 ——
+            // 那一行由主代理接 HabitDrawerEntry（habit 模块提供，task 模块不依赖 habit 模块）。
+            composable(Screen.Habits.route) {
+                HabitScreen(onBack = { navController.popBackStack() })
             }
         }
     }
