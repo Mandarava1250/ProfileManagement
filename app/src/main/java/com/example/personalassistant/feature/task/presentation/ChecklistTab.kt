@@ -54,6 +54,8 @@ import com.example.personalassistant.feature.task.domain.model.ChecklistSort
 import com.example.personalassistant.feature.task.domain.model.CompletionStats
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
+import com.example.personalassistant.feature.task.domain.model.parseQuickInput
+import com.example.personalassistant.feature.task.domain.model.removeTokenRange
 import com.example.personalassistant.feature.task.presentation.components.ChecklistBatchBar
 import com.example.personalassistant.feature.task.presentation.components.ChecklistBatchDateSheet
 import com.example.personalassistant.feature.task.presentation.components.ChecklistBatchDeleteDialog
@@ -63,7 +65,10 @@ import com.example.personalassistant.feature.task.presentation.components.Checkl
 import com.example.personalassistant.feature.task.presentation.components.ChecklistItemCard
 import com.example.personalassistant.feature.task.presentation.components.CompletionStatsCard
 import com.example.personalassistant.feature.task.presentation.components.FilterEntryButton
+import com.example.personalassistant.feature.task.presentation.components.QuickInputChipRow
 import com.example.personalassistant.feature.task.presentation.list.ReorderableTaskListViewModel
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.math.roundToInt
 
 /**
@@ -158,6 +163,16 @@ fun ChecklistTab(
 
     val selectionMode = selectedIds.isNotEmpty()
     val canSubmit = input.isNotBlank()
+
+    // ===== Phase 18.3：解析结果（chip 行画在输入框上方）=====
+    // 纯函数 + 「今天」由外部传入 —— 每次输入变化重算一遍。
+    val parsed = remember(input) {
+        parseQuickInput(
+            input = input,
+            today = LocalDate.now(),
+            zoneId = ZoneId.systemDefault(),
+        )
+    }
 
     // ===== Phase 18.4：拖拽排序 =====
     // 复用任务页那套拖拽状态机：拖拽过程中只动本地顺序，
@@ -295,61 +310,72 @@ fun ChecklistTab(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        // ===== 顶部：输入框 + 添加 + 筛选入口 =====
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        ) {
-            OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                placeholder = { Text(stringResource(R.string.checklist_input_hint)) },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                // Phase 10 修复：让软键盘右下角变成「完成」，按回车真的能提交。
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Text,
-                    imeAction = ImeAction.Done,
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = { submit() },
-                ),
+        // ===== 顶部：快速添加区 =====
+        // Phase 18.3：解析结果的 chip 行画在**输入框上方**。
+        // Phase 18.6：多选模式下整个快速添加区（含 chip 行）都隐藏 ——
+        //              多选是用来批量操作已有项的，不该同时在新建。
+        if (!selectionMode) {
+            QuickInputChipRow(
+                parsed = parsed,
+                onRemove = { token ->
+                    // 点掉 chip = 把这一段从输入文本里删掉（重新解析后 chip 就没了）
+                    input = removeTokenRange(input, token.range)
+                },
             )
-            Spacer(Modifier.width(4.dp))
-            IconButton(onClick = { creatingItem = true }) {
-                Icon(
-                    imageVector = Icons.Rounded.AddCircle,
-                    contentDescription = stringResource(R.string.checklist_detail_add),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(
-                // Phase 10 修复：保留 enabled 守卫避免提交空项，但 disabled 时显式
-                // 给 Icon 一个 outline 灰色并加透明度，让「+ 不可点」这件事一眼可见。
-                onClick = submit,
-                enabled = canSubmit,
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Add,
-                    contentDescription = stringResource(R.string.action_add),
-                    tint = if (canSubmit) {
-                        LocalContentColor.current
-                    } else {
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-                    },
-                )
-            }
-            FilterEntryButton(
-                activeCount = activeFilterCount,
-                contentDescription = stringResource(R.string.checklist_filter_button),
-                onClick = { showFilterSheet = true },
-            )
-        }
 
-        // ===== Phase 18.6：多选模式下的批量操作条 =====
-        if (selectionMode) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    placeholder = { Text(stringResource(R.string.checklist_input_hint)) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    // Phase 10 修复：让软键盘右下角变成「完成」，按回车真的能提交。
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { submit() },
+                    ),
+                )
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = { creatingItem = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.AddCircle,
+                        contentDescription = stringResource(R.string.checklist_detail_add),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(
+                    // Phase 10 修复：保留 enabled 守卫避免提交空项，但 disabled 时显式
+                    // 给 Icon 一个 outline 灰色并加透明度，让「+ 不可点」这件事一眼可见。
+                    onClick = submit,
+                    enabled = canSubmit,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = stringResource(R.string.action_add),
+                        tint = if (canSubmit) {
+                            LocalContentColor.current
+                        } else {
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                        },
+                    )
+                }
+                FilterEntryButton(
+                    activeCount = activeFilterCount,
+                    contentDescription = stringResource(R.string.checklist_filter_button),
+                    onClick = { showFilterSheet = true },
+                )
+            }
+        } else {
+            // ===== Phase 18.6：多选模式下的批量操作条 =====
             ChecklistBatchBar(
                 selectedCount = selectedIds.size,
                 onChangeDate = { showDateSheet = true },

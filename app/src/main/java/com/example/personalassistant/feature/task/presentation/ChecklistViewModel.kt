@@ -18,6 +18,7 @@ import com.example.personalassistant.feature.task.domain.model.matches
 import com.example.personalassistant.feature.task.domain.model.parseQuickInput
 import com.example.personalassistant.feature.task.domain.model.toExpression
 import com.example.personalassistant.feature.task.domain.model.toSpec
+import com.example.personalassistant.feature.task.presentation.util.DefaultTagPalette
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.domain.model.TransactionType
 import com.example.personalassistant.feature.finance.domain.repository.FinanceRepository
@@ -27,6 +28,7 @@ import com.example.personalassistant.feature.task.domain.repository.TaskListRepo
 import com.example.personalassistant.feature.task.domain.usecase.AddChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.AddNestedChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.AttachTagToChecklistItemUseCase
+import com.example.personalassistant.feature.task.domain.usecase.CreateTagUseCase
 import com.example.personalassistant.feature.task.domain.usecase.CreateTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DeleteChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DeleteTaskListUseCase
@@ -96,6 +98,8 @@ class ChecklistViewModel @Inject constructor(
     // ===== Phase 21：清单 ↔ 记账联动 =====
     private val recordExpenseFromTask: RecordExpenseFromTaskUseCase,
     private val financeRepository: FinanceRepository,
+    // ===== Phase 18.3：快速输入里的 #标签 =====
+    private val createTag: CreateTagUseCase,
 ) : ViewModel() {
 
     // ===== Phase 21：清单 ↔ 记账联动 =====
@@ -301,6 +305,10 @@ class ChecklistViewModel @Inject constructor(
      * Phase 22.5：**快速添加**会套用设置页里的默认值（默认清单 / 默认优先级 / 默认提醒）。
      * 编辑面板那条路（[addItemWithDetails]）不套 —— 那边用户已经明确选过值了，
      * 再覆盖一遍是添乱。
+     *
+     * Phase 18.3：标题里的**标签**（`#Work`）与**清单**（`~学习`）也会被解析出来并落地：
+     * - `#Work` → 挂到这一项上（同名标签会去重复用）
+     * - `~学习` → 这一项落到「学习」清单（没有就新建一个，同名去重）
      */
     fun addItem(title: String) {
         viewModelScope.launch {
@@ -311,23 +319,30 @@ class ChecklistViewModel @Inject constructor(
                     today = LocalDate.now(),
                     zoneId = ZoneId.systemDefault(),
                 )
-                val finalTitle = parsed?.title?.takeIf { it.isNotBlank() } ?: title
-                val finalDueDate = parsed?.dueDate
+                val finalTitle = parsed.title.takeIf { it.isNotBlank() } ?: title
+                val finalDueDate = parsed.dueDate
 
                 // 默认提醒：只在**有截止时间**时才算得出来提醒点
                 val reminderTime = defaults.defaultReminderMinutesBefore
                     ?.let { minutes -> finalDueDate?.minus(minutes * 60_000L) }
 
-                addChecklistItem(
+                // Phase 18.3：~清单 优先于默认清单
+                val listId = parsed.listToken?.let { token -> resolveListIdByName(token.name) }
+                    ?: (defaults.defaultListId ?: targetListId())
+
+                val id = addChecklistItem(
                     title = finalTitle,
                     category = null,
                     dueDate = finalDueDate,
                     priority = defaults.defaultPriority,
                     amount = null,
                     // 默认清单：设了就一律落到那儿，没设就跟着当前视图
-                    listId = defaults.defaultListId ?: targetListId(),
+                    listId = listId,
                     reminderTime = reminderTime,
                 )
+
+                // Phase 18.3：#标签 挂到这一项上
+                parsed.tagTokens.forEach { token -> attachTagByName(id, token.name) }
             }
         }
     }
@@ -337,6 +352,8 @@ class ChecklistViewModel @Inject constructor(
      *
      * Phase 18：**标题里的自然语言日期会被拆出来**（「买牛奶 明天」→ 标题「买牛奶」+
      * 截止明天 9:00）。拆不出就原样当标题。
+     *
+     * Phase 18.3：标签（`#Work`）与清单（`~学习`）同样会被拆出来并落地。
      */
     fun addItemWithDetails(
         title: String,
@@ -360,17 +377,54 @@ class ChecklistViewModel @Inject constructor(
                 val finalTitle = parsed?.title?.takeIf { it.isNotBlank() } ?: title
                 val finalDueDate = dueDate ?: parsed?.dueDate
 
-                addChecklistItem(
+                // Phase 18.3：~清单 优先于当前视图对应的清单
+                val listId = parsed?.listToken?.let { token -> resolveListIdByName(token.name) }
+                    ?: targetListId()
+
+                val id = addChecklistItem(
                     title = finalTitle,
                     category = category,
                     dueDate = finalDueDate,
                     priority = priority,
                     amount = amount,
                     // Phase 17：落在当前视图对应的清单
-                    listId = targetListId(),
+                    listId = listId,
                 )
+
+                // Phase 18.3：#标签 挂到这一项上
+                parsed?.tagTokens?.forEach { token -> attachTagByName(id, token.name) }
             }
         }
+    }
+
+    /**
+     * Phase 18.3：按名字找清单。
+     *
+     * 找不到就**新建**一个 —— [CreateTaskListUseCase] 按规范化名去重，
+     * 所以「~学习」写两次也只会有一条清单。
+     */
+    private suspend fun resolveListIdByName(name: String): Long? {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return null
+        val normalized = trimmed.lowercase()
+        val existing = uiState.value.lists.firstOrNull { it.list.nameNormalized == normalized }
+        if (existing != null) return existing.list.id
+        return runCatching { createTaskList(displayName = trimmed) }.getOrNull()
+    }
+
+    /**
+     * Phase 18.3：按名字挂标签。
+     *
+     * 同名标签会去重复用（[CreateTagUseCase] 找不到才新建），
+     * 新建的用调色板默认色 —— 与「新建标签」面板的默认色一致。
+     */
+    private suspend fun attachTagByName(itemId: Long, name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        val tag = runCatching {
+            createTag(displayName = trimmed, colorHex = DefaultTagPalette.defaultEntry.hex)
+        }.getOrNull() ?: return
+        runCatching { attachTagToItem(itemId, tag.id) }
     }
 
     /**

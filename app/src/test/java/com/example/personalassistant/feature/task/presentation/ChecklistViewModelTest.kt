@@ -14,6 +14,7 @@ import com.example.personalassistant.feature.task.domain.repository.TagRepositor
 import com.example.personalassistant.feature.task.domain.usecase.AddChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.AddNestedChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.AttachTagToChecklistItemUseCase
+import com.example.personalassistant.feature.task.domain.usecase.CreateTagUseCase
 import com.example.personalassistant.feature.task.domain.usecase.CreateTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DeleteChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DeleteTaskListUseCase
@@ -99,6 +100,9 @@ class ChecklistViewModelTest {
         fun setTags(tags: Map<Long, List<Tag>>) {
             tagsState.value = tags
         }
+
+        /** 某个清单项当前挂着的标签（断言用）。 */
+        fun tagsOf(itemId: Long): List<Tag> = tagsState.value[itemId].orEmpty()
 
         override fun observeChecklistItems(): Flow<List<ChecklistItem>> =
             combine(itemsState, tagsState) { items, tags -> buildTree(items, tags) }
@@ -239,6 +243,8 @@ class ChecklistViewModelTest {
         financeRepository = FakeFinanceRepository(),
         // ===== Phase 18.7：撤销删除 =====
         restoreChecklistItem = RestoreChecklistItemUseCase(repo),
+        // ===== Phase 18.3：快速输入里的 #标签 =====
+        createTag = CreateTagUseCase(tagRepo),
     )
 
     private fun tag(id: Long): Tag = Tag(
@@ -658,5 +664,41 @@ class ChecklistViewModelTest {
         assertEquals(1, repo.items.size)
         assertEquals("项", repo.items.single().title)
         assertNull(vm.deleteNotice.value)
+    }
+
+    // ===== Phase 18.3：快速输入里的 #标签 / ~清单 =====
+
+    @Test
+    fun addItemStripsTagFromTitleAndAttachesIt() = runTest {
+        val repo = FakeChecklistRepository()
+        val vm = makeVm(repo)
+
+        vm.addItem("买牛奶 #Work")
+
+        assertEquals("标题里不该再留着 #Work", "买牛奶", repo.items.single().title)
+        assertEquals(1, repo.tagsOf(repo.items.single().id).size)
+    }
+
+    @Test
+    fun addItemMovesItemToNamedList() = runTest {
+        val repo = FakeChecklistRepository()
+        val listRepo = FakeTaskListRepository()
+        val vm = makeVm(repo = repo, listRepo = listRepo)
+
+        vm.addItem("买牛奶 ~学习")
+
+        val stored = repo.items.single()
+        assertEquals("标题里不该再留着 ~学习", "买牛奶", stored.title)
+        assertEquals("学习", listRepo.lists.first { it.id == stored.listId }.displayName)
+    }
+
+    @Test
+    fun addItemWithoutTokensKeepsTitleAsIs() = runTest {
+        val repo = FakeChecklistRepository()
+        val vm = makeVm(repo)
+
+        vm.addItem("买牛奶")
+
+        assertEquals("买牛奶", repo.items.single().title)
     }
 }

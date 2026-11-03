@@ -3,6 +3,7 @@ package com.example.personalassistant.feature.task.domain.model
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalTime
@@ -237,5 +238,91 @@ class QuickInputParserTest {
         val r = parse("x 明天")
         val due = java.time.Instant.ofEpochMilli(r.dueDate!!).atZone(zone)
         assertEquals(LocalTime.of(9, 0), due.toLocalTime())
+    }
+
+    // ===== Phase 18.3：标签 / 清单 / 区间 =====
+
+    @Test
+    fun `标签被解析出来并从标题里摘掉`() {
+        val r = parse("买牛奶 #Work")
+        assertEquals("买牛奶", r.title)
+        assertEquals(1, r.tagTokens.size)
+        assertEquals("Work", r.tagTokens.first().name)
+        assertEquals("#Work", r.tagTokens.first().label)
+    }
+
+    @Test
+    fun `清单被解析出来并从标题里摘掉`() {
+        val r = parse("买牛奶 ~学习")
+        assertEquals("买牛奶", r.title)
+        assertEquals("学习", r.listToken?.name)
+        assertEquals("~学习", r.listToken?.label)
+    }
+
+    @Test
+    fun `日期 标签 清单一起解析`() {
+        val r = parse("买牛奶 明天 #Work ~学习")
+        assertEquals("买牛奶", r.title)
+        assertEquals(monday.plusDays(1), dueDateOf("买牛奶 明天 #Work ~学习"))
+        assertEquals(3, r.tokens.size)
+        assertEquals("明天", r.dateToken?.label)
+        assertEquals("Work", r.tagTokens.single().name)
+        assertEquals("学习", r.listToken?.name)
+    }
+
+    @Test
+    fun `token 的区间能定位回原文`() {
+        val text = "买牛奶 明天 #Work ~学习"
+        val r = parse(text)
+        // 每段都要能原样从原文里切出来
+        r.tokens.forEach { token ->
+            assertEquals(token.label, text.substring(token.range.first, token.range.last + 1))
+        }
+    }
+
+    @Test
+    fun `点掉标签后剩下的文本不再有标签`() {
+        val text = "买牛奶 #Work"
+        val r = parse(text)
+        val rest = removeTokenRange(text, r.tagTokens.single().range)
+        assertEquals("买牛奶", rest)
+        assertTrue("重新解析后没有标签了", parse(rest).tagTokens.isEmpty())
+    }
+
+    @Test
+    fun `点掉日期后剩下的文本不再有日期`() {
+        val text = "买牛奶 明天 #Work ~学习"
+        val r = parse(text)
+        val rest = removeTokenRange(text, r.dateToken!!.range)
+        assertEquals("买牛奶 #Work ~学习", rest)
+        assertNull("重新解析后没有日期了", parse(rest).dueDate)
+    }
+
+    @Test
+    fun `井号不在词首不当作标签`() {
+        // 「C#」不是标签 —— # 前面必须是空白或开头
+        val r = parse("C# 编程")
+        assertTrue(r.tagTokens.isEmpty())
+        assertEquals("C# 编程", r.title)
+    }
+
+    @Test
+    fun `波浪号不在词首不当作清单`() {
+        val r = parse("a~b")
+        assertNull(r.listToken)
+        assertEquals("a~b", r.title)
+    }
+
+    @Test
+    fun `多个标签都能解析出来`() {
+        val r = parse("买牛奶 #Work #Urgent")
+        assertEquals(listOf("Work", "Urgent"), r.tagTokens.map { it.name })
+        assertEquals("买牛奶", r.title)
+    }
+
+    @Test
+    fun `标签后面的中文标点不收进名字里`() {
+        val r = parse("买牛奶 #Work，")
+        assertEquals("Work", r.tagTokens.single().name)
     }
 }
