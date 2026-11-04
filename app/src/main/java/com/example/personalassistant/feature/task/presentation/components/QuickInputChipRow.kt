@@ -83,16 +83,11 @@ private fun QuickInputChip(
     dueDate: Long?,
     onClick: () -> Unit,
 ) {
-    val containerColor = when (token.kind) {
-        QuickInputTokenKind.DATE -> MaterialTheme.colorScheme.primaryContainer
-        QuickInputTokenKind.TAG -> MaterialTheme.colorScheme.tertiaryContainer
-        QuickInputTokenKind.LIST -> MaterialTheme.colorScheme.secondaryContainer
-    }
-    val contentColor = when (token.kind) {
-        QuickInputTokenKind.DATE -> MaterialTheme.colorScheme.onPrimaryContainer
-        QuickInputTokenKind.TAG -> MaterialTheme.colorScheme.onTertiaryContainer
-        QuickInputTokenKind.LIST -> MaterialTheme.colorScheme.onSecondaryContainer
-    }
+    // Phase 26：三种 token 曾各用一种容器色（primary / tertiary / secondary），
+    // 快速添加行里几个 chip 挤在一起就成了一块块杂色。
+    // 现在统一成一套 —— 类型靠图标（DateRange / LocalOffer / List）区分，不靠颜色。
+    val containerColor = MaterialTheme.colorScheme.primaryContainer
+    val contentColor = MaterialTheme.colorScheme.onPrimaryContainer
     val icon = when (token.kind) {
         QuickInputTokenKind.DATE -> Icons.Rounded.DateRange
         QuickInputTokenKind.TAG -> Icons.Rounded.LocalOffer

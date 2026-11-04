@@ -106,14 +106,19 @@ fun ChecklistItemCard(
     // ===== Phase 24：滑动动作 =====
     // 左滑三个（改日期 / 移入清单 / 删除）、右滑两个（完成 / 置顶）。
     // 没传回调的动作就不加进去 —— 免得露出一个点了没反应的图标。
+    //
+    // Phase 26：颜色统一 —— 五个动作曾各用一种 Material3 容器色
+    // （secondary / tertiary / error / primary），露出来时整行五颜六色。
+    // 现在只有**删除**保留红色（唯一需要「危险」语义的动作），
+    // 其余一律用 primary 容器色 —— 图标不同就够区分了。
     val endActions: List<SwipeAction> = buildList {
         if (onSwipeChangeDate != null) {
             add(
                 SwipeAction(
                     icon = Icons.Rounded.Event,
                     label = "改日期",
-                    backgroundColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    backgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 ) { onSwipeChangeDate.invoke(item.id) },
             )
         }
@@ -122,8 +127,8 @@ fun ChecklistItemCard(
                 SwipeAction(
                     icon = Icons.Rounded.FolderOpen,
                     label = "移入清单",
-                    backgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    backgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 ) { onSwipeMoveToList.invoke(item.id) },
             )
         }
@@ -155,8 +160,8 @@ fun ChecklistItemCard(
                 SwipeAction(
                     icon = Icons.Rounded.PushPin,
                     label = if (item.isPinned) "取消置顶" else "置顶",
-                    backgroundColor = MaterialTheme.colorScheme.tertiary,
-                    contentColor = MaterialTheme.colorScheme.onTertiary,
+                    backgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 ) { onSwipeTogglePin.invoke(item.id, !item.isPinned) },
             )
         }

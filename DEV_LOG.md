@@ -3038,3 +3038,59 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 - **拖拽手感只过了编译级验证** —— 模拟器上长按拖一下才知道对不对味。
 - **「任务页拖拽」在矩阵视图（`TaskViewMode.MATRIX`）下不可用** —— 矩阵视图是独立布局，不走 LazyColumn。
 - **`daily_pools` 的备份 diff-by-id 坑未修** —— UNIQUE 是 `(accountId, date)` 但 diff 按 id 比对。跨模块且影响既有备份语义，需单独授权。`coin_pools` 已从设计上按 `accountId` 判等避开。
+
+---
+
+## 📓 Phase 26（清单页色块外露 BUG 修复 + 颜色统一）
+
+> 分支：`feature/phase-16-checklist-rebuild`｜Room 仍是 19｜验证门槛：`assembleDebug` + `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全绿
+
+### 一、BUG：滑动动作区整片透出来，把每一行切成彩色条纹
+
+**现象**：清单列表里每一行都被紫 / 粉 / 橙几块色条切碎，标题文字被色块盖掉一半。
+
+**根因**：`SwipeActionBox` 的两层结构里，**上层内容没有背景色**。
+
+```
+Box {                                        ← 底层：动作区（5 个彩色按钮）
+    Box(matchParentSize) { Row { 动作按钮 } }
+    Box(fillMaxWidth + offset) { content() }  ← 上层内容，背景透明 ← 元凶
+}
+```
+
+底层动作区是**常驻绘制**的（5 个按钮各占 64dp 宽），靠上层内容把它盖住。上层一透明，那 5 块颜色就整片透出来。
+
+清单页的两条放大因素：
+- 清单页的 `LazyColumn` 自身**没有背景**（透明，靠 Scaffold 底色）
+- `ChecklistItemRow` / `ChecklistItemCard` 也**没有背景**
+
+所以内容层必须自带不透明底色。
+
+**修法**：`SwipeActionBox` 加 `contentBackground: Color? = null`（null = `MaterialTheme.colorScheme.surface`），内容层 `.background(contentBackground ?: MaterialTheme.colorScheme.surface)`。
+
+### 二、颜色统一
+
+**滑动动作**：五个动作曾各用一种 Material3 容器色 —— 改日期 `secondaryContainer`、移入清单 `tertiaryContainer`、删除 `errorContainer`、完成 `primaryContainer`、置顶 `tertiary`。五种色相在同一条滑动条上排开，就是「杂乱」的来源。
+
+现在只剩一条语义：**删除 = 红**（`errorContainer`），其余四个动作统一 `primaryContainer` —— 靠图标区分就够了（Event / FolderOpen / Check / PushPin）。
+
+**快速添加行的 token chip**：日期 / 标签 / 清单三种 token 曾各用一种容器色（primary / tertiary / secondary），挤在一行里也是三块杂色。现在统一 `primaryContainer`，类型靠图标（DateRange / LocalOffer / List）区分。
+
+### 三、确认过、刻意保留的语义色
+
+这些不是「杂乱」，是有含义的，没动：
+
+| 位置 | 颜色 | 含义 |
+|---|---|---|
+| 删除按钮 / 删除确认 / 逾期日期 / 「拖延」计数 | `error` / `errorContainer` | 危险与逾期 |
+| 主操作、选中态、筛选高亮、Badge、进度条 | `primary` | 强调与主行动 |
+| 象限 P1/P2/P3 | `error` / `tertiary` / `primary` | 象限语义（任务页、矩阵视图） |
+| 优先级 | `appColors.priority*Ink` | 优先级语义 |
+| 分类色点 | 用户自定义分类色 | 用户自己的选择 |
+| 抽屉选中项 | `secondaryContainer` | 选中态 |
+
+### 四、已知边界
+
+- **内容层底色默认 `surface`** —— 如果清单列表所在容器的底色不是 `surface`，行与行之间会有一条色差。清单页当前列表区是 Scaffold 底色（`surface` 家族），看不出差别；若日后换容器底色，`SwipeActionBox` 的 `contentBackground` 参数就是给这用的。
+- **这一版没做整体的视觉重设计** —— 只修了「色块外露」这个硬伤 + 把散色收敛成语义色。清单项的排版节奏（行高、meta 区换行）上一轮已经调过。
+- **没做真机截图比对** —— 效果需要伙伴在设备上看一眼：滑动时动作区露出应该是一条浅蓝底 + 一个红色删除按钮，不再是五彩条纹。

@@ -1,4 +1,4 @@
-﻿# 多功能个人助手 App（Personal Assistant）
+# 多功能个人助手 App（Personal Assistant）
 
 > 纯离线 Android 个人助手 App，集 **课表 / 任务 / 记账 / 日历** 四大模块于一体，
 > 外加 **多账户 + 账户头像 + 跨账户转账**、**全局搜索**、**备份恢复** 与 **主题系统**
@@ -22,7 +22,7 @@
 | 包名 / 命名空间 | `com.example.personalassistant` |
 | 版本 | `versionCode 1` / `versionName 0.1.0`（首个 release：`v0.1.0`） |
 | 开发分支 | `Develop`（`feature/phase-16-checklist-rebuild` 进行中；`main` 为 release 分支） |
-| 累计 commit | 186 |
+| 累计 commit | 187 |
 | Room 数据库 | **v19**（19 张表，schema 快照 `app/schemas/…/1.json ~ 19.json` 全量保留） |
 | 性能优化 | 五批（索引补全 / 备份批量化 / 重组收敛 / 调度器归位 / WAL + baseline profile）—— 详见 [`DEV_LOG.md`](DEV_LOG.md) 末尾段 |
 | 测试 | **1152 JVM 单测** 全绿（116 个测试类，0 失败 / 0 错误）+ **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ JVM 数字是 Phase 25 收尾实测（`app/build/test-results/testDebugUnitTest` 下全量 XML 求和）；instrumented 数字仍是上一轮实测 |

@@ -77,6 +77,12 @@ fun SwipeActionBox(
     endActions: List<SwipeAction> = emptyList(),
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /**
+     * 内容层的底色。
+     *
+     * null = 用 `surface`。调用方要跟所在列表的底色一致时传自己的颜色。
+     */
+    contentBackground: Color? = null,
     content: @Composable () -> Unit,
 ) {
     val offsetX = remember { Animatable(0f) }
@@ -133,6 +139,10 @@ fun SwipeActionBox(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                // Phase 26：内容层必须**不透明** ——
+                // 底层是动作区（彩色按钮），上层透明的话那几块颜色会整片透出来，
+                // 把每一行切成紫/粉/橙的条纹。
+                .background(contentBackground ?: MaterialTheme.colorScheme.surface)
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .pointerInput(enabled, startSnapPx, endSnapPx) {
                     if (!enabled) return@pointerInput
