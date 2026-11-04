@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -27,6 +28,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,7 +46,10 @@ import com.example.personalassistant.R
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskDisplayPreferences
 import com.example.personalassistant.feature.task.domain.model.TaskQuadrant
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.personalassistant.feature.task.domain.model.TaskSort
+import com.example.personalassistant.feature.task.presentation.list.ReorderHitResolver
+import com.example.personalassistant.feature.task.presentation.list.ReorderableTaskListViewModel
 import com.example.personalassistant.feature.task.domain.model.TaskViewMode
 import com.example.personalassistant.feature.task.presentation.components.FilterEntryButton
 import com.example.personalassistant.feature.task.presentation.components.MatrixViewToggle
@@ -242,7 +252,83 @@ fun TasksTab(
             return@Column
         }
 
+        // ===== Phase 25：拖拽排序 =====
+        // 只有「自定义顺序」排序下才允许拖 —— 其它排序下拖完会被立刻重排回去。
+        val dragEnabled = state.sort == TaskSort.MANUAL_ORDER
+        val reorderVm: ReorderableTaskListViewModel = hiltViewModel(key = "reorder-tasks")
+        val lazyState = rememberLazyListState()
+        var draggingId by remember { mutableStateOf<Long?>(null) }
+        var dragOffsetY by remember { mutableFloatStateOf(0f) }
+        // 本次拖拽开始时的全局顺序（落库时用它判断「顺序到底变没变」）
+        var dragSnapshot by remember { mutableStateOf<List<Long>>(emptyList()) }
+
+        // DB 出了新值就重置本地顺序（拖拽中不重置，否则会把顺序弹回去）
+        LaunchedEffect(state.allActiveIds) {
+            reorderVm.resetLocalOrder(state.allActiveIds)
+        }
+
+        // 每个任务属于哪个象限 —— 跨象限不许换位
+        val quadrantOf = remember(state.groups.byQuadrant) {
+            val map = HashMap<Long, TaskQuadrant>()
+            state.groups.byQuadrant.forEach { (quadrant, list) ->
+                list.forEach { map[it.id] = quadrant }
+            }
+            map
+        }
+
+        // 某一行的高度（像素）—— 用来判断「拖过半行就换位」
+        val itemHeight: (Long) -> Int = { id ->
+            lazyState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == id }?.size ?: 0
+        }
+
+        val onDragStart: (Long) -> Unit = { id ->
+            draggingId = id
+            dragOffsetY = 0f
+            val current = reorderVm.localOrder.value
+            val snapshot = if (current.isEmpty()) state.allActiveIds else current
+            dragSnapshot = snapshot
+            reorderVm.beginDrag(snapshot)
+        }
+
+        // ⚠️ 显式 label `drag@` —— lambda 直接赋值给 val 时不能用隐式的 `return@onDrag`
+        val onDrag: (Float) -> Unit = drag@{ delta ->
+            dragOffsetY += delta
+            val order = reorderVm.localOrder.value
+            val dragged = draggingId ?: return@drag
+            val index = order.indexOf(dragged)
+            if (index < 0) return@drag
+            val myQuadrant = quadrantOf[dragged]
+
+            // 往下换位（目标必须同象限）
+            val nextId = order.getOrNull(index + 1)
+            if (nextId != null && quadrantOf[nextId] == myQuadrant) {
+                val height = itemHeight(nextId)
+                if (height > 0 && ReorderHitResolver.shouldSwap(dragOffsetY, height)) {
+                    reorderVm.moveLocal(index, index + 1)
+                    // 布局跟着上移了一行 —— 补偿掉视觉偏移，被拖的项才不会跳一下
+                    dragOffsetY -= height
+                }
+            }
+            // 往上换位
+            val prevId = order.getOrNull(index - 1)
+            if (prevId != null && quadrantOf[prevId] == myQuadrant) {
+                val height = itemHeight(prevId)
+                if (height > 0 && ReorderHitResolver.shouldSwap(dragOffsetY, height)) {
+                    reorderVm.moveLocal(index, index - 1)
+                    dragOffsetY += height
+                }
+            }
+        }
+
+        val onDragEnd: () -> Unit = {
+            // 落库写的是**全局下标** —— 别的象限里的项位置不会被挤掉
+            reorderVm.endDrag(dragSnapshot)
+            draggingId = null
+            dragOffsetY = 0f
+        }
+
         LazyColumn(
+            state = lazyState,
             modifier = Modifier.fillMaxSize(),
             // Phase 14：底部留出 FAB 的位置，末条任务不会被悬浮按钮压住
             contentPadding = PaddingValues(top = 8.dp, bottom = 96.dp),
@@ -262,7 +348,19 @@ fun TasksTab(
                                 )
                             }
                             items(tasks, key = { it.id }) { task ->
-                                TaskRow(task, onToggleComplete, onClickTask, { pendingDeleteTask = it })
+                                TaskRow(
+                                    task = task,
+                                    onToggleComplete = onToggleComplete,
+                                    onClickTask = onClickTask,
+                                    onDelete = { pendingDeleteTask = it },
+                                    // ===== Phase 25：拖拽排序 =====
+                                    dragEnabled = dragEnabled,
+                                    isDragging = draggingId == task.id,
+                                    dragOffsetY = if (draggingId == task.id) dragOffsetY else 0f,
+                                    onDragStart = { onDragStart(task.id) },
+                                    onDrag = onDrag,
+                                    onDragEnd = onDragEnd,
+                                )
                             }
                         }
                     }
@@ -274,7 +372,19 @@ fun TasksTab(
                     val tasks = state.groups.byQuadrant[target].orEmpty()
                     if (tasks.isNotEmpty()) {
                         items(tasks, key = { it.id }) { task ->
-                            TaskRow(task, onToggleComplete, onClickTask, { pendingDeleteTask = it })
+                            TaskRow(
+                                task = task,
+                                onToggleComplete = onToggleComplete,
+                                onClickTask = onClickTask,
+                                onDelete = { pendingDeleteTask = it },
+                                // ===== Phase 25：拖拽排序 =====
+                                dragEnabled = dragEnabled,
+                                isDragging = draggingId == task.id,
+                                dragOffsetY = if (draggingId == task.id) dragOffsetY else 0f,
+                                onDragStart = { onDragStart(task.id) },
+                                onDrag = onDrag,
+                                onDragEnd = onDragEnd,
+                            )
                         }
                     }
                 }
@@ -291,7 +401,14 @@ fun TasksTab(
                 }
                 if (state.showCompleted) {
                     items(state.groups.completed, key = { "completed-${it.id}" }) { task ->
-                        TaskRow(task, onToggleComplete, onClickTask, { pendingDeleteTask = it })
+                        TaskRow(
+                            task = task,
+                            onToggleComplete = onToggleComplete,
+                            onClickTask = onClickTask,
+                            onDelete = { pendingDeleteTask = it },
+                            // 已完成区不参与拖拽排序
+                            dragEnabled = false,
+                        )
                     }
                 }
             }
@@ -305,12 +422,25 @@ private fun TaskRow(
     onToggleComplete: (Long, Boolean) -> Unit,
     onClickTask: (Long) -> Unit,
     onDelete: (Task) -> Unit,
+    // ===== Phase 25：拖拽排序 =====
+    dragEnabled: Boolean = false,
+    isDragging: Boolean = false,
+    dragOffsetY: Float = 0f,
+    onDragStart: () -> Unit = {},
+    onDrag: (Float) -> Unit = {},
+    onDragEnd: () -> Unit = {},
 ) {
     TaskItem(
         task = task,
         onToggleComplete = { onToggleComplete(task.id, it) },
         onClick = { onClickTask(task.id) },
         onDelete = { onDelete(task) },
+        dragEnabled = dragEnabled,
+        isDragging = isDragging,
+        dragOffsetY = dragOffsetY,
+        onDragStart = onDragStart,
+        onDrag = onDrag,
+        onDragEnd = onDragEnd,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
     )
 }

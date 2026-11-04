@@ -10,6 +10,7 @@ import androidx.room.Update
 import com.example.personalassistant.feature.finance.domain.model.AccountBalanceSum
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
 import com.example.personalassistant.feature.finance.domain.model.GlobalMonthlySums
+import com.example.personalassistant.feature.finance.domain.util.CoinPoolSettlementCalculator
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -308,6 +309,152 @@ interface FinanceDao {
     /** 备份导入用（批量；冲突策略与 [insertCoinPool] 逐字一致） */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCoinPools(pools: List<CoinPoolEntity>): List<Long>
+
+    // ==================== 批次 D：零钱池日切结算 ====================
+
+    /** 某一天的结算流水（幂等判重用） */
+    @Query("SELECT * FROM coin_pool_settlements WHERE accountId = :accountId AND date = :date LIMIT 1")
+    suspend fun getCoinPoolSettlement(accountId: Long, date: Long): CoinPoolSettlementEntity?
+
+    /**
+     * 写一条结算流水
+     *
+     * ⚠️ 用 REPLACE：`(accountId, date)` 上有唯一索引，
+     * 同一天重复写入会**覆盖**旧行而不是报冲突 —— 这是幂等的第二道闸。
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCoinPoolSettlement(settlement: CoinPoolSettlementEntity): Long
+
+    /** 清空（备份导入用） */
+    @Query("DELETE FROM coin_pool_settlements")
+    suspend fun clearCoinPoolSettlements(): Int
+
+    /** 删账户时清本账户的结算流水（外键 CASCADE 也会兜底，双保险） */
+    @Query("DELETE FROM coin_pool_settlements WHERE accountId = :accountId")
+    suspend fun deleteCoinPoolSettlementsByAccount(accountId: Long): Int
+
+    /** 备份导出用（全账户；跨账户全量是备份语义，白名单内） */
+    @Query("SELECT * FROM coin_pool_settlements")
+    suspend fun getAllCoinPoolSettlements(): List<CoinPoolSettlementEntity>
+
+    /** 备份导入用（批量；冲突策略与 [insertCoinPoolSettlement] 逐字一致） */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCoinPoolSettlements(settlements: List<CoinPoolSettlementEntity>): List<Long>
+
+    /**
+     * 本账户最早的一条 `daily_pools` 日期（补算起点用）
+     *
+     * 没有记录 → null（说明这个账户从没参与过预算执行 → 没有可结算的日子）。
+     */
+    @Query("SELECT MIN(date) FROM daily_pools WHERE accountId = :accountId")
+    suspend fun getEarliestDailyPoolDate(accountId: Long): Long?
+
+    /**
+     * 批次 D：零钱池日切结算（事务内完成「落结算流水 + 累加余额 + 推进水位线」）
+     *
+     * ## 为什么必须在事务里
+     *
+     * 「写结算流水」和「改余额」必须同时成功：
+     * 只写了流水没改余额 → 下次重跑会再累加一次（余额翻倍）；
+     * 只改了余额没写流水 → 下次重跑会再累加一次（余额还是翻倍）。
+     * 所以整个结算包在一个 Room 事务里 —— 失败回滚，不留半对状态。
+     *
+     * ## 幂等的三道闸
+     *
+     * 1. **水位线**：`coin_pools.lastSettledDate` 记「已结算到哪天」，
+     *    下次从「水位线 + 1 天」开始 —— 同一天不会被处理第二次。
+     * 2. **结算流水唯一索引**：`(accountId, date)` 唯一 → 同一天只可能有一行结算额。
+     * 3. **本方法内的存在性检查**：已存在结算流水的那天直接 `continue`，不重复累加。
+     *
+     * ## 跳过规则
+     *
+     * 那天**没有** `daily_pools` 行 → 当天没参与预算执行（App 没开 / 没预算）→
+     * 不产生结转，直接跳过。但**水位线照样推进** —— 那些天永久跳过，不会反复扫。
+     *
+     * @param plans 待结算的日子（含日期与所属账期标签）；日期升序
+     * @param now 写入时间戳
+     */
+    @Transaction
+    suspend fun settleCoinPool(
+        accountId: Long,
+        plans: List<CoinPoolSettlementPlan>,
+        now: Long,
+    ): CoinPoolSettleOutcome {
+        if (plans.isEmpty()) {
+            // 没有待结算的日子 → 什么都不做（连零钱池行都不建，
+            // 免得「从没设过预算的账户」凭空多出一个 ¥0.00 的零钱池）
+            val existing = getCoinPool(accountId)
+            return CoinPoolSettleOutcome(
+                balance = existing?.balance ?: 0.0,
+                settledDays = 0,
+                settledAmount = 0.0,
+                lastSettledDate = existing?.lastSettledDate ?: 0L,
+            )
+        }
+
+        var balance = getCoinPool(accountId)?.balance ?: 0.0
+        var settledDays = 0
+        var settledAmount = 0.0
+        // 水位线推进到最后一天（不管那天有没有真的结算）
+        val watermark = plans.last().date
+
+        for (plan in plans) {
+            // 幂等闸 2 + 3：这一天已经结算过 → 跳过，绝不重复累加
+            if (getCoinPoolSettlement(accountId, plan.date) != null) continue
+            // 那天没有 daily_pools 行 → 没参与预算执行 → 不产生结转
+            val row = getDailyPool(accountId, plan.date) ?: continue
+
+            val amount = CoinPoolSettlementCalculator.settleAmount(
+                dailyBudget = row.dailyBudget,
+                totalIncomeToday = row.totalIncomeToday,
+                totalSpentToday = row.totalSpentToday,
+            )
+            insertCoinPoolSettlement(
+                CoinPoolSettlementEntity(
+                    id = 0L,
+                    accountId = accountId,
+                    date = plan.date,
+                    amount = amount,
+                    ym = plan.ym,
+                    createdAt = now,
+                ),
+            )
+            balance += amount
+            settledDays += 1
+            settledAmount += amount
+        }
+
+        // 落余额 + 推进水位线
+        val existing = getCoinPool(accountId)
+        if (existing == null) {
+            insertCoinPool(
+                CoinPoolEntity(
+                    id = 0L,
+                    accountId = accountId,
+                    balance = balance,
+                    note = null,
+                    createdAt = now,
+                    updatedAt = now,
+                    lastSettledDate = watermark,
+                ),
+            )
+        } else {
+            updateCoinPool(
+                existing.copy(
+                    balance = balance,
+                    updatedAt = now,
+                    lastSettledDate = watermark,
+                ),
+            )
+        }
+
+        return CoinPoolSettleOutcome(
+            balance = balance,
+            settledDays = settledDays,
+            settledAmount = settledAmount,
+            lastSettledDate = watermark,
+        )
+    }
 
     // ==================== Phase 8 Sub-step 4：备份导出快照 ====================
     // ⚠️ 以下 4 条是「跨账户全量」白名单：备份语义 = 导出所有账户的所有数据，

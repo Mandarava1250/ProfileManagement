@@ -18,6 +18,7 @@ import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.CoinPoolEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolSettlementEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
@@ -198,6 +199,11 @@ class BackupImporter @Inject constructor(
                     bundle.tableBytes["coin_pools"],
                     ListSerializer(CoinPoolEntity.serializer()),
                 ),
+                // 批次 D：零钱池结算流水（旧备份缺这个条目 → decodeTable 返回空列表）
+                coinPoolSettlements = decodeTable(
+                    bundle.tableBytes["coin_pool_settlements"],
+                    ListSerializer(CoinPoolSettlementEntity.serializer()),
+                ),
             )
         } catch (t: Throwable) {
             return BackupResult.Failure(
@@ -219,6 +225,9 @@ class BackupImporter @Inject constructor(
         // 批次 C：零钱池同理 —— 旧备份没有这个条目，
         // 无条件清空 = 把用户攒的零钱池余额删光，而备份里又没有数据可写回来。
         val hasCoinPools = bundle.tableBytes.containsKey("coin_pools")
+        // 批次 D：结算流水同理 —— 旧备份没有这个条目，
+        // 无条件清空 = 把用户攒的结算历史删光，而备份里又没有数据可写回来。
+        val hasCoinPoolSettlements = bundle.tableBytes.containsKey("coin_pool_settlements")
 
         // ===== Room 事务批量写入 =====
         return try {
@@ -266,6 +275,10 @@ class BackupImporter @Inject constructor(
                     // 批次 C：零钱池（叶子表，先清；外键 CASCADE 也会兜底）
                     if (hasCoinPools) {
                         clearTable { financeDao.clearCoinPools() }
+                    }
+                    // 批次 D：零钱池结算流水（叶子表，先清；外键 CASCADE 也会兜底）
+                    if (hasCoinPoolSettlements) {
+                        clearTable { financeDao.clearCoinPoolSettlements() }
                     }
                     if (hasHabitCheckIns) {
                         clearTable { habitCheckInDao.clearAll() }
@@ -359,6 +372,10 @@ class BackupImporter @Inject constructor(
                     // 批次 C：零钱池 —— accountId → user_profiles.id，父行已就位
                     if (payload.coinPools.isNotEmpty()) {
                         financeDao.insertCoinPools(payload.coinPools)
+                    }
+                    // 批次 D：零钱池结算流水 —— accountId → user_profiles.id，父行已就位
+                    if (payload.coinPoolSettlements.isNotEmpty()) {
+                        financeDao.insertCoinPoolSettlements(payload.coinPoolSettlements)
                     }
                 } finally {
                     database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
@@ -545,6 +562,16 @@ class BackupImporter @Inject constructor(
                     strategyByTable["coin_pools"]?.let { diff ->
                         if (shouldWrite(diff)) {
                             mergeCoinPools(financeDao, diff as TableDiff<CoinPoolEntity>)
+                        }
+                    }
+
+                    // ===== coin_pool_settlements =====
+                    strategyByTable["coin_pool_settlements"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeCoinPoolSettlements(
+                                financeDao,
+                                diff as TableDiff<CoinPoolSettlementEntity>,
+                            )
                         }
                     }
 
@@ -790,6 +817,36 @@ class BackupImporter @Inject constructor(
             ImportStrategy.OVERWRITE -> {
                 dao.insertCoinPools(diff.toAdd)
                 dao.insertCoinPools(diff.toOverwrite)
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    /**
+     * 批次 D：合并零钱池结算流水
+     *
+     * ## 为什么按 (accountId, date) 判等
+     *
+     * `coin_pool_settlements` 的 UNIQUE 是 (accountId, date)，那才是业务主键；
+     * `id` 只是自增列，备份导入 REPLACE 时会变。按 id 判等会让 diff 报告与实际写入对不上
+     * （详见 `BackupDiffCalculator` 里同名的注释）。
+     *
+     * ## REPLACE 的副作用
+     *
+     * `insertCoinPoolSettlements` 用 REPLACE：备份行的 id 与库里不同时，
+     * REPLACE 会删掉冲突行（accountId + date 相同）并插入新行
+     * → 结果仍是「一账户一天一条」✓，只是 `id` / `createdAt` 变成备份里的值
+     * —— 这是「恢复备份」的预期语义。
+     */
+    private suspend fun mergeCoinPoolSettlements(
+        dao: FinanceDao,
+        diff: TableDiff<CoinPoolSettlementEntity>,
+    ) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> dao.insertCoinPoolSettlements(diff.toAdd)
+            ImportStrategy.OVERWRITE -> {
+                dao.insertCoinPoolSettlements(diff.toAdd)
+                dao.insertCoinPoolSettlements(diff.toOverwrite)
             }
             ImportStrategy.SKIP -> Unit
         }

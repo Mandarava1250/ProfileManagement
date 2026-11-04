@@ -107,7 +107,7 @@ class BackupPreviewViewModelTest {
     // -----------------------------------------------------------------------
     @Test
     fun `load reaches Ready when validator returns Success`() = runTest(testDispatcher) {
-        validator.setSuccess() // 空 bundle → 18 个空 TableDiff
+        validator.setSuccess() // 空 bundle → 19 个空 TableDiff
         val vm = newVm()
 
         vm.load(uri = placeholderUri(), inputStreamProvider = fakeStreamProvider)
@@ -121,9 +121,10 @@ class BackupPreviewViewModelTest {
         val ready = state as BackupPreviewViewModel.PreviewUiState.Ready
         assertEquals(
             // Phase 23：加了 habits / habit_checkins 两张表，15 → 17；
-            // 批次 C：加了 coin_pools 一张表，17 → 18
-            "BackupPreview 应包含 18 张表的 perTable",
-            18,
+            // 批次 C：加了 coin_pools 一张表，17 → 18；
+            // 批次 D：加了 coin_pool_settlements 一张表，18 → 19
+            "BackupPreview 应包含 19 张表的 perTable",
+            19,
             ready.preview.perTable.size,
         )
         assertEquals(

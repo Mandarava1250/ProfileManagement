@@ -4,6 +4,7 @@ import com.example.personalassistant.feature.finance.domain.model.AccountBalance
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.domain.model.CoinPool
+import com.example.personalassistant.feature.finance.domain.model.CoinPoolSettlement
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.domain.model.GlobalMonthlySums
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
@@ -12,9 +13,12 @@ import com.example.personalassistant.feature.finance.domain.model.TransactionTyp
 import com.example.personalassistant.feature.finance.domain.repository.CategoryInUseException
 import com.example.personalassistant.feature.finance.domain.repository.FinanceRepository
 import com.example.personalassistant.feature.finance.domain.repository.TransferNotAllowedException
+import com.example.personalassistant.feature.finance.domain.util.CoinPoolSettlementCalculator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * Phase 7a：单元测试用的内存版 [FinanceRepository]。
@@ -333,45 +337,98 @@ class FakeFinanceRepository : FinanceRepository {
         }
     }
 
-    // ===== 批次 C：零钱池 =====
+    /**
+     * 批次 D：塞一条指定日期的 `daily_pools` 行（结算测试用）
+     *
+     * 真库里这行是 `refreshDailyPool` / `recordExpense` 写的；
+     * Fake 里 `refreshDailyPool` 只建今天那一行、额度恒为 0，测不出结算额，
+     * 所以给测试一个直接塞行的口子。
+     */
+    fun seedDailyPool(
+        date: Long,
+        dailyBudget: Double = 0.0,
+        totalIncomeToday: Double = 0.0,
+        totalSpentToday: Double = 0.0,
+    ) {
+        val id = nextPoolId++
+        dailyPoolsState.value = dailyPoolsState.value + DailyPool(
+            id = id,
+            date = date,
+            dailyBudget = dailyBudget,
+            remainingAmount = dailyBudget + totalIncomeToday - totalSpentToday,
+            totalSpentToday = totalSpentToday,
+            totalIncomeToday = totalIncomeToday,
+            carryOver = 0.0,
+            lastUpdated = System.currentTimeMillis(),
+        )
+    }
+
+    // ===== 批次 D：零钱池日切结算 =====
 
     override fun observeCoinPool(): Flow<CoinPool?> =
         coinPoolsState.map { list -> list.firstOrNull() }
 
-    override suspend fun adjustCoinPool(delta: Double, note: String?): Double {
+    /**
+     * Fake 版日切结算（结算到 [settledDate] 那一天，含）
+     *
+     * 语义与真库一致：
+     * - 结算额 = 当日净结余（`dailyBudget + totalIncomeToday - totalSpentToday`）
+     * - 那天没有 `daily_pools` 行 → 不产生结转（但水位线照样推进）
+     * - 已结算到这一天 → **不重复累加**（幂等）
+     */
+    override suspend fun settleCoinPool(settledDate: LocalDate): CoinPoolSettlement {
+        val zone = ZoneId.systemDefault()
+        val dayStart = settledDate.atStartOfDay(zone).toInstant().toEpochMilli()
         val existing = coinPoolsState.value.firstOrNull()
-        val newBalance = (existing?.balance ?: 0.0) + delta
-        writeCoinPool(newBalance, note, existing)
-        return newBalance
-    }
+        val balance = existing?.balance ?: 0.0
 
-    override suspend fun setCoinPoolBalance(balance: Double, note: String?): Double {
-        writeCoinPool(balance, note, coinPoolsState.value.firstOrNull())
-        return balance
-    }
+        // 幂等：水位线已经到这一天 → 不再重复累加
+        if ((existing?.lastSettledDate ?: 0L) >= dayStart) {
+            return CoinPoolSettlement(
+                settledDate = dayStart,
+                settledDays = 0,
+                settledAmount = 0.0,
+                balance = balance,
+            )
+        }
 
-    private fun writeCoinPool(balance: Double, note: String?, existing: CoinPool?) {
+        val row = dailyPoolsState.value.firstOrNull { it.date == dayStart }
+        val amount = if (row == null) {
+            0.0
+        } else {
+            CoinPoolSettlementCalculator.settleAmount(
+                dailyBudget = row.dailyBudget,
+                totalIncomeToday = row.totalIncomeToday,
+                totalSpentToday = row.totalSpentToday,
+            )
+        }
+        val newBalance = balance + amount
         val now = System.currentTimeMillis()
-        coinPoolsState.value = if (existing == null) {
-            listOf(
+        coinPoolsState.value = listOf(
+            if (existing == null) {
                 CoinPool(
                     id = nextCoinPoolId++,
                     accountId = CURRENT_ACCOUNT_ID,
-                    balance = balance,
-                    note = note,
+                    balance = newBalance,
+                    note = null,
                     createdAt = now,
                     updatedAt = now,
+                    lastSettledDate = dayStart,
                 )
-            )
-        } else {
-            listOf(
+            } else {
                 existing.copy(
-                    balance = balance,
-                    note = note ?: existing.note,
+                    balance = newBalance,
                     updatedAt = now,
+                    lastSettledDate = dayStart,
                 )
-            )
-        }
+            },
+        )
+        return CoinPoolSettlement(
+            settledDate = dayStart,
+            settledDays = if (row == null) 0 else 1,
+            settledAmount = amount,
+            balance = newBalance,
+        )
     }
 
     // ===== 测试辅助 =====

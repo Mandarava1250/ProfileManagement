@@ -18,7 +18,6 @@ import com.example.personalassistant.feature.finance.domain.model.BudgetSummaryT
 import com.example.personalassistant.feature.finance.domain.repository.FinanceDisplayRepository
 import com.example.personalassistant.feature.finance.domain.repository.FinanceRepository
 import com.example.personalassistant.feature.finance.domain.repository.TransferNotAllowedException
-import com.example.personalassistant.feature.finance.domain.usecase.AdjustCoinPoolUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ExportTransactionsUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.GetMonthlyReportUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ImportTransactionsUseCase
@@ -76,7 +75,6 @@ class FinanceViewModel @Inject constructor(
     private val refreshDailyPoolUseCase: RefreshDailyPoolUseCase,
     // ===== 批次 C =====
     private val financeDisplayRepository: FinanceDisplayRepository,
-    private val adjustCoinPool: AdjustCoinPoolUseCase,
     private val observeCoinPool: ObserveCoinPoolUseCase,
     // ===== Phase 5 =====
     observeAccountBalances: ObserveAccountBalancesUseCase,
@@ -314,19 +312,6 @@ class FinanceViewModel @Inject constructor(
                 financeDisplayRepository.setTodayRemainingMode(mode)
             }.onFailure {
                 _feedback.value = "切换口径失败：${it.message ?: "未知错误"}"
-            }
-        }
-    }
-
-    /** 存 / 取零钱池（[delta] 正 = 存，负 = 取；余额允许为负） */
-    fun adjustCoinPool(delta: Double, note: String?) {
-        viewModelScope.launch {
-            runCatching {
-                adjustCoinPool(delta = delta, note = note)
-            }.onSuccess {
-                _feedback.value = if (delta >= 0) "已存入零钱池" else "已从零钱池取出"
-            }.onFailure {
-                _feedback.value = "零钱池操作失败：${it.message ?: "未知错误"}"
             }
         }
     }

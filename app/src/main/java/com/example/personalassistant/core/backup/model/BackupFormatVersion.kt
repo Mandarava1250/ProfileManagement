@@ -36,7 +36,8 @@ import com.example.personalassistant.core.database.APP_DATABASE_VERSION
  *     ├── student_profile.json  ← Phase 16 新增（「我」档案，一账户一行）
  *     ├── habits.json           ← Phase 23 新增（习惯本体）
  *     ├── habit_checkins.json   ← Phase 23 新增（习惯打卡记录）
- *     └── coin_pools.json       ← 批次 C 新增（零钱池）
+ *     ├── coin_pools.json       ← 批次 C 新增（零钱池）
+ *     └── coin_pool_settlements.json ← 批次 D 新增（零钱池日切结算流水）
  * ```
  */
 object BackupFormatVersion {
@@ -66,6 +67,15 @@ object BackupFormatVersion {
      * 批次 C：**同样没升它**（仍是 2）。新增 `coin_pools` 属于「新增表」，
      * `BackupPayload.coinPools` 有 `= emptyList()` 默认值 → 旧备份解出空列表 →
      * 导入端按「备份里有没有这个条目」判断要不要清表（见 `BackupImporter`）。
+     *
+     * 批次 D：**同样没升它**（仍是 2）。新增 `coin_pool_settlements` 属于「新增表」，
+     * `BackupPayload.coinPoolSettlements` 有 `= emptyList()` 默认值 → 旧备份解出空列表 →
+     * 导入端按「备份里有没有这个条目」判断要不要清表（见 `BackupImporter`）。
+     *
+     * ⚠️ `coin_pools` 本次**新增了一列** `lastSettledDate`（有 `@Serializable` 默认值 0L）——
+     * 按规则「字段变更」本该升版，但这一列是**加列**不是**改语义**：
+     * 旧备份解出来是 0（= 从没结算过），语义与新装 App 一致，
+     * 所以不升版 —— 与记账 4 表当年新增 `accountId` 字段的处理一致。
      *
      * ⚠️ 什么时候才需要升 v3：删字段 / 改字段语义 / 改表集合的**既有**表结构时。
      */

@@ -134,6 +134,7 @@ internal fun CoinPoolEntity.toDomain(): CoinPool = CoinPool(
     note = note,
     createdAt = createdAt,
     updatedAt = updatedAt,
+    lastSettledDate = lastSettledDate,
 )
 
 internal fun CoinPool.toEntity(): CoinPoolEntity = CoinPoolEntity(
@@ -143,6 +144,7 @@ internal fun CoinPool.toEntity(): CoinPoolEntity = CoinPoolEntity(
     note = note,
     createdAt = createdAt,
     updatedAt = updatedAt,
+    lastSettledDate = lastSettledDate,
 )
 
 // ===== 统计投影 → domain =====

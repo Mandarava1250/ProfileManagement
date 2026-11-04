@@ -22,10 +22,10 @@
 | 包名 / 命名空间 | `com.example.personalassistant` |
 | 版本 | `versionCode 1` / `versionName 0.1.0`（首个 release：`v0.1.0`） |
 | 开发分支 | `Develop`（`feature/phase-16-checklist-rebuild` 进行中；`main` 为 release 分支） |
-| 累计 commit | 185 |
-| Room 数据库 | **v18**（18 张表，schema 快照 `app/schemas/…/1.json ~ 18.json` 全量保留） |
+| 累计 commit | 186 |
+| Room 数据库 | **v19**（19 张表，schema 快照 `app/schemas/…/1.json ~ 19.json` 全量保留） |
 | 性能优化 | 五批（索引补全 / 备份批量化 / 重组收敛 / 调度器归位 / WAL + baseline profile）—— 详见 [`DEV_LOG.md`](DEV_LOG.md) 末尾段 |
-| 测试 | **1138 JVM 单测** 全绿（116 个测试类，0 失败 / 0 错误）+ **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ JVM 数字是 Phase 24 收尾实测（`app/build/test-results/testDebugUnitTest` 下全量 XML 求和）；instrumented 数字仍是上一轮实测 |
+| 测试 | **1152 JVM 单测** 全绿（116 个测试类，0 失败 / 0 错误）+ **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ JVM 数字是 Phase 25 收尾实测（`app/build/test-results/testDebugUnitTest` 下全量 XML 求和）；instrumented 数字仍是上一轮实测 |
 | 台账 | 见 [`DEV_LOG.md`](DEV_LOG.md) —— 全部 Phase 的完成项 / 验证结果 / 踩坑笔记 |
 
 > ⚠️ 阶段 Phase 5（跨账户转账 + 账户余额 + 预算汇总）当前是 **🟨 进行中**：代码已 push、JVM 全绿，
@@ -294,7 +294,7 @@ ProfileManagement/
 
 ---
 
-## 🗃 数据库 Schema（Room v18，18 张表）
+## 🗃 数据库 Schema（Room v19，19 张表）
 
 | 表 | 说明 | 引入版本 |
 |----|------|---------|
@@ -313,7 +313,8 @@ ProfileManagement/
 | `user_profiles` | 账户（name、avatarUri、**initialBalance**；当前账户标记走 DataStore，不在表里） | v9 → **v10** |
 | `habits` | 习惯（name、iconKey、color、targetType 每日N次·每周N次、targetCount、unit、sortOrder、isArchived） | **v17**（Phase 23） |
 | `habit_checkins` | 习惯打卡（habitId → habits、date、count、note；一天一条 + 次数累加，支持补卡） | **v17**（Phase 23） |
-| `coin_pools` | **零钱池**（accountId unique → user_profiles、`balance` **可负数**、note；一个账户一个池，与「今日剩余」的预算口径是两回事） | **v18**（Phase 24） |
+| `coin_pools` | **零钱池**（accountId unique → user_profiles、`balance` **可负数**、note、lastSettledDate 水位线；一个账户一个池，与「今日剩余」的预算口径是两回事） | **v18**（Phase 24） |
+| `coin_pool_settlements` | **零钱池日切结算流水**（accountId + date 唯一、amount 可负、ym 账期；每日结算额落库冻结，重复结算靠它幂等） | **v19**（Phase 25） |
 
 > **v15 起 `sub_tasks` / `sub_task_tag_cross_ref` 已不存在** —— 清单项并入 `tasks`，
 > 层级改用 `tasks.parentTaskId` 自引用表达。

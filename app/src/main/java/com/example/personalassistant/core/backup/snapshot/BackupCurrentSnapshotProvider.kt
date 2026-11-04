@@ -94,6 +94,8 @@ open class BackupCurrentSnapshotProvider @Inject constructor(
             habitCheckIns = runCatching { database.habitCheckInDao().getAll() }.getOrDefault(emptyList()),
             // 批次 C：零钱池
             coinPools = runCatching { financeDao.getAllCoinPools() }.getOrDefault(emptyList()),
+            // 批次 D：零钱池日切结算流水
+            coinPoolSettlements = runCatching { financeDao.getAllCoinPoolSettlements() }.getOrDefault(emptyList()),
         )
     }
 

@@ -2972,3 +2972,69 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 - **`buildCalendarHabitItems` 是 repository 私有方法**，不是纯函数 → JVM 单测覆盖不到（要覆盖得先提到 `domain/util/`）。
 - **任务页拖拽组件仍是死代码** —— 本轮只把组件修对（18.3 / 18.4 修的是潜伏 BUG），没给任务页接线；接线还得给任务页加「手动排序」排序选项，属产品决策。
 - **零钱池没有存取流水明细** —— 只有余额 + 备注，没有历史表；需要的话得再加 `coin_pool_records`。
+
+---
+
+## 📓 Phase 25（清单 UI/UX + 零钱池改日切结算 + 任务页拖拽彻底完成）
+
+> 分支：`feature/phase-16-checklist-rebuild`｜Room 18 → **19**（新增 `coin_pool_settlements`）｜备份 18 表 → 19 表
+> 验证门槛：`assembleDebug` + `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全绿
+
+### 一、清单模块 UI/UX 优化 + 排版修复
+
+| 位置 | 改了什么 |
+|---|---|
+| `ChecklistBatchBar.kt` | 去掉 `IconButton(modifier = Modifier.padding(0.dp))` —— 它把按钮内边距清零了，6 个操作按钮的图标几乎贴在一起，触达区也没了余量。恢复默认内边距后触达区回到 48dp（外层 Row 有 `horizontalScroll`，窄屏横滑即可） |
+| `ChecklistItem.kt` | 卡片内边距 `12.dp / 4.dp` → `AppSpacing.sm / AppSpacing.xxs`；meta 区 `4.dp / 2.dp` → `AppSpacing.xxs`（同文件里硬编码与 token 混用，缩进看起来忽宽忽窄） |
+| `ChecklistItem.kt` | 标题 `maxLines = 2` → **1**（滴答的风格是单行标题；两行标题把行高撑开，列表扫视时节奏很乱。多出来的信息下沉到 meta 区，`FlowRow` 会自动换行） |
+| `ChecklistItem.kt` | 编辑按钮不存在时那个 `Spacer(4.dp)` 是一段莫名其妙的空隙 → 挪进 `if (onEdit != null)` 里 |
+
+**已确认不用做的**：空状态**已经有了**（`EmptyState` + `ic_empty_checklist` 插图 + 筛选 / 未筛选两套文案）；勾选框在多选模式下**宽度不变**（两个分支都是 `Checkbox`），不会跳动。
+
+### 二、零钱池改为「今日剩余日切自动存入」
+
+> 用户原话：零钱池是今日剩余在今日结束后自动存入零钱池，用户无法自行更改零钱池的余额。
+
+| 项 | 内容 |
+|---|---|
+| 拆手动入口 | 删 `AdjustCoinPoolUseCase` / `SetCoinPoolBalanceUseCase`（后者全项目零调用方）+ `FinanceRepository.adjustCoinPool` / `setCoinPoolBalance` + `CoinPoolCard` 的 8 处手动入口（存入 / 取出按钮、编辑弹窗、`dialogMode` 状态、随之失效的 import） |
+| 结算额口径 | **当日净结余**（伙伴拍板）：`daily_pools[D].dailyBudget + totalIncomeToday − totalSpentToday` |
+| 结算时机 | 挂在 `RefreshDailyPoolUseCase.invoke()` **内部** —— `DailyPoolRefreshWorker` 与 `PersonalAssistantApp` **一行都不用改** |
+| 结算到哪天 | **昨天**（D = 触发日 − 1 天）。00:01 时「今天」刚开始、当天的额度还没花；昨天的钱也还属于旧账期 |
+| 手动刷新 | `force()` **不结算** —— 手动重算当天额度不该篡改历史账 |
+| 幂等 | Room **19**（新表 `coin_pool_settlements`，UNIQUE `(accountId, date)`）+ `coin_pools.lastSettledDate` 水位线；同一天重复结算 → REPLACE 覆盖，**余额只在真正新增了结算记录时才 += amount** |
+| 补算 | 对 `(lastSettledDate, D]` 逐日补；某日无 `daily_pools` 行 → 跳过（那天系统没参与预算执行，不产生结转） |
+| 备份 | 18 表 → 19 表；`BackupDiffCalculator` 对新表**按 accountId + date 复合键判等**（不能照抄 `coin_pools` 的单键）；`FORMAT_VERSION` 保持 2 |
+
+**关键决策**
+
+21. **「今日剩余」改成派生值，不落库** —— 落库的派生值 = 用户改一次预算、历史那一行也跟着变，月底对账看到的全是假的。
+22. **`daily_pools` 保留，职责收窄为「预算执行快照」** —— 它记的是「10 月 5 日那天实际发了多少日预算」，那是**当时的决定**；而且结转依赖它（`carryOver = max(0, 昨日 pool.remainingAmount)`），删表 = 结转功能消失。
+23. **零钱池单独建表** —— `daily_pools` 是日切快照（每天一行），改成持续余额要动 `dailyBudget` / `carryOver` / `totalSpentToday` 一整套字段，历史数据也没法迁。
+24. **`coin_pools` 不依赖外键 CASCADE** —— `PRAGMA foreign_keys` 是**连接级**开关，备份导入 / 数据重置路径会临时关掉外键检查 → CASCADE 不触发 → 零钱池变孤儿行。所以删账户时显式删。
+
+### 三、任务页拖拽彻底完成
+
+上一轮（Phase 24）把数据层和组件修对了，这轮把**交互**接上：
+
+| 项 | 内容 |
+|---|---|
+| `TaskItem` | 加 `dragEnabled` / `isDragging` / `dragOffsetY` / `onDragStart` / `onDrag` / `onDragEnd`；外面套 `ChecklistItemGestureBox`（`enableLongPress = false` —— 任务页没有多选）；被拖项加阴影 + 跟手偏移 |
+| `TaskRow` | 加同样参数并透传 |
+| `TasksTab` | `hiltViewModel(key = "reorder-tasks")` + `rememberLazyListState()`；`draggingId` / `dragOffsetY` / `dragSnapshot` 状态；`LaunchedEffect(state.allActiveIds) { reorderVm.resetLocalOrder(...) }`；命中判定用 `ReorderHitResolver.shouldSwap`（半行高换位）+ `dragOffsetY` 补偿布局移位 |
+| 象限边界 | 只能在**当前象限内**换位 —— 候选目标必须与被拖项同象限（`quadrantOf` 映射） |
+| 落库 | `endDrag(dragSnapshot)` 写**全局下标** → `manualOrder = 0..N-1` 全局唯一，别的象限里的项位置不被挤掉 |
+| 启用条件 | 只有 `sort == TaskSort.MANUAL_ORDER` 时才允许拖 —— 其它排序下拖完会被立刻重排回去 |
+| 已完成区 | 不参与拖拽 |
+
+**关键决策**
+
+25. **任务页不改造 `ReorderableTaskList` 组件** —— 它是「每个象限调用一次」的设计，任务页是「一个 LazyColumn 里多象限」。清单页那套（直接在 LazyColumn 里自己算命中 + 用 `ReorderableTaskListViewModel` 管顺序）已经跑通了，照抄更稳。组件保持修对的状态，等真有「独立 LazyColumn」场景再用。
+26. **象限边界靠「全局序列里的相邻项是否同象限」判定** —— 不用另建分组索引：全局顺序是按象限拍平的，同象限的项在序列里本来就挨着。
+
+### 七、已知边界
+
+- **Room v19 迁移没有真机验证** —— `MigrationTestHelper` 需要设备；DDL 与 `19.json` 的一致性是静态比对 + JVM 断言。
+- **拖拽手感只过了编译级验证** —— 模拟器上长按拖一下才知道对不对味。
+- **「任务页拖拽」在矩阵视图（`TaskViewMode.MATRIX`）下不可用** —— 矩阵视图是独立布局，不走 LazyColumn。
+- **`daily_pools` 的备份 diff-by-id 坑未修** —— UNIQUE 是 `(accountId, date)` 但 diff 按 id 比对。跨模块且影响既有备份语义，需单独授权。`coin_pools` 已从设计上按 `accountId` 判等避开。

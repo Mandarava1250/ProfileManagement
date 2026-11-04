@@ -6,6 +6,7 @@ import com.example.personalassistant.feature.calendar.data.local.EventCategoryEn
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.CoinPoolEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolSettlementEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
@@ -58,4 +59,6 @@ data class CurrentDbSnapshot(
     val habitCheckIns: List<HabitCheckInEntity> = emptyList(),
     // 批次 C：零钱池
     val coinPools: List<CoinPoolEntity> = emptyList(),
+    // 批次 D：零钱池日切结算流水
+    val coinPoolSettlements: List<CoinPoolSettlementEntity> = emptyList(),
 )

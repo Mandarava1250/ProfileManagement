@@ -128,6 +128,17 @@ fun DailyPoolCard(
                 trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f),
             )
         }
+
+        // 批次 D：点明本卡与「零钱池」卡的关系
+        //
+        // 「今日剩余」是**今天**还能花多少（整天在变）；
+        // 「零钱池」是历次日终结转累加下来的钱（每天只在日终变一次）。
+        // 两张卡都是「¥」，不点明的话用户会以为零钱池 = 今日剩余。
+        Text(
+            text = "日终自动存入零钱池",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.55f),
+        )
     }
 }
 

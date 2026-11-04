@@ -5,6 +5,7 @@ import com.example.personalassistant.feature.calendar.data.local.EventCategoryEn
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
 import com.example.personalassistant.feature.finance.data.local.CoinPoolEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolSettlementEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
@@ -83,6 +84,10 @@ data class BackupPayload(
     // 默认 emptyList()：旧备份里根本没有这个条目 → 解出空列表 →
     // 导入端据此判断「备份没带这张表」→ 不清空用户现有的零钱池。
     val coinPools: List<CoinPoolEntity> = emptyList(),
+    // 批次 D：零钱池日切结算流水（accountId → user_profiles.id）
+    // 默认 emptyList()：旧备份里根本没有这个条目 → 解出空列表 →
+    // 导入端据此判断「备份没带这张表」→ 不清空用户现有的结算流水。
+    val coinPoolSettlements: List<CoinPoolSettlementEntity> = emptyList(),
 ) {
     /**
      * 总记录数（用于 manifest 报告 / 调试 / UI 展示）
@@ -92,5 +97,5 @@ data class BackupPayload(
                 taskLists.size + tasks.size + taskTagCrossRefs.size +
                 events.size + eventCategories.size + categories.size + monthlyBudgets.size +
                 dailyPools.size + transactions.size + holidays.size + studentProfile.size +
-                habits.size + habitCheckIns.size + coinPools.size
+                habits.size + habitCheckIns.size + coinPools.size + coinPoolSettlements.size
 }

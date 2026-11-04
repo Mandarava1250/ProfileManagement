@@ -2,6 +2,7 @@ package com.example.personalassistant.feature.finance.domain.repository
 
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.domain.model.CoinPool
+import com.example.personalassistant.feature.finance.domain.model.CoinPoolSettlement
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.domain.model.AccountBalanceSum
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
@@ -10,6 +11,7 @@ import com.example.personalassistant.feature.finance.domain.model.Transaction
 import com.example.personalassistant.feature.finance.domain.model.TransactionType
 import com.example.personalassistant.feature.finance.domain.model.GlobalMonthlySums
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
 
 /**
  * Phase 7a：记账模块领域仓库接口
@@ -235,31 +237,24 @@ interface FinanceRepository {
      */
     suspend fun refreshDailyPool(today: Long)
 
-    // ===== 批次 C：零钱池 =====
+    // ===== 批次 D：零钱池 =====
 
     /**
      * 本账户的零钱池（null = 该账户还没建过）
      *
      * 与 [observeTodayPool] 是两回事 —— 那个是系统按预算每天发的额度快照，
-     * 这个是用户手动攒的一笔钱。
+     * 这个是**历次日切结算累加**出来的余额。
      */
     fun observeCoinPool(): Flow<CoinPool?>
 
     /**
-     * 存 / 取零钱池
+     * 批次 D：零钱池日切结算（补算 + 落结算流水 + 累加余额 + 推进水位线）
      *
-     * @param delta 变动额（正 = 存入，负 = 取出）
-     * @param note 备注（可空；null = 沿用旧备注）
-     * @return 操作后的余额
+     * @param settledDate 结算到哪一天（**含**）。通常是「昨天」——
+     *   00:01 触发时「今天」刚开始、还没过完，结算的应该是昨天。
+     * @return 本次结算的结果（结算了几天、累加了多少、结算后余额多少）
      */
-    suspend fun adjustCoinPool(delta: Double, note: String? = null): Double
-
-    /**
-     * 直接设置零钱池余额（用户发现记错了，纠正用）
-     *
-     * @return 设置后的余额
-     */
-    suspend fun setCoinPoolBalance(balance: Double, note: String? = null): Double
+    suspend fun settleCoinPool(settledDate: LocalDate): CoinPoolSettlement
 }
 
 /** 分类仍有交易引用，无法删除 */

@@ -9,6 +9,7 @@ import com.example.personalassistant.core.holiday.model.HolidayEntity
 import com.example.personalassistant.feature.calendar.data.local.EventCategoryEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolSettlementEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
@@ -123,11 +124,12 @@ class BackupDiffCalculator @Inject constructor() {
         val crossRefCurrentKeys: Set<CrossRefKey> = current.taskTagCrossRefs
             .map { CrossRefKey(it.taskId, it.tagId) }
             .toSet()
-        val crossRefDiff: TableDiff<TaskTagCrossRef> = diffByCompositeKey<TaskTagCrossRef>(
+        val crossRefDiff: TableDiff<TaskTagCrossRef> = diffByCompositeKey<TaskTagCrossRef, CrossRefKey>(
             tableName = "task_tag_cross_ref",
             backup = payload.taskTagCrossRefs,
             currentKeys = crossRefCurrentKeys,
             keyOf = { CrossRefKey(it.taskId, it.tagId) },
+            sampleIdOf = { it.taskId },
         )
         val eventsDiff = diffById(
             tableName = "events",
@@ -205,6 +207,22 @@ class BackupDiffCalculator @Inject constructor() {
             idOf = { it.accountId },
         )
 
+        // 批次 D：零钱池结算流水
+        //
+        // ⚠️ 按 **(accountId, date) 复合键**判等，不按 id ——
+        // `coin_pool_settlements` 的 UNIQUE 是 (accountId, date)，那才是业务主键；
+        // `id` 只是自增列，备份导入 REPLACE 时会变。按 id 判等会让 diff 报告与实际写入对不上。
+        val settlementCurrentKeys: Set<SettlementKey> = current.coinPoolSettlements
+            .map { SettlementKey(it.accountId, it.date) }
+            .toSet()
+        val coinPoolSettlementsDiff = diffByCompositeKey<CoinPoolSettlementEntity, SettlementKey>(
+            tableName = "coin_pool_settlements",
+            backup = payload.coinPoolSettlements,
+            currentKeys = settlementCurrentKeys,
+            keyOf = { SettlementKey(it.accountId, it.date) },
+            sampleIdOf = { it.accountId },
+        )
+
         val rawPerTable = listOf(
             userProfilesDiff,
             semestersDiff,
@@ -224,6 +242,7 @@ class BackupDiffCalculator @Inject constructor() {
             habitsDiff,
             habitCheckInsDiff,
             coinPoolsDiff,
+            coinPoolSettlementsDiff,
         )
 
         // ===== 2. 外键级联 SKIP 推断 =====
@@ -278,13 +297,24 @@ class BackupDiffCalculator @Inject constructor() {
         )
     }
 
-    // ---------- 单表差异：按联合主键 (taskId, tagId) ----------
+    // ---------- 单表差异：按联合主键 ----------
 
-    private fun <T> diffByCompositeKey(
+    /**
+     * 联合主键差异
+     *
+     * 两张表用联合主键：
+     * - `task_tag_cross_ref`：(taskId, tagId)
+     * - `coin_pool_settlements`：(accountId, date)
+     *
+     * @param sampleIdOf 采样 id（**仅展示用**，无业务含义）——
+     *   联合主键没有单 id，这里取键里的第一个分量占位。
+     */
+    private fun <T, K> diffByCompositeKey(
         tableName: String,
         backup: List<T>,
-        currentKeys: Set<CrossRefKey>,
-        keyOf: (T) -> CrossRefKey,
+        currentKeys: Set<K>,
+        keyOf: (T) -> K,
+        sampleIdOf: (T) -> Long,
     ): TableDiff<T> {
         val toAdd = mutableListOf<T>()
         val toOverwrite = mutableListOf<T>()
@@ -292,9 +322,8 @@ class BackupDiffCalculator @Inject constructor() {
             val key = keyOf(row)
             if (currentKeys.contains(key)) toOverwrite += row else toAdd += row
         }
-        // 联合主键没有单 id，sampleRowIds 用 taskId 占位（仅展示用，无业务含义）
-        val sampleIds = (toAdd.take(SAMPLE_LIMIT).map { keyOf(it).taskId } +
-                toOverwrite.take(SAMPLE_LIMIT).map { keyOf(it).taskId })
+        val sampleIds = (toAdd.take(SAMPLE_LIMIT).map(sampleIdOf) +
+                toOverwrite.take(SAMPLE_LIMIT).map(sampleIdOf))
             .distinct()
             .take(SAMPLE_LIMIT)
         return TableDiff(
@@ -311,6 +340,14 @@ class BackupDiffCalculator @Inject constructor() {
      * 联合主键包装（避免 Tuple/Pair 装箱开销）
      */
     private data class CrossRefKey(val taskId: Long, val tagId: Long)
+
+    /**
+     * 批次 D：零钱池结算流水的联合主键 (accountId, date)
+     *
+     * 一账户一天只可能有一条结算流水 —— 这条唯一索引就是幂等的最后一道闸，
+     * 所以 diff 必须按它判等，不能按自增 id（备份导入 REPLACE 时 id 会变）。
+     */
+    private data class SettlementKey(val accountId: Long, val date: Long)
 
     // ---------- 外键级联 SKIP ----------
 
@@ -399,6 +436,8 @@ class BackupDiffCalculator @Inject constructor() {
             "habits" to emptySet(),                              // 习惯本体自身无父表
             "habit_checkins" to setOf("habits"),                 // habit_checkins.habitId → habits.id
             "coin_pools" to setOf("user_profiles"),               // 批次 C：coin_pools.accountId → user_profiles.id（真外键）
+            // 批次 D：coin_pool_settlements.accountId → user_profiles.id（真外键）
+            "coin_pool_settlements" to setOf("user_profiles"),
         )
     }
 }

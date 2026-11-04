@@ -78,6 +78,8 @@ class BackupSerializer @Inject constructor(
             habitCheckIns = database.habitCheckInDao().getAll(),
             // 批次 C：零钱池
             coinPools = financeDao.getAllCoinPools(),
+            // 批次 D：零钱池日切结算流水
+            coinPoolSettlements = financeDao.getAllCoinPoolSettlements(),
         )
         BackupResult.Success(payload)
     } catch (t: Throwable) {

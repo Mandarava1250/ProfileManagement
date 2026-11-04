@@ -52,7 +52,7 @@ class BackupExporterTest {
     }
 
     @Test
-    fun `export 18 张表 JSON 都写入`() {
+    fun `export 19 张表 JSON 都写入`() {
         val exporter = BackupExporter(json())
         val outputStream = ByteArrayOutputStream()
         val result = exporter.export(BackupPayload(), outputStream)
@@ -69,15 +69,17 @@ class BackupExporterTest {
             }
         }
 
-        // 验证 18 张表的 JSON 都存在
+        // 验证 19 张表的 JSON 都存在
         // （Phase 16：-sub_tasks +task_lists +event_categories +student_profile；
         //   Phase 23：+habits +habit_checkins；
-        //   批次 C：+coin_pools）
+        //   批次 C：+coin_pools；
+        //   批次 D：+coin_pool_settlements）
         val expectedTables = listOf(
             "user_profiles", "semesters", "courses", "tags", "task_lists", "tasks",
             "task_tag_cross_ref", "events", "event_categories", "categories",
             "monthly_budgets", "daily_pools", "transactions", "holidays",
             "student_profile", "habits", "habit_checkins", "coin_pools",
+            "coin_pool_settlements",
         )
         expectedTables.forEach { table ->
             assertTrue("包含 data/$table.json", entries.containsKey("data/$table.json"))

@@ -79,7 +79,11 @@ private fun BatchAction(
     onClick: () -> Unit,
     tint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
-    IconButton(onClick = onClick, modifier = Modifier.padding(0.dp)) {
+    // Phase 25：去掉 `Modifier.padding(0.dp)`。
+    // 它把 IconButton 自带的内边距清零了 —— 视觉上 6 个按钮的图标会贴在一起，
+    // 触达区也没了余量。恢复默认内边距后触达区回到 48dp。
+    // 窄屏放不下时外层 Row 有 horizontalScroll，横滑即可。
+    IconButton(onClick = onClick) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,

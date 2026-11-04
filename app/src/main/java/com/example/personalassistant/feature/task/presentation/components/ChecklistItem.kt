@@ -140,7 +140,9 @@ internal fun ChecklistItemRow(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+            // Phase 25：换成 AppSpacing token —— 页面其它区块走的是这套刻度，
+            // 这里硬编码 12.dp / 4.dp 会让卡片内边距跟区块间距对不上。
+            .padding(horizontal = AppSpacing.sm, vertical = AppSpacing.xxs),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (selectionMode) {
@@ -174,7 +176,9 @@ internal fun ChecklistItemRow(
                         } else {
                             MaterialTheme.colorScheme.onSurface
                         },
-                        maxLines = 2,
+                        // Phase 25：标题单行（滴答的风格）。两行标题会把行高撑开，
+                        // 列表扫视时节奏很乱；多出来的信息下沉到下面的 meta 区（FlowRow 会自动换行）。
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -198,8 +202,10 @@ internal fun ChecklistItemRow(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    // Phase 25：间隔只在「编辑」按钮真的存在时才有 ——
+                    // 没有编辑按钮时这个 Spacer 是一段莫名其妙的空隙。
+                    Spacer(Modifier.width(AppSpacing.xxs))
                 }
-                Spacer(Modifier.width(4.dp))
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Rounded.Delete,
@@ -232,7 +238,9 @@ private fun ChecklistMetaRow(
         amount != null || tags.isNotEmpty()
     if (!hasMeta) return
 
-    Column(modifier = Modifier.padding(start = 4.dp, top = 2.dp)) {
+    // Phase 25：4.dp / 2.dp 换成 AppSpacing token —— 跟同一文件里
+    // 紧邻的 AppSpacing.xxs 混用会让 meta 区的缩进看起来忽宽忽窄。
+    Column(modifier = Modifier.padding(start = AppSpacing.xxs, top = AppSpacing.xxs)) {
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs),
             verticalArrangement = Arrangement.spacedBy(AppSpacing.xxs),

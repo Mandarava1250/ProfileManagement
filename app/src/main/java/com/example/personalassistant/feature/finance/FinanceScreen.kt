@@ -199,7 +199,6 @@ fun FinanceScreen(
                     }
                 )
             },
-            onAdjustCoinPool = { delta, note -> viewModel.adjustCoinPool(delta, note) },
             onTransactionClick = { tx ->
                 editingTx = tx
                 showSheet = true
@@ -300,7 +299,6 @@ private fun FinanceContent(
     todayRemaining: TodayRemainingResult,
     coinPool: CoinPool?,
     onToggleRemainingMode: () -> Unit,
-    onAdjustCoinPool: (Double, String?) -> Unit,
 ) {
     if (uiState.isLoading) {
         Box(
@@ -351,11 +349,10 @@ private fun FinanceContent(
             )
         }
 
-        // 批次 C：零钱池卡片（与「今日剩余」平级，标题 / 副标题 / 图标都区分开）
+        // 批次 D：零钱池卡片（只读；与「今日剩余」平级，标题 / 副标题 / 图标都区分开）
         item {
             CoinPoolCard(
                 pool = coinPool,
-                onAdjust = onAdjustCoinPool,
                 modifier = Modifier.padding(vertical = 4.dp),
             )
         }
