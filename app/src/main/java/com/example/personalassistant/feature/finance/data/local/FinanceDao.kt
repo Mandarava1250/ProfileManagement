@@ -228,6 +228,87 @@ interface FinanceDao {
     )
     suspend fun addIncomeToPool(accountId: Long, date: Long, amount: Double, now: Long)
 
+    /**
+     * 批次 C：更新已存在当日零钱池的「额度」三件套
+     *
+     * ## 为什么必须有这条（原来只有 insertDailyPool 的 REPLACE）
+     *
+     * REPLACE 会把**整行**换掉 —— `totalSpentToday` / `totalIncomeToday` 被重置成 0，
+     * 「今天已经花掉的钱」凭空消失，池子余额会回血。
+     * 所以更新必须**只动** dailyBudget / remainingAmount / carryOver 三个字段。
+     *
+     * ## 不变量
+     *
+     * ```
+     * remainingAmount = dailyBudget + carryOver + totalIncomeToday - totalSpentToday
+     * ```
+     *
+     * 这条不变量跟 [deductFromPool] / [addIncomeToPool] 的写法对齐
+     * （那两个方法只动 remaining / totalSpent / totalIncome 三个量），
+     * 所以「改了预算」和「记了一笔」两条路径不会打架。
+     */
+    @Query(
+        """
+        UPDATE daily_pools
+        SET dailyBudget = :dailyBudget,
+            remainingAmount = :remainingAmount,
+            carryOver = :carryOver,
+            lastUpdated = :now
+        WHERE accountId = :accountId AND date = :date
+        """
+    )
+    suspend fun updateDailyPoolBudget(
+        accountId: Long,
+        date: Long,
+        dailyBudget: Double,
+        remainingAmount: Double,
+        carryOver: Double,
+        now: Long,
+    )
+
+    // ==================== 批次 C：零钱池 ====================
+
+    /**
+     * 本账户的零钱池（一账户一行；null = 还没建过）
+     *
+     * ⚠️ 刻意**不**按 `id` 查 —— 业务主键是 accountId，
+     * 按 id 查会漏掉「id 变了但 accountId 没变」的行（备份导入 REPLACE 会换掉 id，见 `BackupImporter`）。
+     */
+    @Query("SELECT * FROM coin_pools WHERE accountId = :accountId LIMIT 1")
+    fun observeCoinPool(accountId: Long): Flow<CoinPoolEntity?>
+
+    @Query("SELECT * FROM coin_pools WHERE accountId = :accountId LIMIT 1")
+    suspend fun getCoinPool(accountId: Long): CoinPoolEntity?
+
+    /**
+     * 新建零钱池
+     *
+     * ⚠️ REPLACE + `UNIQUE(accountId)`：同一账户重复插入会**替换**旧行（不是新增），
+     * 这正是 upsert 语义；但调用方仍应先查再决定 insert / update，
+     * 因为 REPLACE 会把 `id` 和 `createdAt` 一起换掉（历史创建时间会丢）。
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCoinPool(pool: CoinPoolEntity)
+
+    @Update
+    suspend fun updateCoinPool(pool: CoinPoolEntity)
+
+    /** 清空（备份导入用） */
+    @Query("DELETE FROM coin_pools")
+    suspend fun clearCoinPools(): Int
+
+    /** 删账户时清本账户的零钱池（外键 CASCADE 也会兜底，双保险） */
+    @Query("DELETE FROM coin_pools WHERE accountId = :accountId")
+    suspend fun deleteCoinPoolsByAccount(accountId: Long): Int
+
+    /** 备份导出用（全账户；跨账户全量是备份语义，白名单内） */
+    @Query("SELECT * FROM coin_pools")
+    suspend fun getAllCoinPools(): List<CoinPoolEntity>
+
+    /** 备份导入用（批量；冲突策略与 [insertCoinPool] 逐字一致） */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCoinPools(pools: List<CoinPoolEntity>): List<Long>
+
     // ==================== Phase 8 Sub-step 4：备份导出快照 ====================
     // ⚠️ 以下 4 条是「跨账户全量」白名单：备份语义 = 导出所有账户的所有数据，
     //    所以**故意不带** accountId 过滤。新增快照方法时不要照抄上面的写法。

@@ -154,6 +154,20 @@ interface TaskRepository {
      */
     suspend fun reorderTasks(orderedIds: List<Long>)
 
+    /**
+     * Phase 24：置顶 / 取消置顶。
+     *
+     * ⚠️ 只写这一列还不够 —— 排序里也得有 `isPinned`（见
+     * [com.example.personalassistant.feature.task.data.local.TaskDao] 与
+     * [com.example.personalassistant.feature.task.domain.model.TaskSort]），
+     * 否则置顶了界面也不会动。
+     *
+     * ⚠️ 默认实现是空操作：绝大多数调用方（和绝大多数测试替身）不关心置顶。
+     * [com.example.personalassistant.feature.task.data.repository.TaskRepositoryImpl]
+     * 有真实实现。
+     */
+    suspend fun setPinned(id: Long, pinned: Boolean) = Unit
+
     // ===== Phase 8 Sub-step 3 全局搜索 =====
 
     /**

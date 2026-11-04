@@ -40,6 +40,9 @@ data class BackupManifest(
          * - 加 `habits`：习惯本体
          * - 加 `habit_checkins`：习惯打卡记录（`habitId` → `habits.id`，CASCADE）
          *
+         * 批次 C：**18 张表**（+ `coin_pools`）
+         * - 加 `coin_pools`：零钱池（`accountId` → `user_profiles.id`，**真外键** CASCADE）
+         *
          * 排序规则：**父表在前、子表在后** —— 本顺序同时决定三件事：
          * ① **导出顺序** —— [com.example.personalassistant.core.backup.exporter.BackupExporter]
          *    按本顺序逐张写 ZIP，父表先写，读回来时顺序才对得上；
@@ -52,7 +55,7 @@ data class BackupManifest(
          * - `task_lists` 排在 `tasks` 前 —— `tasks.listId` → `task_lists.id`（CASCADE）
          * - `task_tag_cross_ref` 排在 `tasks` / `tags` 后 —— (taskId, tagId) 联合外键
          * - `habits` 排在 `habit_checkins` 前 —— `habit_checkins.habitId` → `habits.id`（CASCADE）
-         * - `student_profile` / `habits` / `habit_checkins` 都是叶子表，排在最后
+         * - `student_profile` / `habits` / `habit_checkins` / `coin_pools` 都是叶子表，排在最后
          */
         val DEFAULT_TABLES: List<String> = listOf(
             // Phase 3：账户表排最前 —— 记账 4 表的 accountId 指向它，必须先就位
@@ -79,6 +82,10 @@ data class BackupManifest(
             "habits",
             // Phase 23：习惯打卡记录 —— 叶子表，排最后
             "habit_checkins",
+            // 批次 C：零钱池 —— accountId → user_profiles.id（真外键），
+            // 必须排在 user_profiles 之后。放在最后：它是叶子表，
+            // 不被任何表引用，插在哪儿都不影响外键顺序。
+            "coin_pools",
         )
     }
 }

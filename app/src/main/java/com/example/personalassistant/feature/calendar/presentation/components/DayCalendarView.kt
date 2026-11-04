@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Assignment
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +42,7 @@ import com.example.personalassistant.core.ui.components.AppCard
 import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.feature.calendar.domain.model.CalendarConflictEntry
+import com.example.personalassistant.feature.calendar.domain.model.CalendarHabitItem
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.presentation.TodayOverview
@@ -78,6 +80,8 @@ fun DayCalendarView(
     onTaskTimeRangeClick: (Task) -> Unit = {},
     // Phase 20.5：清单项 ↔ 课程 的冲突
     conflicts: List<CalendarConflictEntry> = emptyList(),
+    // Phase 24B：习惯打卡的 + / −（habitId, delta）
+    onHabitCheckIn: (Long, Int) -> Unit = { _, _ -> },
 ) {
     val zone = remember { ZoneId.systemDefault() }
     val title = remember(date) {
@@ -94,6 +98,7 @@ fun DayCalendarView(
     }
     val tasks = remember(dayDetail) { dayDetail?.tasks.orEmpty() }
     val courses = remember(dayDetail) { dayDetail?.courses.orEmpty() }
+    val habits = remember(dayDetail) { dayDetail?.habits.orEmpty() }
     val weekNumber = dayDetail?.weekNumber
 
     Column(
@@ -138,6 +143,12 @@ fun DayCalendarView(
             onToggleTask = onToggleTask,
             onTaskClick = onTaskClick,
             onTaskTimeRangeClick = onTaskTimeRangeClick,
+        )
+
+        // Phase 24B：习惯打卡 —— 紧跟在「今日待办」后面
+        DayHabitSection(
+            habits = habits,
+            onCheckIn = { habitId, delta -> onHabitCheckIn(habitId, delta) },
         )
 
         // Phase 20.5：清单项与课程撞车了 —— 复用事件编辑器那套冲突横幅
@@ -362,6 +373,61 @@ internal fun DayTodoRow(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
                 modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
+// =====================================================================
+// 3. 习惯打卡
+// =====================================================================
+
+/**
+ * 当天的习惯打卡列表（Phase 24B）
+ *
+ * 习惯没有时刻，所以它不进时间轴 —— 摆在「今日待办」下面，
+ * 每行一个「+ / −」，点一下就打卡 / 撤销。
+ *
+ * count 记的是**这一天**的次数 —— 日视图显示的是选中日，不是「今天」。
+ */
+@Composable
+internal fun DayHabitSection(
+    habits: List<CalendarHabitItem>,
+    onCheckIn: (habitId: Long, delta: Int) -> Unit,
+    title: String = "习惯打卡",
+) {
+    if (habits.isEmpty()) return
+
+    AppCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(AppSpacing.sm),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Rounded.Star,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = "${habits.size}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(AppSpacing.xxs))
+        habits.forEach { habit ->
+            CalendarHabitRow(
+                habit = habit,
+                onCheckIn = { onCheckIn(habit.habitId, 1) },
+                onUndo = { onCheckIn(habit.habitId, -1) },
             )
         }
     }

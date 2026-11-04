@@ -1,6 +1,7 @@
 package com.example.personalassistant.core.backup.exporter
 
 import com.example.personalassistant.core.backup.model.BackupError
+import com.example.personalassistant.core.backup.model.BackupManifest
 import com.example.personalassistant.core.backup.model.BackupPayload
 import com.example.personalassistant.core.backup.model.BackupResult
 import kotlinx.serialization.json.Json
@@ -51,7 +52,7 @@ class BackupExporterTest {
     }
 
     @Test
-    fun `export 17 张表 JSON 都写入`() {
+    fun `export 18 张表 JSON 都写入`() {
         val exporter = BackupExporter(json())
         val outputStream = ByteArrayOutputStream()
         val result = exporter.export(BackupPayload(), outputStream)
@@ -68,20 +69,27 @@ class BackupExporterTest {
             }
         }
 
-        // 验证 17 张表的 JSON 都存在
+        // 验证 18 张表的 JSON 都存在
         // （Phase 16：-sub_tasks +task_lists +event_categories +student_profile；
-        //   Phase 23：+habits +habit_checkins）
+        //   Phase 23：+habits +habit_checkins；
+        //   批次 C：+coin_pools）
         val expectedTables = listOf(
             "user_profiles", "semesters", "courses", "tags", "task_lists", "tasks",
             "task_tag_cross_ref", "events", "event_categories", "categories",
             "monthly_budgets", "daily_pools", "transactions", "holidays",
-            "student_profile", "habits", "habit_checkins",
+            "student_profile", "habits", "habit_checkins", "coin_pools",
         )
         expectedTables.forEach { table ->
             assertTrue("包含 data/$table.json", entries.containsKey("data/$table.json"))
             // 空表也是有效 JSON 数组
             assertTrue("$table 应为空数组 JSON", String(entries["data/$table.json"]!!).trim() == "[]")
         }
+        // 表清单与实际写出的 ZIP 条目一一对应（漏写一张表 = 用户备份静默丢数据）
+        assertEquals(
+            "ZIP 里的 data/*.json 数量应与 DEFAULT_TABLES 一致",
+            BackupManifest.DEFAULT_TABLES.size,
+            entries.keys.count { it.startsWith("data/") },
+        )
     }
 
     @Test

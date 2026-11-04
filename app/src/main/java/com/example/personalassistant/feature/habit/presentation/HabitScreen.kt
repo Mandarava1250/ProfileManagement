@@ -183,7 +183,7 @@ fun HabitScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(text = "在日历中显示习惯", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            text = "Phase 23.6 占位开关：日历侧尚未提供同屏开关，先由习惯侧持有",
+                            text = "在日历里显示习惯打卡",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

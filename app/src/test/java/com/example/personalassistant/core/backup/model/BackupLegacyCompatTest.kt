@@ -268,14 +268,14 @@ class BackupLegacyCompatTest {
     // ---------- 表清单不变量 ----------
 
     @Test
-    fun `DEFAULT_TABLES 为 17 张且顺序与内容固定`() {
-        assertEquals(17, BackupManifest.DEFAULT_TABLES.size)
+    fun `DEFAULT_TABLES 为 18 张且顺序与内容固定`() {
+        assertEquals(18, BackupManifest.DEFAULT_TABLES.size)
         assertEquals("user_profiles", BackupManifest.DEFAULT_TABLES.first())
-        // Phase 23：习惯打卡两张表排在最后，habit_checkins 是最后一张
-        assertEquals("habit_checkins", BackupManifest.DEFAULT_TABLES.last())
+        // 批次 C：coin_pools 是叶子表，排在最后
+        assertEquals("coin_pools", BackupManifest.DEFAULT_TABLES.last())
         assertEquals(
-            "表清单去重后仍应是 17 项",
-            17,
+            "表清单去重后仍应是 18 项",
+            18,
             BackupManifest.DEFAULT_TABLES.distinct().size,
         )
         // 外键依赖顺序：父表必须在子表之前（habits → habit_checkins）
@@ -284,10 +284,15 @@ class BackupLegacyCompatTest {
             "habits 必须排在 habit_checkins 之前",
             tables.indexOf("habits") < tables.indexOf("habit_checkins"),
         )
+        // 批次 C：coin_pools.accountId → user_profiles.id，父表必须在前
+        assertTrue(
+            "coin_pools 必须排在 user_profiles 之后",
+            tables.indexOf("user_profiles") < tables.indexOf("coin_pools"),
+        )
     }
 
     @Test
-    fun `manifest 带全部 17 张表可 round-trip`() {
+    fun `manifest 带全部 18 张表可 round-trip`() {
         val manifest = BackupManifest(
             application = "com.example.personalassistant",
             formatVersion = BackupFormatVersion.FORMAT_VERSION,

@@ -1,11 +1,13 @@
 package com.example.personalassistant.feature.finance.data.mapper
 
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.domain.model.CategoryExpenseSum
+import com.example.personalassistant.feature.finance.domain.model.CoinPool
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.domain.model.DayExpenseSum
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
@@ -121,6 +123,26 @@ internal fun DailyPool.toEntity(): DailyPoolEntity = DailyPoolEntity(
     totalIncomeToday = totalIncomeToday,
     carryOver = carryOver,
     lastUpdated = lastUpdated,
+)
+
+// ===== CoinPool =====
+
+internal fun CoinPoolEntity.toDomain(): CoinPool = CoinPool(
+    id = id,
+    accountId = accountId,
+    balance = balance,
+    note = note,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+)
+
+internal fun CoinPool.toEntity(): CoinPoolEntity = CoinPoolEntity(
+    id = id,
+    accountId = accountId,
+    balance = balance,
+    note = note,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
 )
 
 // ===== 统计投影 → domain =====

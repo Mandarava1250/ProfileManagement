@@ -45,15 +45,27 @@ enum class TaskSort {
 /**
  * Phase 6a：把 toComparator 提到 domain 包顶层（internal）——
  * RepositoryImpl 与同包测试都可以直接复用，**确保测试和生产代码用的是同一份逻辑**。
+ *
+ * ## Phase 24：置顶优先
+ *
+ * 所有排序方式的第一关键字都是 `isPinned`（置顶的排最前）。
+ * 不加这一条的话，用户点了「置顶」界面纹丝不动 —— 那一列从 v15 就有了，
+ * 但排序里一直没有它。
  */
 internal fun TaskSort.toComparator(): Comparator<Task> = when (this) {
     // Phase 8 Sub-step 2：5 档权重 URGENT(9) > HIGH(7) > MEDIUM(5) > NORMAL(3) > LOW(1)
-    TaskSort.PRIORITY_DUE_ASC -> compareByDescending<Task> { it.priority.rank }
+    TaskSort.PRIORITY_DUE_ASC -> compareByDescending<Task> { it.isPinned }
+        .thenByDescending { it.priority.rank }
         .thenBy { it.dueDate ?: Long.MAX_VALUE }
-    TaskSort.DUE_DATE_ASC -> compareBy { it.dueDate ?: Long.MAX_VALUE }
-    TaskSort.DUE_DATE_DESC -> compareByDescending { it.dueDate ?: Long.MIN_VALUE }
-    TaskSort.CREATED_DESC -> compareByDescending { it.createdAt }
-    TaskSort.TITLE_ASC -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-    TaskSort.MANUAL_ORDER -> compareBy<Task> { it.manualOrder ?: Long.MAX_VALUE }
+    TaskSort.DUE_DATE_ASC -> compareByDescending<Task> { it.isPinned }
+        .thenBy { it.dueDate ?: Long.MAX_VALUE }
+    TaskSort.DUE_DATE_DESC -> compareByDescending<Task> { it.isPinned }
+        .thenByDescending { it.dueDate ?: Long.MIN_VALUE }
+    TaskSort.CREATED_DESC -> compareByDescending<Task> { it.isPinned }
+        .thenByDescending { it.createdAt }
+    TaskSort.TITLE_ASC -> compareByDescending<Task> { it.isPinned }
+        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+    TaskSort.MANUAL_ORDER -> compareByDescending<Task> { it.isPinned }
+        .thenBy { it.manualOrder ?: Long.MAX_VALUE }
         .thenBy { it.id }
 }

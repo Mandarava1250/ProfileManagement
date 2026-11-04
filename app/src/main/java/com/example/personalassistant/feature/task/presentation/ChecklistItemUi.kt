@@ -16,6 +16,8 @@ data class ChecklistItemUi(
     val title: String,
     val isCompleted: Boolean,
     val order: Int,
+    /** Phase 24：置顶（恒在列表最前）。 */
+    val isPinned: Boolean = false,
     /** 分类名。null = 未分类 */
     val category: String? = null,
     /** 截止时间（毫秒时间戳）。null = 无截止 */
@@ -51,6 +53,8 @@ internal fun ChecklistItem.toUi(): ChecklistItemUi = ChecklistItemUi(
     isCompleted = task.isCompleted,
     // Phase 16：排序权重从 `sub_tasks.order`（Int）迁到 `tasks.manualOrder`（Long?）
     order = task.manualOrder?.toInt() ?: 0,
+    // Phase 24：置顶状态（右滑「置顶 / 取消置顶」要用）
+    isPinned = task.isPinned,
     category = task.category,
     dueDate = task.dueDate,
     priority = task.priority,

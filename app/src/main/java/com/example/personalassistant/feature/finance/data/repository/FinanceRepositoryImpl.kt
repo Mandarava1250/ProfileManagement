@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.finance.data.repository
 
 import com.example.personalassistant.core.di.IoDispatcher
+import com.example.personalassistant.feature.finance.data.local.CoinPoolEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
@@ -13,6 +14,7 @@ import com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy
 import com.example.personalassistant.feature.finance.domain.model.AccountBalanceSum
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
 import com.example.personalassistant.feature.finance.domain.model.Category
+import com.example.personalassistant.feature.finance.domain.model.CoinPool
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.domain.model.GlobalMonthlySums
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
@@ -27,10 +29,12 @@ import com.example.personalassistant.feature.settings.FinanceCutoffSettings
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -419,13 +423,37 @@ class FinanceRepositoryImpl @Inject constructor(
 
     override fun observeTodayPool(): Flow<DailyPool?> =
         accountIdFlow.flatMapLatest { accountId ->
-            financeDao.observeDailyPool(accountId, startOfDayMillis(System.currentTimeMillis()))
+            todayStartMillisFlow().flatMapLatest { todayStart ->
+                financeDao.observeDailyPool(accountId, todayStart)
+            }
         }.map { it?.toDomain() }
 
     /**
      * Phase 3：算法的 3 处数据读取全部按当前账户 ——
      * 预算读取、当月支出统计、昨日 pool 结转。
      * 漏任一处都会让 A 账户的支出吃掉 B 账户的日预算（静默错账，比崩溃更难发现）。
+     *
+     * ## 批次 C：改成「更新已存在的当天行」（修「改了预算今日剩余不动」的根因）
+     *
+     * 原来第 5 步是「当日 pool 已存在 → 幂等跳过」，于是：
+     * 用户改本月可用余额 → 重算结果算出来了 → 被那行 `return` 丢掉 → 界面上纹丝不动。
+     * 而且当天那行往往是「记账时兜底建的」（`dailyBudget = 0.0`），于是日预算恒为 0。
+     *
+     * 现在的语义：
+     * - 当天行**不存在** → 新建（`remainingAmount = dailyBudget + carryOver`）
+     * - 当天行**存在** → **更新** `dailyBudget` / `carryOver` / `remainingAmount`，
+     *   其中 `remainingAmount` 按下面的不变量重算，**已花掉的部分原样保留**：
+     *
+     *   ```
+     *   remainingAmount = dailyBudget + carryOver + totalIncomeToday - totalSpentToday
+     *   ```
+     *
+     * 这条不变量跟 [FinanceDao.deductFromPool] / [FinanceDao.addIncomeToPool] 的写法对齐，
+     * 所以「改了预算」和「记了一笔」两条路径不会互相打架。
+     *
+     * ⚠️ 第 3 步算 `dailyBudget` 时那个 `coerceAtLeast(0.0)` **保留** ——
+     * 那是「日额度」的算法（本月已超支 → 今天不再发额度），
+     * 和「今日剩余（可负）」是两个概念，别混。
      */
     override suspend fun refreshDailyPool(today: Long) = withContext(dispatcher) {
         val accountId = awaitAccountId()
@@ -478,23 +506,34 @@ class FinanceRepositoryImpl @Inject constructor(
         //    （yesterdayPool 在 carryOverEnabled=false 时为 null → 0.0，与原来一致）
         val carryOver = yesterdayPool?.remainingAmount?.coerceAtLeast(0.0) ?: 0.0
 
-        // 5. 当日 pool 已存在 → 幂等跳过
-        if (todayPool != null) return@withContext
-
-        // 6. 创建今日 pool
-        financeDao.insertDailyPool(
-            DailyPoolEntity(
-                id = 0L,
+        // 5. 写入（批次 C 修根因）：不存在 → 新建；存在 → **更新**（不丢弃重算结果）
+        if (todayPool == null) {
+            financeDao.insertDailyPool(
+                DailyPoolEntity(
+                    id = 0L,
+                    accountId = accountId,
+                    date = todayPoolDate,
+                    dailyBudget = dailyBudget,
+                    remainingAmount = dailyBudget + carryOver,
+                    totalSpentToday = 0.0,
+                    totalIncomeToday = 0.0,
+                    carryOver = carryOver,
+                    lastUpdated = System.currentTimeMillis(),
+                )
+            )
+        } else {
+            // 已花掉 / 已赚到的部分原样带过去，只把「今天发多少额度」换掉
+            val newRemaining = dailyBudget + carryOver +
+                todayPool.totalIncomeToday - todayPool.totalSpentToday
+            financeDao.updateDailyPoolBudget(
                 accountId = accountId,
                 date = todayPoolDate,
                 dailyBudget = dailyBudget,
-                remainingAmount = dailyBudget + carryOver,
-                totalSpentToday = 0.0,
-                totalIncomeToday = 0.0,
+                remainingAmount = newRemaining,
                 carryOver = carryOver,
-                lastUpdated = System.currentTimeMillis(),
+                now = System.currentTimeMillis(),
             )
-        )
+        }
     }
 
     // ===================== 内部工具 =====================
@@ -558,6 +597,96 @@ class FinanceRepositoryImpl @Inject constructor(
         val zone = ZoneId.systemDefault()
         val date = Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate()
         return date.atStartOfDay(zone).toInstant().toEpochMilli()
+    }
+
+    /**
+     * 「今天 00:00」的时间戳流：跨零点自动发新值
+     *
+     * ## 为什么用本地日期算下一个零点，而不是 `todayStart + ONE_DAY_MS`
+     *
+     * 夏令时切换那天本地日长 23 / 25 小时，用固定毫秒数会算错一天，
+     * 而且错的那天会一直错到下一次切换。
+     *
+     * ## 为什么多睡 1 秒
+     *
+     * 避开「正好卡在 00:00:00.000」那一毫秒的边界 ——
+     * 那时 `nextMidnight - now` 可能是 0，循环会立刻重发同一个值。
+     */
+    private fun todayStartMillisFlow(): Flow<Long> = flow {
+        val zone = ZoneId.systemDefault()
+        while (true) {
+            val now = System.currentTimeMillis()
+            emit(startOfDayMillis(now))
+            val nextMidnight = LocalDate.now(zone)
+                .plusDays(1)
+                .atStartOfDay(zone)
+                .toInstant()
+                .toEpochMilli()
+            delay((nextMidnight - now).coerceAtLeast(1L) + 1_000L)
+        }
+    }
+
+    // ===================== 批次 C：零钱池 =====================
+
+    override fun observeCoinPool(): Flow<CoinPool?> =
+        accountIdFlow.flatMapLatest { accountId ->
+            financeDao.observeCoinPool(accountId)
+        }.map { it?.toDomain() }
+
+    override suspend fun adjustCoinPool(delta: Double, note: String?): Double =
+        withContext(dispatcher) {
+            val accountId = awaitAccountId()
+            val now = System.currentTimeMillis()
+            val existing = financeDao.getCoinPool(accountId)
+            val newBalance = (existing?.balance ?: 0.0) + delta
+            writeCoinPool(accountId, newBalance, note, existing, now)
+            newBalance
+        }
+
+    override suspend fun setCoinPoolBalance(balance: Double, note: String?): Double =
+        withContext(dispatcher) {
+            val accountId = awaitAccountId()
+            val now = System.currentTimeMillis()
+            val existing = financeDao.getCoinPool(accountId)
+            writeCoinPool(accountId, balance, note, existing, now)
+            balance
+        }
+
+    /**
+     * 零钱池写入（新建 or 更新）
+     *
+     * ## 为什么不直接 REPLACE 一把梭
+     *
+     * REPLACE 会换掉 `id` 和 `createdAt` —— 这两列是「这一行是什么时候建的」的历史信息，
+     * 换掉之后备份里就看不出零钱池建了多久了。
+     */
+    private suspend fun writeCoinPool(
+        accountId: Long,
+        balance: Double,
+        note: String?,
+        existing: CoinPoolEntity?,
+        now: Long,
+    ) {
+        if (existing == null) {
+            financeDao.insertCoinPool(
+                CoinPoolEntity(
+                    id = 0L,
+                    accountId = accountId,
+                    balance = balance,
+                    note = note,
+                    createdAt = now,
+                    updatedAt = now,
+                )
+            )
+        } else {
+            financeDao.updateCoinPool(
+                existing.copy(
+                    balance = balance,
+                    note = note ?: existing.note,
+                    updatedAt = now,
+                )
+            )
+        }
     }
 
     companion object {

@@ -55,6 +55,7 @@ import com.example.personalassistant.feature.finance.presentation.FinanceViewMod
 import com.example.personalassistant.feature.finance.presentation.add.AddTransactionSheet
 import com.example.personalassistant.feature.finance.presentation.budget.BudgetSheet
 import com.example.personalassistant.feature.finance.presentation.category.CategoryManagementScreen
+import com.example.personalassistant.feature.finance.presentation.components.CoinPoolCard
 import com.example.personalassistant.feature.finance.presentation.components.DailyPoolCard
 import com.example.personalassistant.feature.finance.presentation.components.MonthlyReportCard
 import com.example.personalassistant.feature.finance.presentation.components.SearchBar
@@ -63,6 +64,9 @@ import com.example.personalassistant.feature.finance.domain.BillingCycle
 import com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
 import com.example.personalassistant.feature.finance.domain.model.BudgetSummaryTotals
+import com.example.personalassistant.feature.finance.domain.model.CoinPool
+import com.example.personalassistant.feature.finance.domain.model.TodayRemainingMode
+import com.example.personalassistant.feature.finance.domain.model.TodayRemainingResult
 import com.example.personalassistant.feature.finance.presentation.components.AccountSummaryCard
 import com.example.personalassistant.feature.finance.presentation.transfer.TransferSheet
 import com.example.personalassistant.feature.finance.presentation.util.FinanceDateUtils
@@ -100,6 +104,9 @@ fun FinanceScreen(
     val accountBalances by viewModel.accountBalances.collectAsStateWithLifecycle()
     // 月截止日策略：月报卡片要显示账期区间（"本月"可能不是自然月）
     val cutoffPolicy by viewModel.cutoffPolicy.collectAsStateWithLifecycle()
+    // 批次 C：「今日剩余」派生结果 + 零钱池（都是独立 StateFlow，避开 uiState 的 5 流上限）
+    val todayRemaining by viewModel.todayRemainingResult.collectAsStateWithLifecycle()
+    val coinPool by viewModel.coinPool.collectAsStateWithLifecycle()
     // 转账行要显示「转出至 / 转入自 哪个账户」；用余额列表做 id→名字映射，
     // 不为此再开一条 observeAccounts（两者本质是同一批账户）
     val accountNameById = remember(accountBalances) {
@@ -180,6 +187,19 @@ fun FinanceScreen(
             uiState = uiState,
             contentPadding = padding,
             cutoffPolicy = cutoffPolicy,
+            // 批次 C
+            todayRemaining = todayRemaining,
+            coinPool = coinPool,
+            onToggleRemainingMode = {
+                viewModel.setTodayRemainingMode(
+                    if (todayRemaining.mode == TodayRemainingMode.FIXED) {
+                        TodayRemainingMode.AUTO
+                    } else {
+                        TodayRemainingMode.FIXED
+                    }
+                )
+            },
+            onAdjustCoinPool = { delta, note -> viewModel.adjustCoinPool(delta, note) },
             onTransactionClick = { tx ->
                 editingTx = tx
                 showSheet = true
@@ -276,6 +296,11 @@ private fun FinanceContent(
     onSwitchAccount: (Long) -> Unit,
     // ===== 月截止日 =====
     cutoffPolicy: MonthCutoffPolicy,
+    // ===== 批次 C =====
+    todayRemaining: TodayRemainingResult,
+    coinPool: CoinPool?,
+    onToggleRemainingMode: () -> Unit,
+    onAdjustCoinPool: (Double, String?) -> Unit,
 ) {
     if (uiState.isLoading) {
         Box(
@@ -314,14 +339,24 @@ private fun FinanceContent(
             )
         }
 
-        // 顶部：零钱池卡片（7b 增量：传入 warningThreshold）
+        // 顶部：今日剩余卡片（批次 C：大字号改成纯计算，按口径二选一）
         item {
             DailyPoolCard(
-                pool = uiState.dailyPool,
+                result = todayRemaining,
                 monthBudget = uiState.monthBudget?.totalAmount,
                 monthExpense = uiState.monthExpense,
                 warningThreshold = uiState.monthBudget?.warningThreshold ?: 0.0,
+                onToggleMode = onToggleRemainingMode,
                 modifier = Modifier.padding(vertical = 8.dp),
+            )
+        }
+
+        // 批次 C：零钱池卡片（与「今日剩余」平级，标题 / 副标题 / 图标都区分开）
+        item {
+            CoinPoolCard(
+                pool = coinPool,
+                onAdjust = onAdjustCoinPool,
+                modifier = Modifier.padding(vertical = 4.dp),
             )
         }
 

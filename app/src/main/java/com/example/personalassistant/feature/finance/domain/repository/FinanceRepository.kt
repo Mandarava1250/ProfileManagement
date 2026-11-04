@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.finance.domain.repository
 
 import com.example.personalassistant.feature.finance.domain.model.Category
+import com.example.personalassistant.feature.finance.domain.model.CoinPool
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.domain.model.AccountBalanceSum
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
@@ -233,6 +234,32 @@ interface FinanceRepository {
      * @param today 任意时刻（用于计算当天 00:00 时间戳 + 当月 yearMonth）
      */
     suspend fun refreshDailyPool(today: Long)
+
+    // ===== 批次 C：零钱池 =====
+
+    /**
+     * 本账户的零钱池（null = 该账户还没建过）
+     *
+     * 与 [observeTodayPool] 是两回事 —— 那个是系统按预算每天发的额度快照，
+     * 这个是用户手动攒的一笔钱。
+     */
+    fun observeCoinPool(): Flow<CoinPool?>
+
+    /**
+     * 存 / 取零钱池
+     *
+     * @param delta 变动额（正 = 存入，负 = 取出）
+     * @param note 备注（可空；null = 沿用旧备注）
+     * @return 操作后的余额
+     */
+    suspend fun adjustCoinPool(delta: Double, note: String? = null): Double
+
+    /**
+     * 直接设置零钱池余额（用户发现记错了，纠正用）
+     *
+     * @return 设置后的余额
+     */
+    suspend fun setCoinPoolBalance(balance: Double, note: String? = null): Double
 }
 
 /** 分类仍有交易引用，无法删除 */

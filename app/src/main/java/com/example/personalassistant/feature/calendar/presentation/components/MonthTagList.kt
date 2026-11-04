@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.example.personalassistant.core.ui.components.AppCard
 import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.core.ui.theme.AppSpacing
+import com.example.personalassistant.feature.calendar.domain.model.CalendarHabitItem
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.task.domain.model.Task
@@ -52,12 +53,15 @@ fun MonthTagList(
     onEventClick: (Event) -> Unit = {},
     onTaskClick: (Task) -> Unit = {},
     onCourseClick: (Course) -> Unit = {},
+    // Phase 24B：点「习惯」标签 → 打开补卡面板（给选中的那一天补打卡）
+    onHabitClick: (CalendarHabitItem) -> Unit = {},
 ) {
     if (dayDetail == null) return
     val events = remember(dayDetail) { dayDetail.events }
     val tasks = remember(dayDetail) { dayDetail.tasks }
     val courses = remember(dayDetail) { dayDetail.courses }
-    if (events.isEmpty() && tasks.isEmpty() && courses.isEmpty()) return
+    val habits = remember(dayDetail) { dayDetail.habits }
+    if (events.isEmpty() && tasks.isEmpty() && courses.isEmpty() && habits.isEmpty()) return
 
     AppCard(
         modifier = modifier.fillMaxWidth(),
@@ -96,6 +100,20 @@ fun MonthTagList(
                         text = course.name,
                         color = Color(course.color),
                         onClick = { onCourseClick(course) },
+                    )
+                },
+            )
+        }
+        // Phase 24B：习惯 —— 点一下打开补卡面板（给选中的那一天补打卡）
+        if (habits.isNotEmpty()) {
+            TagRow(
+                label = "习惯",
+                tags = habits.map { habit ->
+                    TagChipData(
+                        text = habit.name,
+                        color = Color(habit.color),
+                        done = habit.isMet,
+                        onClick = { onHabitClick(habit) },
                     )
                 },
             )

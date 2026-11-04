@@ -96,6 +96,16 @@ class FakeTaskRepository : TaskRepository {
     override suspend fun deleteSubTask(subTask: Task) = Unit
     override suspend fun reorderTasks(orderedIds: List<Long>) = Unit
 
+    /** Phase 24：置顶调用记录（id -> 是否置顶），单测断言用。 */
+    val pinnedCalls = mutableListOf<Pair<Long, Boolean>>()
+
+    override suspend fun setPinned(id: Long, pinned: Boolean) {
+        pinnedCalls += id to pinned
+        tasksState.value = tasksState.value.map {
+            if (it.id == id) it.copy(isPinned = pinned) else it
+        }
+    }
+
     // ===== Phase 8 Sub-step 3 全局搜索 =====
 
     /**

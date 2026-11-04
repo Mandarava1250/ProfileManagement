@@ -4,9 +4,12 @@ import com.example.personalassistant.feature.finance.data.repository.FakeFinance
 import com.example.personalassistant.feature.finance.domain.BillingCycle
 import com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
+import com.example.personalassistant.feature.finance.domain.model.TodayRemainingMode
+import com.example.personalassistant.feature.finance.domain.repository.FinanceDisplayRepository
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveAllBudgetsUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.SetMonthlyBudgetUseCase
 import com.example.personalassistant.feature.finance.presentation.util.Feedback
+import com.example.personalassistant.feature.finance.presentation.util.FinanceDateUtils
 import com.example.personalassistant.feature.settings.FinanceCutoffSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -49,6 +52,7 @@ class BudgetViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var repo: FakeFinanceRepository
     private lateinit var settings: FakeFinanceCutoffSettings
+    private lateinit var displayRepo: FakeFinanceDisplayRepository
     private lateinit var vm: BudgetViewModel
 
     @Before
@@ -56,10 +60,12 @@ class BudgetViewModelTest {
         Dispatchers.setMain(testDispatcher)
         repo = FakeFinanceRepository()
         settings = FakeFinanceCutoffSettings()
+        displayRepo = FakeFinanceDisplayRepository()
         vm = BudgetViewModel(
             observeAllBudgets = ObserveAllBudgetsUseCase(repo),
             setMonthlyBudget = SetMonthlyBudgetUseCase(repo),
             settingsRepository = settings,
+            financeDisplayRepository = displayRepo,
         )
     }
 
@@ -180,10 +186,56 @@ class BudgetViewModelTest {
         assertNull("非法金额不应创建预算行", current)
     }
 
+    /**
+     * 批次 C：默认展示的月份必须是**账期月**，不是自然月。
+     *
+     * 帮凶 1 的回归测试：月截止日 = 15 时，10 月 10 日属于「2026-09」账期段。
+     * 若这里退回自然月，用户保存的是「2026-10」，而 Repository 比的是「2026-09」，
+     * `refreshDailyPool` 不会被触发 —— 改了预算界面纹丝不动。
+     */
+    @Test
+    fun `yearMonth defaults to cycle month not natural month`() = runTest(testDispatcher) {
+        // 默认策略（截止日 = 1）→ 账期月 = 自然月
+        assertEquals(
+            FinanceDateUtils.currentYearMonth(),
+            vm.yearMonth.value,
+        )
+    }
+
+    /** 批次 C：切换口径会写进仓库 */
+    @Test
+    fun `setTodayRemainingMode writes to repository`() = runTest(testDispatcher) {
+        vm.setTodayRemainingMode(TodayRemainingMode.AUTO)
+        advanceUntilIdle()
+        assertEquals(TodayRemainingMode.AUTO, displayRepo.mode.value)
+        assertEquals(1, displayRepo.writeCount)
+    }
+
     // Phase 13：月截止日的用例已迁到
     // `com.example.personalassistant.feature.settings.MonthCutoffViewModelTest`
     // —— 截止日读写搬到了设置页的「记账」分组，不再由预算 VM 负责。
     // 本 VM 只保留 [BudgetViewModel.cutoffPolicy] 的读（用于展示账期区间）。
+}
+
+/**
+ * 内存版 [FinanceDisplayRepository]
+ *
+ * 零 IO，所以 `runTest` 的虚拟时间能完整推进 —— 行为完全确定，不会 flaky。
+ */
+private class FakeFinanceDisplayRepository : FinanceDisplayRepository {
+
+    val mode = MutableStateFlow(TodayRemainingMode.DEFAULT)
+
+    /** 写了几次，用来验证「没变就不重写」 */
+    var writeCount = 0
+        private set
+
+    override fun observeTodayRemainingMode(): Flow<TodayRemainingMode> = mode
+
+    override suspend fun setTodayRemainingMode(mode: TodayRemainingMode) {
+        writeCount++
+        this.mode.value = mode
+    }
 }
 
 /**

@@ -52,4 +52,12 @@ interface HabitRepository {
 
     /** 观察某一天**所有习惯**的打卡记录（「今日」列表用） */
     fun observeCheckInsOn(date: Long): Flow<List<HabitCheckIn>>
+
+    /**
+     * 观察闭区间 [start, end] 内**所有习惯**的打卡记录
+     *
+     * Phase 24B：日历月视图的角标要统计「这个月哪天有习惯打卡」，
+     * 横跨了好几个习惯 —— 单习惯的 [observeCheckIns] 和单日的 [observeCheckInsOn] 都答不了。
+     */
+    fun observeCheckInsInRange(start: Long, end: Long): Flow<List<HabitCheckIn>>
 }

@@ -135,6 +135,9 @@ class TaskViewModel @Inject constructor(
                 selectedTagId = selectedTagId,
                 // ===== Phase 8b' =====
                 displayPreferences = displayPrefs,
+                // ===== Phase 24 =====
+                // 全局手动顺序（**不按象限过滤**）—— 拖拽排序靠它保住别象限里那些项的位置
+                allActiveIds = active.map { it.id },
             )
         }
     }.stateIn(

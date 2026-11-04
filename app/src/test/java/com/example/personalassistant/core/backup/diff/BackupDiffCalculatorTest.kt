@@ -10,6 +10,7 @@ import com.example.personalassistant.core.holiday.model.HolidayType
 import com.example.personalassistant.feature.calendar.data.local.EventCategoryEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
@@ -39,12 +40,13 @@ import org.junit.Test
  * - 默认策略必须是 ADD（最保守，绝不静默覆盖用户数据）
  * - 联合主键表（task_tag_cross_ref）不能走 id 等价
  * - sampleRowIds 的上限与去重
- * - 17 张表的完整性与顺序（与 [BackupManifest.DEFAULT_TABLES] 对齐）
+ * - 18 张表的完整性与顺序（与 [BackupManifest.DEFAULT_TABLES] 对齐）
  * - 外键拓扑表 [BackupDiffCalculator.TABLE_FK_GRAPH] 自身的一致性
  *
  * Phase 16：sub_tasks 已删表（子任务并入 tasks.parentTaskId），
  * 新增 task_lists / event_categories / student_profile 三张表。
  * Phase 23：新增 habits / habit_checkins 两张表。
+ * 批次 C：新增 coin_pools 一张表（按 **accountId** 判等，不是按自增 id）。
  */
 class BackupDiffCalculatorTest {
 
@@ -152,6 +154,19 @@ class BackupDiffCalculatorTest {
         count = 1,
     )
 
+    /**
+     * 批次 C：零钱池（挂在账户 1 上）
+     *
+     * ⚠️ `id` 与 `accountId` 是**两回事**：`id` 是自增列（备份导入 REPLACE 后会变），
+     * `accountId` 才是业务主键（一账户一池，UNIQUE）。
+     * 所以 fixture 把两者分开传，方便构造「id 不同但 accountId 相同」的场景。
+     */
+    private fun coinPool(id: Long = 1L, accountId: Long = 1L) = CoinPoolEntity(
+        id = id,
+        accountId = accountId,
+        balance = 100.0,
+    )
+
     /** 按表名从预览里取差异；缺失即失败（避免测试静默跳过） */
     private fun BackupPreview.diffOf(tableName: String) =
         perTable.firstOrNull { it.tableName == tableName }
@@ -165,7 +180,7 @@ class BackupDiffCalculatorTest {
     // ---------- 完整性 ----------
 
     @Test
-    fun `compute 空备份空库 产出 17 张表且全部为空`() {
+    fun `compute 空备份空库 产出 18 张表且全部为空`() {
         val preview = compute(BackupPayload())
 
         assertEquals(
@@ -173,7 +188,7 @@ class BackupDiffCalculatorTest {
             BackupManifest.DEFAULT_TABLES.size,
             preview.perTable.size,
         )
-        assertEquals(17, preview.perTable.size)
+        assertEquals(18, preview.perTable.size)
         assertEquals(0, preview.totalToAdd)
         assertEquals(0, preview.totalToOverwrite)
         assertEquals(0, preview.totalSkippedTables)
@@ -373,7 +388,7 @@ class BackupDiffCalculatorTest {
     }
 
     @Test
-    fun `17 张表都能各自算出差异`() {
+    fun `18 张表都能各自算出差异`() {
         val payload = BackupPayload(
             userProfiles = listOf(profile(1)),
             semesters = listOf(semester(1)),
@@ -393,18 +408,55 @@ class BackupDiffCalculatorTest {
             // Phase 23：习惯打卡两张表
             habits = listOf(habit(1)),
             habitCheckIns = listOf(habitCheckIn(1)),
+            // 批次 C：零钱池
+            coinPools = listOf(coinPool()),
         )
         val preview = compute(payload)
 
-        assertEquals(17, preview.perTable.size)
+        assertEquals(18, preview.perTable.size)
         assertEquals(
             "每张表各 1 行全新数据",
-            17,
+            18,
             preview.totalToAdd,
         )
         preview.perTable.forEach { diff ->
             assertEquals("${diff.tableName} 应有 1 行新增", 1, diff.toAdd.size)
         }
+    }
+
+    /**
+     * 批次 C：`coin_pools` 按 **accountId** 判等，不按自增 id。
+     *
+     * 备份里 id=5、库里 id=9，但 accountId 都是 1 —— 这是**同一个池子**（同一账户一个池），
+     * 所以应判为「覆盖」而不是「新增」。
+     *
+     * ⚠️ 如果误按 id 判等，这里会得到 toAdd=1 / toOverwrite=0，
+     * 预览界面就会告诉用户「要新增一个池子」，而实际写入时 REPLACE 会把老池子顶掉
+     * —— diff 报告与实际写入对不上。
+     */
+    @Test
+    fun `coin_pools 按 accountId 判等而非自增 id`() {
+        val payload = BackupPayload(coinPools = listOf(coinPool(id = 5L, accountId = 1L)))
+        val current = CurrentDbSnapshot(coinPools = listOf(coinPool(id = 9L, accountId = 1L)))
+
+        val diff = compute(payload, current).diffOf("coin_pools")
+
+        assertEquals("同一 accountId 应判为覆盖，而不是新增", 0, diff.toAdd.size)
+        assertEquals(1, diff.toOverwrite.size)
+    }
+
+    /**
+     * 批次 C：`coin_pools` 换账户 = 新增（accountId 不同就是另一个池子）。
+     */
+    @Test
+    fun `coin_pools 换 accountId 归入 toAdd`() {
+        val payload = BackupPayload(coinPools = listOf(coinPool(id = 5L, accountId = 2L)))
+        val current = CurrentDbSnapshot(coinPools = listOf(coinPool(id = 9L, accountId = 1L)))
+
+        val diff = compute(payload, current).diffOf("coin_pools")
+
+        assertEquals(1, diff.toAdd.size)
+        assertEquals(0, diff.toOverwrite.size)
     }
 
     // ---------- 外键拓扑表自身的一致性 ----------

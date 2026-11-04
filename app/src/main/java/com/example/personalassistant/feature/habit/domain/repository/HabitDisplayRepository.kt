@@ -7,12 +7,13 @@ import kotlinx.coroutines.flow.Flow
  *
  * ## 23.6「习惯与日历同屏」开关
  *
- * 计划要求复用 Phase 20 日历侧的「显示开关」。但日历那边（[com.example.personalassistant.feature.calendar]）
- * 目前只有「日程 / 任务 / 课程同屏」的实现，**并没有一个通用的日历显示开关**，
- * 而 Phase 23 又不允许改 calendar 模块 —— 所以这里先由习惯模块自己持有这个开关（DataStore 占位）。
+ * 这个开关**由习惯模块自己持有**（DataStore key = `habit_show_in_calendar`），
+ * 日历侧通过 [com.example.personalassistant.feature.calendar.domain.model.CalendarDisplayPreferences.showHabits]
+ * 读同一个 key —— 习惯页和日历页操作的是同一个开关，用户只看到一个。
  *
- * 等日历侧补上对应开关后，把这里的读写指过去即可，
- * UI 侧（[com.example.personalassistant.feature.habit.presentation]）不用改。
+ * Phase 24B 起，日历侧已经真的把习惯打卡渲染出来了
+ * （日视图「习惯打卡」卡片 / 月视图「习惯」标签行 / 月网格角标 / 周视图全天标签区），
+ * 这个布尔值不再是占位。
  */
 interface HabitDisplayRepository {
 

@@ -29,11 +29,18 @@ data class DayDetail(
     val events: List<Event> = emptyList(),
     val tasks: List<Task> = emptyList(),
     val courses: List<Course> = emptyList(),
+    /**
+     * Phase 24B：当天所有习惯的打卡情况（未归档习惯）
+     *
+     * 打卡 / 撤销都落在某一天上，所以按天存 —— 日视图、月视图、周视图共用同一份。
+     */
+    val habits: List<CalendarHabitItem> = emptyList(),
     val weekNumber: Int? = null,
 ) {
     /** 该日是否有任意内容 */
-    val hasAny: Boolean get() = events.isNotEmpty() || tasks.isNotEmpty() || courses.isNotEmpty()
+    val hasAny: Boolean
+        get() = events.isNotEmpty() || tasks.isNotEmpty() || courses.isNotEmpty() || habits.isNotEmpty()
 
     /** 总条目数 */
-    val totalCount: Int get() = events.size + tasks.size + courses.size
+    val totalCount: Int get() = events.size + tasks.size + courses.size + habits.size
 }

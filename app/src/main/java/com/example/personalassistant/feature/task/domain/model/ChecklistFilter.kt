@@ -87,22 +87,36 @@ internal fun ChecklistFilter.applyTo(
 
 /**
  * 按 [ChecklistSort] 排序（纯函数）。
+ *
+ * ## Phase 24：置顶优先
+ *
+ * 所有排序方式的第一关键字都是 `isPinned`（置顶的排最前）。
+ * 必须跟 DAO 的 `ORDER BY isPinned DESC, ...` 对齐 —— 否则同一个列表
+ * 在「刚进页面」和「切了筛选条件」之后会给出两种顺序。
  */
 internal fun ChecklistFilter.sortItems(items: List<ChecklistItem>): List<ChecklistItem> = when (sort) {
     ChecklistSort.MANUAL -> items.sortedWith(
-        compareBy<ChecklistItem> { it.task.manualOrder }.thenBy { it.task.createdAt },
+        compareByDescending<ChecklistItem> { it.task.isPinned }
+            .thenBy { it.task.manualOrder }
+            .thenBy { it.task.createdAt },
     )
     ChecklistSort.PRIORITY -> items.sortedWith(
-        compareByDescending<ChecklistItem> { it.task.priority.rank }.thenBy { it.task.manualOrder },
+        compareByDescending<ChecklistItem> { it.task.isPinned }
+            .thenByDescending { it.task.priority.rank }
+            .thenBy { it.task.manualOrder },
     )
     ChecklistSort.DUE_DATE -> items.sortedWith(
-        compareBy<ChecklistItem> { it.task.dueDate ?: Long.MAX_VALUE }.thenBy { it.task.manualOrder },
+        compareByDescending<ChecklistItem> { it.task.isPinned }
+            .thenBy { it.task.dueDate ?: Long.MAX_VALUE }
+            .thenBy { it.task.manualOrder },
     )
     ChecklistSort.CREATED_DESC -> items.sortedWith(
-        compareByDescending<ChecklistItem> { it.task.createdAt },
+        compareByDescending<ChecklistItem> { it.task.isPinned }
+            .thenByDescending { it.task.createdAt },
     )
     ChecklistSort.TITLE_ASC -> items.sortedWith(
-        compareBy(String.CASE_INSENSITIVE_ORDER) { it.task.title },
+        compareByDescending<ChecklistItem> { it.task.isPinned }
+            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.task.title },
     )
 }
 

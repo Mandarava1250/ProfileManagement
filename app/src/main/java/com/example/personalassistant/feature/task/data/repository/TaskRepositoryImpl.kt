@@ -272,6 +272,16 @@ class TaskRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * Phase 24：置顶 / 取消置顶。
+     *
+     * 只写这一列还不够 —— DAO 与 [TaskSort] 的排序里都得有 `isPinned`，
+     * 否则置顶了界面也不会动。
+     */
+    override suspend fun setPinned(id: Long, pinned: Boolean) = withContext(dispatcher) {
+        dao.setPinned(id = id, pinned = pinned, now = System.currentTimeMillis())
+    }
+
     // ===== Phase 8 Sub-step 3 全局搜索 =====
 
     /**

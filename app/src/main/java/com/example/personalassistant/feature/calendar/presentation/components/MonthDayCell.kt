@@ -101,6 +101,8 @@ fun MonthDayCell(
                     if (cell.hasEvents) BadgeDot(MaterialTheme.colorScheme.primary)
                     if (cell.hasTasks) BadgeDot(MaterialTheme.colorScheme.tertiary)
                     if (cell.hasCourses) BadgeDot(MaterialTheme.colorScheme.secondary)
+                    // Phase 24B：习惯用中性描边色，不跟日程 / 任务 / 课程抢色
+                    if (cell.hasHabits) BadgeDot(MaterialTheme.colorScheme.outline)
                 }
             }
         }

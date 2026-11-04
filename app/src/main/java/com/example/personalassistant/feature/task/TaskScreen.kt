@@ -259,6 +259,10 @@ fun TaskScreen(
                     onBatchMoveToList = checklistViewModel::batchMoveToList,
                     onBatchAttachTag = checklistViewModel::batchAttachTag,
                     onBatchDelete = checklistViewModel::batchDelete,
+                    // ===== Phase 24：左滑 / 右滑单条操作 =====
+                    onSetDueDate = checklistViewModel::setItemDueDate,
+                    onMoveToList = checklistViewModel::moveItemToList,
+                    onSetPinned = checklistViewModel::setItemPinned,
                     )
                 }
 

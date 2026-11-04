@@ -2,27 +2,35 @@ package com.example.personalassistant.feature.finance.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.personalassistant.feature.finance.domain.BillingCycle
 import com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy
 import com.example.personalassistant.feature.finance.domain.model.Category
+import com.example.personalassistant.feature.finance.domain.model.CoinPool
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
 import com.example.personalassistant.feature.finance.domain.model.MonthlyReport
+import com.example.personalassistant.feature.finance.domain.model.TodayRemainingMode
+import com.example.personalassistant.feature.finance.domain.model.TodayRemainingResult
 import com.example.personalassistant.feature.finance.domain.model.Transaction
 import com.example.personalassistant.feature.finance.domain.model.AccountBalance
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
 import com.example.personalassistant.feature.finance.domain.model.BudgetSummaryTotals
+import com.example.personalassistant.feature.finance.domain.repository.FinanceDisplayRepository
 import com.example.personalassistant.feature.finance.domain.repository.FinanceRepository
 import com.example.personalassistant.feature.finance.domain.repository.TransferNotAllowedException
+import com.example.personalassistant.feature.finance.domain.usecase.AdjustCoinPoolUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ExportTransactionsUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.GetMonthlyReportUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ImportTransactionsUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveAccountBalancesUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveCategoriesUseCase
+import com.example.personalassistant.feature.finance.domain.usecase.ObserveCoinPoolUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveMonthlyBudgetUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveTodayPoolUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.RefreshDailyPoolUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.SearchTransactionsUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.TransferUseCase
+import com.example.personalassistant.feature.finance.domain.util.TodayRemainingCalculator
 import com.example.personalassistant.feature.profile.data.CurrentAccountRepository
 import com.example.personalassistant.feature.profile.data.local.AccountIds
 import com.example.personalassistant.feature.settings.FinanceCutoffSettings
@@ -42,6 +50,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import javax.inject.Inject
 
 /**
@@ -65,6 +74,10 @@ class FinanceViewModel @Inject constructor(
     private val exportTransactionsUseCase: ExportTransactionsUseCase,
     private val importTransactionsUseCase: ImportTransactionsUseCase,
     private val refreshDailyPoolUseCase: RefreshDailyPoolUseCase,
+    // ===== 批次 C =====
+    private val financeDisplayRepository: FinanceDisplayRepository,
+    private val adjustCoinPool: AdjustCoinPoolUseCase,
+    private val observeCoinPool: ObserveCoinPoolUseCase,
     // ===== Phase 5 =====
     observeAccountBalances: ObserveAccountBalancesUseCase,
     private val transfer: TransferUseCase,
@@ -230,10 +243,98 @@ class FinanceViewModel @Inject constructor(
         _searchKeyword.value = keyword
     }
 
+    // ==================== 批次 C：「今日剩余」口径与派生值 ====================
+
+    /**
+     * 「今日剩余」的显示口径（FIXED / AUTO）
+     *
+     * 走**独立** StateFlow 而不是塞进 `uiState`：后者已占满 5 流上限（见上）。
+     */
+    val todayRemainingMode: StateFlow<TodayRemainingMode> =
+        financeDisplayRepository.observeTodayRemainingMode()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = TodayRemainingMode.DEFAULT,
+            )
+
+    /**
+     * 今日剩余（**纯计算**，不落库）
+     *
+     * - FIXED → 本月可用余额 − 本月已支出
+     * - AUTO  → 上者 ÷ 账期剩余天数（含今天）
+     *
+     * null = 未设预算（UI 显示「未设置预算」）。
+     *
+     * ⚠️ 这里刻意**不**读 `daily_pools.remainingAmount`：
+     * 那是「当天发下来的日额度」的快照，改预算后它不会立刻变
+     * （那正是批次 C 要修的 bug），而派生的「今日剩余」必须跟着预算实时走。
+     *
+     * 跨零点会自动重算：`uiState` 依赖的 `dailyPoolFlow` 在零点会发新值
+     * （见 `FinanceRepositoryImpl.observeTodayPool` 的跨零点处理），
+     * 于是这条 combine 会被重新触发，`LocalDate.now()` 也就跟着刷新了。
+     */
+    val todayRemainingResult: StateFlow<TodayRemainingResult> = combine(
+        todayRemainingMode,
+        uiState,
+        cutoffPolicy,
+    ) { mode, state, policy ->
+        val days = BillingCycle.remainingDays(LocalDate.now(), policy)
+        val total = state.monthBudget?.totalAmount
+        val expense = state.monthExpense
+        TodayRemainingResult(
+            mode = mode,
+            amount = TodayRemainingCalculator.compute(mode, total, expense, days),
+            monthRemaining = TodayRemainingCalculator.monthRemaining(total, expense),
+            remainingDays = days,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = TodayRemainingResult(),
+    )
+
+    /**
+     * 零钱池余额（每个账户一行；null = 该账户还没建过零钱池）
+     *
+     * 独立 StateFlow 的理由同 `todayRemainingResult`（`uiState` 已满 5 流）。
+     */
+    val coinPool: StateFlow<CoinPool?> =
+        observeCoinPool()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = null,
+            )
+
+    /** 切换「今日剩余」的显示口径 */
+    fun setTodayRemainingMode(mode: TodayRemainingMode) {
+        viewModelScope.launch {
+            runCatching {
+                financeDisplayRepository.setTodayRemainingMode(mode)
+            }.onFailure {
+                _feedback.value = "切换口径失败：${it.message ?: "未知错误"}"
+            }
+        }
+    }
+
+    /** 存 / 取零钱池（[delta] 正 = 存，负 = 取；余额允许为负） */
+    fun adjustCoinPool(delta: Double, note: String?) {
+        viewModelScope.launch {
+            runCatching {
+                adjustCoinPool(delta = delta, note = note)
+            }.onSuccess {
+                _feedback.value = if (delta >= 0) "已存入零钱池" else "已从零钱池取出"
+            }.onFailure {
+                _feedback.value = "零钱池操作失败：${it.message ?: "未知错误"}"
+            }
+        }
+    }
+
     /** 用户点"刷新"按钮（兜底：手动触发） */
     fun refreshDailyPool() {
         viewModelScope.launch {
-            refreshDailyPoolUseCase()
+            refreshDailyPoolUseCase.force()
         }
     }
 

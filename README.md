@@ -23,7 +23,7 @@
 | 版本 | `versionCode 1` / `versionName 0.1.0`（首个 release：`v0.1.0`） |
 | 开发分支 | `Develop`（`feature/phase-16-checklist-rebuild` 进行中；`main` 为 release 分支） |
 | 累计 commit | 182 |
-| Room 数据库 | **v17**（17 张表，schema 快照 `app/schemas/…/1.json ~ 17.json` 全量保留） |
+| Room 数据库 | **v18**（18 张表，schema 快照 `app/schemas/…/1.json ~ 18.json` 全量保留） |
 | 性能优化 | 五批（索引补全 / 备份批量化 / 重组收敛 / 调度器归位 / WAL + baseline profile）—— 详见 [`DEV_LOG.md`](DEV_LOG.md) 末尾段 |
 | 测试 | **1081 JVM 单测** 全绿（112 个测试类，0 失败 / 0 错误）+ **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ JVM 数字是 Phase 18~23 收尾实测（`app/build/test-results/testDebugUnitTest` 下全量 XML 求和）；instrumented 数字仍是上一轮实测 |
 | 台账 | 见 [`DEV_LOG.md`](DEV_LOG.md) —— 全部 Phase 的完成项 / 验证结果 / 踩坑笔记 |
@@ -294,7 +294,7 @@ ProfileManagement/
 
 ---
 
-## 🗃 数据库 Schema（Room v17，17 张表）
+## 🗃 数据库 Schema（Room v18，18 张表）
 
 | 表 | 说明 | 引入版本 |
 |----|------|---------|
@@ -313,6 +313,7 @@ ProfileManagement/
 | `user_profiles` | 账户（name、avatarUri、**initialBalance**；当前账户标记走 DataStore，不在表里） | v9 → **v10** |
 | `habits` | 习惯（name、iconKey、color、targetType 每日N次·每周N次、targetCount、unit、sortOrder、isArchived） | **v17**（Phase 23） |
 | `habit_checkins` | 习惯打卡（habitId → habits、date、count、note；一天一条 + 次数累加，支持补卡） | **v17**（Phase 23） |
+| `coin_pools` | **零钱池**（accountId unique → user_profiles、`balance` **可负数**、note；一个账户一个池，与「今日剩余」的预算口径是两回事） | **v18**（Phase 24） |
 
 > **v15 起 `sub_tasks` / `sub_task_tag_cross_ref` 已不存在** —— 清单项并入 `tasks`，
 > 层级改用 `tasks.parentTaskId` 自引用表达。
@@ -336,6 +337,7 @@ ProfileManagement/
 | v15 | **清单模型合并**（Phase 16）：新建 `task_lists`（内置收集箱 id=1）+ `tasks` 加 7 列（`listId` / `parentTaskId` / `amount` / `startAt` / `endAt` / `completedAt` / `isPinned`）+ **`sub_tasks` 整表并入 `tasks`**（恒定 id 偏移搬迁）、`sub_task_tag_cross_ref` 并入 `task_tag_cross_ref` |
 | v16 | `transactions.linkedTaskId` 列 + 索引（Phase 21 清单 ↔ 记账联动，**弱引用不加外键** —— 清单项删了流水要留下） |
 | v17 | **习惯打卡**（Phase 23）：新建 `habits` + `habit_checkins` 两表（`habit_checkins.habitId` → `habits` ON DELETE CASCADE，一天一条 + 次数累加，支持补卡） |
+| v18 | **零钱池**（Phase 24）：新建 `coin_pools` 表（`accountId` unique + FK → `user_profiles` ON DELETE CASCADE，`balance` REAL 可负数；**只 CREATE TABLE，不动任何已有表**） |
 
 > ⚠️ `DEV_LOG.md` 早期段落里的部分字段名与快照有出入，**精确列名以 `app/schemas/` 为准**：
 > 快照显示 `tasks.priority` / `tasks.category` 在 **v1 就已存在**（日志写的是「v2→v3 新增」）；

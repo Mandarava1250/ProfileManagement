@@ -11,6 +11,7 @@ import com.example.personalassistant.core.holiday.model.HolidayEntity
 import com.example.personalassistant.feature.calendar.data.local.EventCategoryEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
@@ -78,6 +79,8 @@ class BackupExporter @Inject constructor(
                 writeHabits(zipOut, payload.habits, checksums)
                 // Phase 23：习惯打卡记录 —— 叶子表，最后写
                 writeHabitCheckIns(zipOut, payload.habitCheckIns, checksums)
+                // 批次 C：零钱池 —— 叶子表，排最后
+                writeCoinPools(zipOut, payload.coinPools, checksums)
 
                 val manifest = BackupManifest(
                     application = BackupFormatVersion.APPLICATION,
@@ -195,6 +198,12 @@ class BackupExporter @Inject constructor(
     private fun writeHabitCheckIns(zipOut: ZipOutputStream, data: List<HabitCheckInEntity>, checksums: MutableMap<String, String>) =
         writeBytes(zipOut, "habit_checkins",
             json.encodeToString(ListSerializer(HabitCheckInEntity.serializer()), data).toByteArray(Charsets.UTF_8),
+            checksums)
+
+    /** 批次 C：零钱池（accountId → user_profiles.id） */
+    private fun writeCoinPools(zipOut: ZipOutputStream, data: List<CoinPoolEntity>, checksums: MutableMap<String, String>) =
+        writeBytes(zipOut, "coin_pools",
+            json.encodeToString(ListSerializer(CoinPoolEntity.serializer()), data).toByteArray(Charsets.UTF_8),
             checksums)
 
     private fun writeBytes(

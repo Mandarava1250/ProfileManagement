@@ -54,19 +54,22 @@ interface TaskDao {
      */
     @Query(
         "SELECT * FROM tasks WHERE parentTaskId IS NULL " +
-            "ORDER BY isCompleted ASC, dueDate ASC, priority DESC, createdAt DESC",
+            // Phase 24：置顶的排最前（isPinned DESC = 1 在前）
+            "ORDER BY isPinned DESC, isCompleted ASC, dueDate ASC, priority DESC, createdAt DESC",
     )
     fun observeAll(): Flow<List<TaskEntity>>
 
     @Query(
         "SELECT * FROM tasks WHERE parentTaskId IS NULL AND isCompleted = 0 " +
-            "ORDER BY priority DESC, dueDate ASC",
+            // Phase 24：置顶的排最前
+            "ORDER BY isPinned DESC, priority DESC, dueDate ASC",
     )
     fun observeActive(): Flow<List<TaskEntity>>
 
     @Query(
         "SELECT * FROM tasks WHERE parentTaskId IS NULL AND isCompleted = 1 " +
-            "ORDER BY dueDate DESC",
+            // Phase 24：置顶的排最前
+            "ORDER BY isPinned DESC, dueDate DESC",
     )
     fun observeCompleted(): Flow<List<TaskEntity>>
 
@@ -149,6 +152,17 @@ interface TaskDao {
     @Query("UPDATE tasks SET manualOrder = :order, updatedAt = :now WHERE id = :id")
     suspend fun updateManualOrder(id: Long, order: Long, now: Long = System.currentTimeMillis())
 
+    // ===== Phase 24：置顶 =====
+
+    /**
+     * 置顶 / 取消置顶。
+     *
+     * `isPinned` 这列从 v15 就在了，但一直没接上层 ——
+     * Phase 24 把它接上，同时给排序加了 `isPinned DESC`（否则写进去也没人看得到）。
+     */
+    @Query("UPDATE tasks SET isPinned = :pinned, updatedAt = :now WHERE id = :id")
+    suspend fun setPinned(id: Long, pinned: Boolean, now: Long = System.currentTimeMillis())
+
     // ===== 子任务（Phase 16：与任务同表，靠 parentTaskId 表达层级） =====
 
     /**
@@ -159,7 +173,7 @@ interface TaskDao {
      *
      * ⚠️ 与 [observeAll] 的区别：那个只要顶层（`parentTaskId IS NULL`），这个要全部。
      */
-    @Query("SELECT * FROM tasks ORDER BY manualOrder, createdAt")
+    @Query("SELECT * FROM tasks ORDER BY isPinned DESC, manualOrder, createdAt")
     fun observeAllIncludingChildren(): Flow<List<TaskEntity>>
 
     /**

@@ -14,7 +14,8 @@ package com.example.personalassistant.core.backup.model
  * [com.example.personalassistant.core.backup.importer.BackupImporter.importWithPreview]。
  *
  * ## 不变量
- * - `perTable.size == 13`
+ * - `perTable.size` == 表集合的表数（批次 C 起是 **18** 张，与
+ *   [BackupManifest.DEFAULT_TABLES] 一致）
  * - 每项的 `tableName` 都来自 [BackupManifest.DEFAULT_TABLES]（不出现未知表）
  */
 data class BackupPreview(

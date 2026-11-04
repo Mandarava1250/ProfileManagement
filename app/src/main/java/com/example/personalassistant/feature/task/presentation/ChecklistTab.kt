@@ -116,6 +116,9 @@ import kotlin.math.roundToInt
  * @param onBatchMoveToList Phase 18.6：批量移入清单
  * @param onBatchAttachTag Phase 18.6：批量加标签
  * @param onBatchDelete Phase 18.6：批量删除
+ * @param onSetDueDate Phase 24：单条改截止时间（左滑「改日期」），null = 清除
+ * @param onMoveToList Phase 24：单条移入清单（左滑「移入清单」）
+ * @param onSetPinned Phase 24：单条置顶 / 取消置顶（右滑「置顶」）
  */
 @Composable
 fun ChecklistTab(
@@ -145,6 +148,10 @@ fun ChecklistTab(
     onBatchMoveToList: (Long) -> Unit = {},
     onBatchAttachTag: (Long) -> Unit = {},
     onBatchDelete: () -> Unit = {},
+    // ===== Phase 24：左滑 / 右滑单条操作 =====
+    onSetDueDate: (Long, Long?) -> Unit = { _, _ -> },
+    onMoveToList: (Long, Long) -> Unit = { _, _ -> },
+    onSetPinned: (Long, Boolean) -> Unit = { _, _ -> },
 ) {
     var input by rememberSaveable { mutableStateOf("") }
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -160,6 +167,35 @@ fun ChecklistTab(
     var showListSheet by remember { mutableStateOf(false) }
     var showTagSheet by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    // ===== Phase 24：左滑 / 右滑 =====
+    // 流程是「滑出图标 → 点图标 → 弹面板」，**不做**「滑到底直接弹」：
+    // sheet 的下拉把手跟横向手势会打架，而且用户没有反悔的余地。
+    var swipeTargetId by remember { mutableStateOf<Long?>(null) }
+    var showSwipeDateSheet by remember { mutableStateOf(false) }
+    var showSwipeListSheet by remember { mutableStateOf(false) }
+    var showSwipeDeleteDialog by remember { mutableStateOf(false) }
+
+    // Phase 24：滑动动作的回调。
+    // 左滑三个动作要开面板（记住目标项 id），右滑两个动作直接改数据。
+    val onSwipeChangeDate: (Long) -> Unit = { id ->
+        swipeTargetId = id
+        showSwipeDateSheet = true
+    }
+    val onSwipeMoveToList: (Long) -> Unit = { id ->
+        swipeTargetId = id
+        showSwipeListSheet = true
+    }
+    val onSwipeDelete: (Long) -> Unit = { id ->
+        swipeTargetId = id
+        showSwipeDeleteDialog = true
+    }
+    val onSwipeComplete: (Long, Boolean) -> Unit = { id, completed ->
+        onToggleComplete(id, completed)
+    }
+    val onSwipeTogglePin: (Long, Boolean) -> Unit = { id, pinned ->
+        onSetPinned(id, pinned)
+    }
 
     val selectionMode = selectedIds.isNotEmpty()
     val canSubmit = input.isNotBlank()
@@ -445,6 +481,12 @@ fun ChecklistTab(
                                 onToggleSelect = { id -> onToggleSelect(id) },
                                 dragEnabled = true,
                                 isDragging = draggingId == item.id,
+                                // ===== Phase 24：左滑 / 右滑 =====
+                                onSwipeChangeDate = onSwipeChangeDate,
+                                onSwipeMoveToList = onSwipeMoveToList,
+                                onSwipeDelete = onSwipeDelete,
+                                onSwipeComplete = onSwipeComplete,
+                                onSwipeTogglePin = onSwipeTogglePin,
                                 modifier = if (draggingId == item.id) {
                                     // Phase 18.4：被拖的项跟着手指走
                                     Modifier.offset { IntOffset(0, dragOffsetY.roundToInt()) }
@@ -491,6 +533,12 @@ fun ChecklistTab(
                                     onToggleSelect = { onToggleSelect(item.id) },
                                     dragEnabled = false,
                                     isDragging = false,
+                                    // ===== Phase 24：左滑 / 右滑 =====
+                                    onSwipeChangeDate = onSwipeChangeDate,
+                                    onSwipeMoveToList = onSwipeMoveToList,
+                                    onSwipeDelete = onSwipeDelete,
+                                    onSwipeComplete = onSwipeComplete,
+                                    onSwipeTogglePin = onSwipeTogglePin,
                                     modifier = Modifier,
                                     onDragStart = {},
                                     onDrag = {},
@@ -571,6 +619,56 @@ fun ChecklistTab(
         )
     }
 
+    // ===== Phase 24：左滑 / 右滑触发的单条面板 =====
+    // 面板跟批量那边共用同一套（ChecklistBatchDateSheet / ChecklistBatchListSheet /
+    // ChecklistBatchDeleteDialog）—— 单条只是范围只有一项。
+    if (showSwipeDateSheet) {
+        ChecklistBatchDateSheet(
+            onPick = { dueDate ->
+                showSwipeDateSheet = false
+                val id = swipeTargetId
+                swipeTargetId = null
+                if (id != null) onSetDueDate(id, dueDate)
+            },
+            onDismiss = {
+                showSwipeDateSheet = false
+                swipeTargetId = null
+            },
+        )
+    }
+    if (showSwipeListSheet) {
+        ChecklistBatchListSheet(
+            lists = state.lists,
+            onPick = { listId ->
+                showSwipeListSheet = false
+                val id = swipeTargetId
+                swipeTargetId = null
+                if (id != null) onMoveToList(id, listId)
+            },
+            onDismiss = {
+                showSwipeListSheet = false
+                swipeTargetId = null
+            },
+        )
+    }
+    if (showSwipeDeleteDialog) {
+        ChecklistBatchDeleteDialog(
+            count = 1,
+            onConfirm = {
+                showSwipeDeleteDialog = false
+                val id = swipeTargetId
+                swipeTargetId = null
+                if (id != null) {
+                    findChecklistItem(state.itemDetails, id)?.let { onDelete(it.toSubTask()) }
+                }
+            },
+            onDismiss = {
+                showSwipeDeleteDialog = false
+                swipeTargetId = null
+            },
+        )
+    }
+
     // ===== 编辑 / 新建弹窗 =====
     val currentEdit = editingItem
     if (currentEdit != null || creatingItem) {
@@ -618,6 +716,12 @@ private fun ChecklistListItemCard(
     onDragStart: () -> Unit,
     onDrag: (Float) -> Unit,
     onDragEnd: () -> Unit,
+    // ===== Phase 24：左滑 / 右滑 =====
+    onSwipeChangeDate: (Long) -> Unit,
+    onSwipeMoveToList: (Long) -> Unit,
+    onSwipeDelete: (Long) -> Unit,
+    onSwipeComplete: (Long, Boolean) -> Unit,
+    onSwipeTogglePin: (Long, Boolean) -> Unit,
 ) {
     ChecklistItemCard(
         item = item,
@@ -638,6 +742,12 @@ private fun ChecklistListItemCard(
         onDragStart = onDragStart,
         onDrag = onDrag,
         onDragEnd = onDragEnd,
+        // ===== Phase 24：左滑 / 右滑 =====
+        onSwipeChangeDate = { id -> onSwipeChangeDate(id) },
+        onSwipeMoveToList = { id -> onSwipeMoveToList(id) },
+        onSwipeDelete = { id -> onSwipeDelete(id) },
+        onSwipeComplete = { id, completed -> onSwipeComplete(id, completed) },
+        onSwipeTogglePin = { id, pinned -> onSwipeTogglePin(id, pinned) },
     )
 }
 
@@ -720,6 +830,8 @@ internal fun ChecklistItemUi.toSubTask(): Task = Task(
     parentTaskId = parentSubTaskId,
     title = title,
     isCompleted = isCompleted,
+    // Phase 24：置顶状态也得带上（撤销删除要原样放回去）
+    isPinned = isPinned,
     manualOrder = order.toLong(),
     createdAt = 0L,
     category = category,
@@ -727,3 +839,17 @@ internal fun ChecklistItemUi.toSubTask(): Task = Task(
     priority = priority,
     amount = amount,
 )
+
+/**
+ * Phase 24：在「顶层项 + 嵌套子项」树里按 id 找某个项。
+ *
+ * 左滑 / 右滑只带 id 上来（回调是 `(Long) -> Unit`），
+ * 真正要动手的时候（比如删除）得把项捞回来 —— 嵌套子项在扁平列表里没有。
+ */
+private fun findChecklistItem(items: List<ChecklistItemUi>, id: Long): ChecklistItemUi? {
+    for (item in items) {
+        if (item.id == id) return item
+        findChecklistItem(item.children, id)?.let { return it }
+    }
+    return null
+}

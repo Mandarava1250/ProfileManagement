@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.finance.presentation.budget
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -27,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.personalassistant.feature.finance.domain.BillingCycle
+import com.example.personalassistant.feature.finance.domain.model.TodayRemainingMode
 
 /**
  * C 重构阶段 3：月度预算 Sheet
@@ -79,6 +82,8 @@ fun BudgetForm(
     val cutoffPolicy by viewModel.cutoffPolicy.collectAsStateWithLifecycle()
     // C：是否显示年份选择 Sheet
     var showYearMonthPicker by remember { mutableStateOf(false) }
+    // 批次 C：「今日剩余」显示口径
+    val todayRemainingMode by viewModel.todayRemainingMode.collectAsStateWithLifecycle()
 
     // B 修复：只在**首次**有 persisted 时加载；后续 persisted 流更新不再覆盖 _editing
     var loaded by remember { mutableStateOf(false) }
@@ -128,6 +133,39 @@ fun BudgetForm(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth(),
         )
+
+        // ===== 批次 C：「今日剩余」显示口径 =====
+        //
+        // 放在预算弹窗而不是记账页顶栏：这是一条**显示偏好**，
+        // 和「每天自动刷新零钱池」「昨日剩余结转今天」是同一类东西，放一起好找。
+        Text(
+            text = "「今日剩余」显示方式",
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            TodayRemainingMode.entries.forEach { mode ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.clickable { viewModel.setTodayRemainingMode(mode) },
+                ) {
+                    RadioButton(
+                        selected = todayRemainingMode == mode,
+                        onClick = { viewModel.setTodayRemainingMode(mode) },
+                    )
+                    Text(
+                        text = when (mode) {
+                            TodayRemainingMode.FIXED -> "固定（本月还能花多少）"
+                            TodayRemainingMode.AUTO -> "自动（按剩余天数均摊）"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
 
         // ===== 月截止日（全局设置，所有月份共用）=====
         //

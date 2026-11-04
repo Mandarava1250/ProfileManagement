@@ -2,12 +2,14 @@ package com.example.personalassistant.feature.finance.presentation.budget
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.personalassistant.feature.finance.domain.BillingCycle
 import com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
+import com.example.personalassistant.feature.finance.domain.model.TodayRemainingMode
+import com.example.personalassistant.feature.finance.domain.repository.FinanceDisplayRepository
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveAllBudgetsUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.SetMonthlyBudgetUseCase
 import com.example.personalassistant.feature.finance.presentation.util.Feedback
-import com.example.personalassistant.feature.finance.presentation.util.FinanceDateUtils
 import com.example.personalassistant.feature.settings.FinanceCutoffSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +19,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.YearMonth
+import java.time.ZoneId
 import javax.inject.Inject
 
 /**
@@ -41,12 +45,31 @@ class BudgetViewModel @Inject constructor(
     observeAllBudgets: ObserveAllBudgetsUseCase,
     private val setMonthlyBudget: SetMonthlyBudgetUseCase,
     private val settingsRepository: FinanceCutoffSettings,
+    // 批次 C：「今日剩余」显示口径
+    private val financeDisplayRepository: FinanceDisplayRepository,
 ) : ViewModel() {
+
+    /** 时区（账期按本地时区切；集中一处，避免各处各自 ZoneId.systemDefault()） */
+    private val zone: ZoneId = ZoneId.systemDefault()
 
     // ============ C：当前选中的月份 ============
 
-    private val _yearMonth = MutableStateFlow(FinanceDateUtils.currentYearMonth())
-    val yearMonth: StateFlow<String> = _yearMonth.asStateFlow()
+    /**
+     * 用户**手动**选中的月份；null = 跟随当前账期。
+     *
+     * ## 批次 C：为什么要拆成两态（修帮凶 1）
+     *
+     * 原来 `_yearMonth` 的初值是 `FinanceDateUtils.currentYearMonth()` —— **自然月**。
+     * 而 `FinanceRepositoryImpl.setMonthlyBudget` 比的是 `BillingCycle.yearMonthOf(...)` —— **账期月**。
+     * 月截止日设为 15 号时，10 月 10 日仍属于「2026-09」这个账期段：
+     * 自然月 = "2026-10"，账期月 = "2026-09" → 两边对不上 →
+     * 用户在弹窗里保存的是「2026-10」，而 `setMonthlyBudget` 判定 `yearMonth != currentCycleYm`
+     * → **连 `refreshDailyPool` 都不调** → 改了预算界面纹丝不动。
+     *
+     * 所以：默认展示的必须是**账期月**，而且用户手动选过之后要记住他的选择
+     * （不能每次策略变化都把用户拉回当前月）。
+     */
+    private val _manualYearMonth = MutableStateFlow<String?>(null)
 
     // ============ 月截止日 ============
 
@@ -67,10 +90,30 @@ class BudgetViewModel @Inject constructor(
         initialValue = MonthCutoffPolicy(),
     )
 
+    /**
+     * 当前展示的月份：手动选择优先，否则跟随当前账期。
+     *
+     * 对外仍然是 `StateFlow<String>`，调用方（BudgetSheet / persistedBudget）不用改。
+     *
+     * ⚠️ 声明必须在 [cutoffPolicy] **之后** —— 它要 combine 那条流，
+     * 写在前面就变成「先用后声明」，Kotlin 编译期直接报
+     * `Variable 'cutoffPolicy' must be initialized`。
+     */
+    val yearMonth: StateFlow<String> = combine(
+        _manualYearMonth,
+        cutoffPolicy,
+    ) { manual, policy ->
+        manual ?: BillingCycle.yearMonthOf(LocalDate.now(zone), policy, zone)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = BillingCycle.yearMonthOf(LocalDate.now(zone), MonthCutoffPolicy(), zone),
+    )
+
     /** 切月份查看历史预算：来源是所有 budget 里筛当前选中的那条 */
     val persistedBudget: StateFlow<MonthlyBudget?> = combine(
         observeAllBudgets(),
-        _yearMonth,
+        yearMonth,
     ) { all, ym -> all.find { it.yearMonth == ym } }
         .stateIn(
             scope = viewModelScope,
@@ -134,19 +177,49 @@ class BudgetViewModel @Inject constructor(
         process(Intent.Save(onDone))
     }
 
-    /** C：直接跳到任意 yyyy-MM */
+    /** C：直接跳到任意 yyyy-MM（手动选择，之后就一直跟着这个月） */
     fun setYearMonth(ym: String) {
-        _yearMonth.value = ym
+        _manualYearMonth.value = ym
     }
 
     /** C：上个月（YearMonth.plusMonths(-1)），格式 yyyy-MM */
     fun goPrevMonth() {
-        _yearMonth.value = YearMonth.parse(_yearMonth.value).minusMonths(1).toString()
+        _manualYearMonth.value = YearMonth.parse(yearMonth.value).minusMonths(1).toString()
     }
 
     /** C：下个月 */
     fun goNextMonth() {
-        _yearMonth.value = YearMonth.parse(_yearMonth.value).plusMonths(1).toString()
+        _manualYearMonth.value = YearMonth.parse(yearMonth.value).plusMonths(1).toString()
+    }
+
+    // ============ 批次 C：「今日剩余」显示口径 ============
+
+    /**
+     * 「今日剩余」的显示口径
+     *
+     * 批次 C：预算弹窗里要能改这个口径，所以 VM 得能读 + 写。
+     * 复用同一个 [FinanceDisplayRepository]（DataStore），记账页那张卡读的是同一个值。
+     */
+    val todayRemainingMode: StateFlow<TodayRemainingMode> =
+        financeDisplayRepository.observeTodayRemainingMode()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = TodayRemainingMode.DEFAULT,
+            )
+
+    /** 切换「今日剩余」的显示口径 */
+    fun setTodayRemainingMode(mode: TodayRemainingMode) {
+        viewModelScope.launch {
+            runCatching {
+                financeDisplayRepository.setTodayRemainingMode(mode)
+            }.onFailure {
+                _feedback.value = Feedback.Error(
+                    message = "保存口径失败：${it.message ?: "未知错误"}",
+                    cause = it,
+                )
+            }
+        }
     }
 
     // ============ 内部 reducer ============
@@ -185,7 +258,7 @@ class BudgetViewModel @Inject constructor(
                 // B 修复：空字符串 / 解析失败 ⇒ null（语义：未设置警告阈值）
                 val threshold = s.warningThresholdText.toDoubleOrNull()
                 // C：save 透传当前选中的 yearMonth，而不是固定的当月
-                val ym = _yearMonth.value
+                val ym = yearMonth.value
                 viewModelScope.launch {
                     runCatching {
                         setMonthlyBudget(

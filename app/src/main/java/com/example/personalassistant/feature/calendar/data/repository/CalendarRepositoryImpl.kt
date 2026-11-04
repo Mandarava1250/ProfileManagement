@@ -4,6 +4,7 @@ import com.example.personalassistant.core.di.IoDispatcher
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.calendar.data.mapper.toDomain
 import com.example.personalassistant.feature.calendar.data.mapper.toEntity
+import com.example.personalassistant.feature.calendar.domain.model.CalendarHabitItem
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.DaySummary
 import com.example.personalassistant.feature.calendar.domain.model.Event
@@ -12,7 +13,11 @@ import com.example.personalassistant.feature.calendar.domain.repository.Calendar
 import com.example.personalassistant.feature.calendar.domain.repository.CalendarRepository
 import com.example.personalassistant.feature.calendar.domain.util.CalendarTaskFilter
 import com.example.personalassistant.feature.calendar.domain.util.WeekCalculator
+import com.example.personalassistant.feature.habit.domain.model.Habit
+import com.example.personalassistant.feature.habit.domain.model.HabitCheckIn
+import com.example.personalassistant.feature.habit.domain.model.HabitTargetType
 import com.example.personalassistant.feature.habit.domain.repository.HabitDisplayRepository
+import com.example.personalassistant.feature.habit.domain.repository.HabitRepository
 import com.example.personalassistant.feature.task.data.local.TaskDao
 import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.domain.model.Task
@@ -56,6 +61,8 @@ class CalendarRepositoryImpl @Inject constructor(
     private val calendarDisplayRepository: CalendarDisplayRepository,
     // Phase 20.3：「习惯打卡」开关复用习惯模块的（key = habit_show_in_calendar）
     private val habitDisplayRepository: HabitDisplayRepository,
+    // Phase 24B：习惯数据（习惯定义 + 打卡记录）—— 日历侧只读，写走习惯域的 UseCase
+    private val habitRepository: HabitRepository,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : CalendarRepository {
 
@@ -153,6 +160,22 @@ class CalendarRepositoryImpl @Inject constructor(
                 .map { it.toDomain() }
         }
 
+        // Phase 24B：习惯打卡 —— 当天所有（未归档）习惯的次数
+        //
+        // 口径与习惯模块的 HabitDayCell 对齐：
+        // - count 永远是**当天**的次数（+ / − 按钮动的就是它）
+        // - isMet：每日目标看当天；每周目标看**所在周累计**（跟习惯页的月度表一致）
+        //
+        // 所以这里要把整周的打卡记录一起拉出来 —— 单日的 observeCheckInsOn 算不出周累计。
+        val weekStart = startOfWeekMillis(date)
+        val weekEnd = weekStart + 7 * ONE_DAY_MILLIS - 1
+        val habitsFlow: Flow<List<CalendarHabitItem>> = combine(
+            habitRepository.observeHabits(),
+            habitRepository.observeCheckInsInRange(weekStart, weekEnd),
+        ) { habits, checkIns ->
+            buildCalendarHabitItems(habits, checkIns, date)
+        }
+
         // Phase 20.3：显示设置（课程 / 清单项 / 已完成 / 习惯打卡）
         // 习惯开关直接复用习惯模块的 HabitDisplayRepository（key = habit_show_in_calendar），
         // 两边共用同一个 key，用户只看到一个开关。
@@ -161,13 +184,17 @@ class CalendarRepositoryImpl @Inject constructor(
             habitDisplayRepository.observeShowInCalendar(),
         ) { prefs, showHabits -> prefs.copy(showHabits = showHabits) }
 
+        // Phase 24B：学期 + 习惯 合成一路（combine 最多 5 路，先折成 1 路）
+        val extrasFlow = combine(semesterFlow, habitsFlow) { semester, habits -> semester to habits }
+
         return combine(
             eventsFlow,
             tasksFlow,
             coursesFlow,
-            semesterFlow,
+            extrasFlow,
             displayPrefsFlow,
-        ) { events, tasks, courses, semester, prefs ->
+        ) { events, tasks, courses, extras, prefs ->
+            val (semester, habits) = extras
             val weekNumber = semester?.let { WeekCalculator.weekNumber(date, it.startDate, it.endDate) }
             DayDetail(
                 date = date,
@@ -176,6 +203,8 @@ class CalendarRepositoryImpl @Inject constructor(
                 // Phase 20.3：清单项 / 已完成 两个开关在这里生效
                 tasks = prefs.filterTasks(tasks),
                 courses = if (prefs.showCourses) courses else emptyList(),
+                // Phase 24B：习惯打卡开关在这里生效 —— 关掉就一条都不显示
+                habits = if (prefs.showHabits) habits else emptyList(),
                 weekNumber = weekNumber,
             )
         }
@@ -234,19 +263,37 @@ class CalendarRepositoryImpl @Inject constructor(
             (1..7).associateWith { dow -> grouped[dow] ?: emptyList() }
         }
 
+        // Phase 24B：当月每天「有打卡记录的习惯数」
+        //
+        // 只算**未归档**的习惯 —— 归档的习惯不再参与日常，历史记录留着但不占月网格角标。
+        val habitCountsFlow: Flow<Map<Long, Int>> = combine(
+            habitRepository.observeHabits(),
+            habitRepository.observeCheckInsInRange(monthStart, monthEnd - 1),
+        ) { habits, checkIns ->
+            val activeIds = habits.mapTo(HashSet()) { it.id }
+            checkIns.asSequence()
+                .filter { it.habitId in activeIds }
+                .groupBy { it.date }
+                .mapValues { (_, list) -> list.map { it.habitId }.distinct().size }
+        }
+
         // Phase 20.3：显示设置（课程 / 清单项 / 已完成 / 习惯打卡）
         val displayPrefsFlow = combine(
             calendarDisplayRepository.observe(),
             habitDisplayRepository.observeShowInCalendar(),
         ) { prefs, showHabits -> prefs.copy(showHabits = showHabits) }
 
+        // Phase 24B：周次 + 显示设置 合成一路（combine 最多 5 路）
+        val extrasFlow = combine(coursesFlow, displayPrefsFlow) { weekNumber, prefs -> weekNumber to prefs }
+
         return combine(
             eventsFlow,
             tasksFlow,
             coursesByDayFlow,
-            coursesFlow,
-            displayPrefsFlow,
-        ) { events, tasks, coursesByDay, weekNumber, prefs ->
+            habitCountsFlow,
+            extrasFlow,
+        ) { events, tasks, coursesByDay, habitCounts, extras ->
+            val (weekNumber, prefs) = extras
             val summary = mutableMapOf<Long, DaySummary>()
 
             // 1. events 分组
@@ -298,7 +345,19 @@ class CalendarRepositoryImpl @Inject constructor(
                 }
             }
 
-            // 4. 标记 today
+            // 4. 习惯打卡（Phase 24B）
+            //
+            // 关掉「习惯打卡」开关 → 这一整段不算（月网格上不显示习惯角标）。
+            if (prefs.showHabits) {
+                habitCounts.forEach { (date, count) ->
+                    if (date in monthStart until monthEnd) {
+                        val existing = summary[date] ?: DaySummary(date = date)
+                        summary[date] = existing.copy(habitCount = count)
+                    }
+                }
+            }
+
+            // 5. 标记 today
             summary[today]?.let { summary[today] = it.copy(isToday = true) }
 
             summary
@@ -326,6 +385,55 @@ class CalendarRepositoryImpl @Inject constructor(
     private fun startOfDayMillis(timestamp: Long): Long {
         val date = Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).toLocalDate()
         return date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    }
+
+    /**
+     * Phase 24B：所在周的周一 00:00（毫秒时间戳）
+     *
+     * 周起始日是周一（与 CalendarViewModel.computeWeekRange 同一套口径）。
+     */
+    private fun startOfWeekMillis(date: Long): Long {
+        val zone = ZoneId.systemDefault()
+        val localDate = Instant.ofEpochMilli(date).atZone(zone).toLocalDate()
+        val monday = localDate.minusDays((localDate.dayOfWeek.value - 1).toLong())
+        return monday.atStartOfDay(zone).toInstant().toEpochMilli()
+    }
+
+    /**
+     * Phase 24B：把「习惯 + 一周的打卡记录」拼成日历侧的习惯条目
+     *
+     * - count：当天（[date]）的次数 —— + / − 按钮动的就是它
+     * - isMet：每日目标看当天；每周目标看所在周累计（与习惯页月度表口径一致）
+     */
+    private fun buildCalendarHabitItems(
+        habits: List<Habit>,
+        checkIns: List<HabitCheckIn>,
+        date: Long,
+    ): List<CalendarHabitItem> {
+        val dayCounts = HashMap<Long, Int>()
+        val weekCounts = HashMap<Long, Int>()
+        checkIns.forEach { checkIn ->
+            weekCounts[checkIn.habitId] = (weekCounts[checkIn.habitId] ?: 0) + checkIn.count
+            if (checkIn.date == date) {
+                dayCounts[checkIn.habitId] = (dayCounts[checkIn.habitId] ?: 0) + checkIn.count
+            }
+        }
+        return habits.map { habit ->
+            val count = dayCounts[habit.id] ?: 0
+            val met = if (habit.targetType == HabitTargetType.WEEKLY) {
+                (weekCounts[habit.id] ?: 0) >= habit.targetCount
+            } else {
+                count >= habit.targetCount
+            }
+            CalendarHabitItem(
+                habitId = habit.id,
+                name = habit.name,
+                color = habit.color,
+                count = count,
+                targetCount = habit.targetCount,
+                isMet = met,
+            )
+        }
     }
 
     /**

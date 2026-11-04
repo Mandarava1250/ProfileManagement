@@ -10,8 +10,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,11 +44,11 @@ import com.example.personalassistant.feature.task.presentation.ChecklistItemUi
  * - 这里的 [ChecklistItemUi] 是清单页专用的 UI 模型，自带 tags / children。
  * - 两边共用同一套行画法 [ChecklistItemRow]，视觉不会分叉。
  *
- * ## 手势（Phase 18.4 / 18.6）
+ * ## 手势（Phase 18.4 / 18.6 / 24）
  *
  * 卡片的行外面套了一层 [ChecklistItemGestureBox]（长按 → 多选 / 长按竖拖 → 排序），
- * 行里面是 [SwipeToDeleteBox]（左滑 → 删除）。
- * 两层的分工见 [ChecklistItemGestureBox] 的注释：横滑删除先拿到事件，
+ * 行里面是 [SwipeActionBox]（左滑 → 改日期 / 移入清单 / 删除；右滑 → 完成 / 置顶）。
+ * 两层的分工见 [ChecklistItemGestureBox] 的注释：横滑先拿到事件，
  * 竖拖排序不会被它抢走。
  *
  * @param item 清单项（UI 模型）
@@ -60,6 +65,11 @@ import com.example.personalassistant.feature.task.presentation.ChecklistItemUi
  * @param dragEnabled Phase 18.4：是否允许拖拽排序（只有顶层项可以）
  * @param isDragging Phase 18.4：该项正被拖着
  * @param onDragStart / onDrag / onDragEnd Phase 18.4：拖拽手势回调
+ * @param onSwipeChangeDate Phase 24：左滑「改日期」（回调带 itemId）
+ * @param onSwipeMoveToList Phase 24：左滑「移入清单」（回调带 itemId）
+ * @param onSwipeDelete Phase 24：左滑「删除」（回调带 itemId）
+ * @param onSwipeComplete Phase 24：右滑「完成 / 取消完成」（回调带 itemId 与目标完成态）
+ * @param onSwipeTogglePin Phase 24：右滑「置顶 / 取消置顶」（回调带 itemId 与目标置顶态）
  */
 @Composable
 fun ChecklistItemCard(
@@ -82,10 +92,75 @@ fun ChecklistItemCard(
     onDragStart: () -> Unit = {},
     onDrag: (Float) -> Unit = {},
     onDragEnd: () -> Unit = {},
+    // ===== Phase 24：左滑 / 右滑操作 =====
+    onSwipeChangeDate: ((Long) -> Unit)? = null,
+    onSwipeMoveToList: ((Long) -> Unit)? = null,
+    onSwipeDelete: ((Long) -> Unit)? = null,
+    onSwipeComplete: ((Long, Boolean) -> Unit)? = null,
+    onSwipeTogglePin: ((Long, Boolean) -> Unit)? = null,
 ) {
     val expanded = expandedIds.contains(item.id)
     val childCount = item.children.size
     val completedChildCount = item.children.count { it.isCompleted }
+
+    // ===== Phase 24：滑动动作 =====
+    // 左滑三个（改日期 / 移入清单 / 删除）、右滑两个（完成 / 置顶）。
+    // 没传回调的动作就不加进去 —— 免得露出一个点了没反应的图标。
+    val endActions: List<SwipeAction> = buildList {
+        if (onSwipeChangeDate != null) {
+            add(
+                SwipeAction(
+                    icon = Icons.Rounded.Event,
+                    label = "改日期",
+                    backgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                ) { onSwipeChangeDate.invoke(item.id) },
+            )
+        }
+        if (onSwipeMoveToList != null) {
+            add(
+                SwipeAction(
+                    icon = Icons.Rounded.FolderOpen,
+                    label = "移入清单",
+                    backgroundColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                ) { onSwipeMoveToList.invoke(item.id) },
+            )
+        }
+        if (onSwipeDelete != null) {
+            add(
+                SwipeAction(
+                    icon = Icons.Rounded.Delete,
+                    label = "删除",
+                    backgroundColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                ) { onSwipeDelete.invoke(item.id) },
+            )
+        }
+    }
+
+    val startActions: List<SwipeAction> = buildList {
+        if (onSwipeComplete != null) {
+            add(
+                SwipeAction(
+                    icon = Icons.Rounded.Check,
+                    label = if (item.isCompleted) "取消完成" else "完成",
+                    backgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) { onSwipeComplete.invoke(item.id, !item.isCompleted) },
+            )
+        }
+        if (onSwipeTogglePin != null) {
+            add(
+                SwipeAction(
+                    icon = Icons.Rounded.PushPin,
+                    label = if (item.isPinned) "取消置顶" else "置顶",
+                    backgroundColor = MaterialTheme.colorScheme.tertiary,
+                    contentColor = MaterialTheme.colorScheme.onTertiary,
+                ) { onSwipeTogglePin.invoke(item.id, !item.isPinned) },
+            )
+        }
+    }
 
     Column(
         modifier = modifier
@@ -102,9 +177,11 @@ fun ChecklistItemCard(
             onDrag = onDrag,
             onDragEnd = onDragEnd,
         ) {
-            // Phase 18.5：左滑露出删除按钮（多选模式下关掉，避免误删）
-            SwipeToDeleteBox(
-                onDelete = { onDelete(item) },
+            // Phase 24：左滑（改日期 / 移入清单 / 删除）+ 右滑（完成 / 置顶）
+            // 多选模式下关掉，避免误操作。
+            SwipeActionBox(
+                startActions = startActions,
+                endActions = endActions,
                 enabled = !selectionMode,
             ) {
                 ChecklistItemRow(
@@ -165,7 +242,13 @@ fun ChecklistItemCard(
                         onToggleSelect = onToggleSelect,
                         // Phase 18.4：只有顶层项能拖拽排序
                         dragEnabled = false,
-                    )
+                        // ===== Phase 24：子项也能左滑 / 右滑 =====
+                        onSwipeChangeDate = onSwipeChangeDate,
+                        onSwipeMoveToList = onSwipeMoveToList,
+                        onSwipeDelete = onSwipeDelete,
+                        onSwipeComplete = onSwipeComplete,
+                        onSwipeTogglePin = onSwipeTogglePin,
+                )
                 }
                 if (onAddChild != null) {
                     AddChildInput(onAdd = { title -> onAddChild(item.id, title) })

@@ -2914,3 +2914,61 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 2. 任务页拖拽把 `manualOrder` 按「象限内下标」写，会和象限外任务撞值
    （清单侧用全局数组重排规避了，任务页未动）。
 3. `SwipeToDeleteBox` 的删除图标 `contentDescription` 硬编码「删除」，未走 strings.xml。
+
+---
+
+## 📓 Phase 24（补完尾巴 + 修三个 BUG + 记账模块三件大事）
+
+> 分支：`feature/phase-16-checklist-rebuild`｜Room 17 → **18**（新增 `coin_pools`）｜备份 17 表 → 18 表
+> 验证门槛：`assembleDebug` + `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全绿
+
+### 一、清单模块（任务 2 / 3 / 4）
+
+| 项 | 主题 | 关键产出 |
+|---|---|---|
+| 18.5 扩展 | 左滑多动作 + 右滑 | 新建 `SwipeActionBox`（通用双向滑动容器），语义从「滑过即执行」改为「**滑到位吸附停住，等用户点图标**」；左右吸附阈值各自独立算（每动作 64dp）；左右都 `consume()` |
+| 18.5 接线 | 左滑三动作 / 右滑两动作 | 左滑 `改日期` / `移入清单` / `删除`，右滑 `完成` / `置顶`；复用 `ChecklistBatchSheets` 里现成的日期 / 清单面板（同包 `internal`，零改动） |
+| 18.5 置顶 | 补齐 `isPinned` 链路 | `TaskDao.setPinned` → `TaskRepository.setPinned` → `SetTaskPinnedUseCase` → VM → UI；**同时给排序加 `isPinned DESC`**（`TaskDao` 三个 observe + `TaskSort` + `ChecklistFilter`），否则点了置顶界面纹丝不动 |
+| 18.3 BUG | `recordCenterY` 命中判定 | 删掉 `ReorderableTaskItem` 的 `recordCenterY` 上报（它传的是**项自身高度的一半**，不是视口坐标 → 所有行命中窗口完全重叠，退化成「拖过一整行才换位」）；改用 `lazyState.layoutInfo.visibleItemsInfo` 按 key 取真实行高，比**半行高**换位 —— 与清单侧 `ChecklistTab` 完全同构 |
+| 18.4 BUG | `manualOrder` 撞值 | 改成**全局重排**（与清单侧一致）：`TaskUiState.allActiveIds` 全量顶层项，拖拽中只在象限内换位、落库写全局下标 → `manualOrder = 0..N-1` 全局唯一 |
+
+### 二、习惯与日历（任务 1）
+
+| 项 | 主题 | 关键产出 |
+|---|---|---|
+| B1 | 习惯数据上屏 | `HabitCheckInDao.observeRangeAll(start, end)`（跨习惯区间查询）→ `HabitRepository.observeCheckInsInRange`；日历四个模型补 `habits` / `habitCount`（`DayDetail` / `DaySummary` / `CalendarDayCell` / `WeekDayColumn`）；`CalendarRepositoryImpl` 的 `observeDayDetail` + `observeMonthSummary` 接入 |
+| B2 | 渲染 | 日视图「习惯打卡」卡片（可勾选 / 取消）；月视图「习惯」标签行（第 4 行，复用 `TagChipData` / `TagChip`）；月网格第 4 个 badge；周视图全天标签区 |
+| B3 | 补卡 UI | 新建 `HabitCheckInSheet`（`ModalBottomSheet`）：点月视图「习惯」chip → 打开，日期取 `selectedDate`，`+` / `−` 各调一次 `CheckInHabitUseCase(habitId, date, ±1)` —— **数据层本来就支持补卡**（`CheckInHabitUseCase` 的 `date` 参数），缺的只是 UI |
+| B4 | 清尾巴 | `HabitScreen` 过期副标题、`HabitDisplayRepository` 过期 KDoc、删除死代码 `DayDetailSheet.kt`（365 行，月视图改用 `MonthTagList` 后无人调用） |
+
+### 三、记账模块（任务 5 / 6 / 7）
+
+| 项 | 主题 | 关键产出 |
+|---|---|---|
+| 5 修复 | 今日剩余不同步 | **病根在 `FinanceRepositoryImpl.kt:482` 的 `if (todayPool != null) return@withContext`** —— 重算结果算到了，被幂等守卫丢弃；DAO 也没有更新已存在行的方法。改成「更新当天行」 |
+| 6 两种模式 | 今日剩余口径 | `TodayRemainingMode`（FIXED / AUTO，DataStore key `finance_today_remaining_mode`）+ `TodayRemainingCalculator`（纯函数）。FIXED = 本月可用余额 − 本月已支出；AUTO = 该值 ÷ `BillingCycle.remainingDays`（账期口径） |
+| 7 零钱池 | 独立于今日剩余 | 新建 `coin_pools` 表（Room v18）：`accountId` unique、`balance` **可负数**、FK → `user_profiles` CASCADE；`CoinPoolCard` 与「今日剩余」卡平级；备份导出 / 导入 / diff / 外键全补（18 表） |
+| 帮凶 | 三处连带不一致 | `BudgetViewModel._yearMonth` 自然月 → 账期月（`BillingCycle.yearMonthOf`）；`isAutoRefresh` 死开关接上 `DailyPoolRefreshWorker`；`observeTodayPool` 跨零点能重新求值 |
+
+### 四、本轮关键决策
+
+21. **「今日剩余」改成派生值，不再落库** —— 落库的派生值 = 用户改一次预算、历史那一行也跟着变，月底对账看到的全是假的。派生的东西每次现算，永远不可能和源数据不一致（`UserProfileEntity.initialBalance` 已经立过这条规矩）。
+22. **`daily_pools` 表保留，职责收窄为「预算执行快照」** —— 它是**历史**（10 月 5 日那天实际发了多少日预算），改本月预算不该让那行跟着变；而且结转依赖它（`carryOver = max(0, 昨日 pool.remainingAmount)`），删表 = 结转功能消失。
+23. **零钱池单独建表而不是复用 `daily_pools`** —— 后者是日切快照（每天一行），改成持续余额要动 `dailyBudget` / `carryOver` / `totalSpentToday` 一整套字段，历史数据也没法迁。新表一个账户一个池，语义干净。
+24. **滑动语义从「滑过即执行」改成「滑出图标等用户点」** —— 多动作时前者会误伤（想改日期结果删了）。
+25. **`recordCenterY` 的修法是「不传坐标」而不是「传对坐标」** —— 绝对视口坐标在拖拽过程中会因布局重排而失效，半行高阈值法不需要绝对坐标，跟清单侧那套已经跑通的手感一模一样。
+26. **`manualOrder` 用全局重排而非分组内 offset** —— 分组 offset（象限序号 × 1e6 + 局部下标）只是把撞值换成稀疏，任务一多照样撞，还留一堆空洞。
+27. **`coin_pools` 不依赖外键 CASCADE** —— `PRAGMA foreign_keys` 是**连接级**开关，备份导入 / 数据重置路径会临时关掉外键检查 → CASCADE 不触发 → 零钱池变孤儿行。所以在 `AccountRepositoryImpl.deleteAccount` 里加**显式**删除。
+
+### 五、过程中揪出并修掉的真 BUG
+
+- **Room DDL 漏 `DEFAULT 1`** —— `CoinPoolEntity` 声明了 `@ColumnInfo(defaultValue = "1")`，Room 生成的 DDL 带 `DEFAULT 1`，但迁移里的 CREATE 语句漏了。**编译期看不出来**，Room 运行期 `TableInfo` 校验会判列不一致 → 用户一升级就崩 `Migration didn't properly handle: coin_pools`。已在 `Migration_17_18Test` 里加断言钉住。
+
+### 六、已知边界（未做 / 待后续）
+
+- **Room 迁移没有真机验证** —— `MigrationTestHelper` 需要设备；DDL 与 `18.json` 的一致性是**静态比对 + JVM 断言**，不是真机迁移验证。
+- **`daily_pools` 的备份 diff-by-id 坑未修** —— UNIQUE 是 `(accountId, date)` 但 diff 按 id 比对，同一天两行 id 不同时会互相替换。跨模块 + 影响既有备份语义，需单独授权。`coin_pools` 已从设计上按 `accountId` 判等避开。
+- **周视图 7 个 `DayDetail` → 7 份习惯区间查询**，Room 查询数从 ~14 涨到 ~21，未实测。
+- **`buildCalendarHabitItems` 是 repository 私有方法**，不是纯函数 → JVM 单测覆盖不到（要覆盖得先提到 `domain/util/`）。
+- **任务页拖拽组件仍是死代码** —— 本轮只把组件修对（18.3 / 18.4 修的是潜伏 BUG），没给任务页接线；接线还得给任务页加「手动排序」排序选项，属产品决策。
+- **零钱池没有存取流水明细** —— 只有余额 + 备注，没有历史表；需要的话得再加 `coin_pool_records`。

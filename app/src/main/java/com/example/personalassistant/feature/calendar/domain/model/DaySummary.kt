@@ -19,10 +19,15 @@ data class DaySummary(
     val eventCount: Int = 0,
     val taskCount: Int = 0,
     val courseCount: Int = 0,
+    /**
+     * Phase 24B：当日有打卡记录的习惯数（月网格角标用）
+     */
+    val habitCount: Int = 0,
     val isToday: Boolean = false,
 ) {
-    val hasAny: Boolean get() = eventCount > 0 || taskCount > 0 || courseCount > 0
-    val totalCount: Int get() = eventCount + taskCount + courseCount
+    val hasAny: Boolean
+        get() = eventCount > 0 || taskCount > 0 || courseCount > 0 || habitCount > 0
+    val totalCount: Int get() = eventCount + taskCount + courseCount + habitCount
 }
 
 /**

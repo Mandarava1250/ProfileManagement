@@ -40,6 +40,7 @@ import com.example.personalassistant.feature.task.domain.usecase.ObserveTaskList
 import com.example.personalassistant.feature.task.domain.usecase.RecordExpenseFromTaskUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RestoreChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RenameTaskListUseCase
+import com.example.personalassistant.feature.task.domain.usecase.SetTaskPinnedUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.UpdateChecklistItemUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -100,6 +101,8 @@ class ChecklistViewModel @Inject constructor(
     private val financeRepository: FinanceRepository,
     // ===== Phase 18.3：快速输入里的 #标签 =====
     private val createTag: CreateTagUseCase,
+    // ===== Phase 24：置顶 =====
+    private val setTaskPinned: SetTaskPinnedUseCase,
 ) : ViewModel() {
 
     // ===== Phase 21：清单 ↔ 记账联动 =====
@@ -507,6 +510,45 @@ class ChecklistViewModel @Inject constructor(
             if (id in expenseRecordedTaskIds.value) return@launch
 
             pendingExpenseTaskState.value = task
+        }
+    }
+
+    // ===== Phase 24：单条操作（左滑 / 右滑）=====
+
+    /**
+     * Phase 24：单条改截止时间（左滑「改日期」）。
+     *
+     * 跟批量那条走同一个 UseCase，只是范围只有一项。
+     *
+     * @param dueDate null = 清除截止时间
+     */
+    fun setItemDueDate(id: Long, dueDate: Long?) {
+        viewModelScope.launch {
+            runCatching {
+                updateChecklistItem(
+                    id = id,
+                    dueDate = dueDate,
+                    clearDueDate = dueDate == null,
+                )
+            }
+        }
+    }
+
+    /**
+     * Phase 24：单条移入别的清单（左滑「移入清单」）。
+     */
+    fun moveItemToList(id: Long, listId: Long) {
+        viewModelScope.launch {
+            runCatching { updateChecklistItem(id = id, listId = listId) }
+        }
+    }
+
+    /**
+     * Phase 24：单条置顶 / 取消置顶（右滑「置顶」）。
+     */
+    fun setItemPinned(id: Long, pinned: Boolean) {
+        viewModelScope.launch {
+            runCatching { setTaskPinned(id, pinned) }
         }
     }
 

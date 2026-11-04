@@ -50,8 +50,8 @@ import com.example.personalassistant.navigation.Screen
 import com.example.personalassistant.navigation.navigateToTab
 import com.example.personalassistant.feature.calendar.presentation.EventEditState
 import com.example.personalassistant.feature.calendar.presentation.components.DayCalendarView
-import com.example.personalassistant.feature.calendar.presentation.components.DayDetailSheet
 import com.example.personalassistant.feature.calendar.presentation.components.EditEventSheet
+import com.example.personalassistant.feature.calendar.presentation.components.HabitCheckInSheet
 import com.example.personalassistant.feature.calendar.presentation.components.MonthCalendarGrid
 import com.example.personalassistant.feature.calendar.presentation.components.MonthTagList
 import com.example.personalassistant.feature.calendar.presentation.components.MonthPickerSheet
@@ -63,15 +63,15 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * Phase 7c Sub-step 4+5：日历主页（三视图切换 + DayDetailSheet + EditEventSheet + FAB 新建）
+ * Phase 7c Sub-step 4+5：日历主页（三视图切换 + EditEventSheet + FAB 新建）
  *
  * 涟宝解读：
  * - 顶部 TopAppBar：左/右按 viewType 切换单位（MONTH=月 / WEEK=周 / DAY=日） + 中间标题 + "回到今天"
  * - 中间：SingleChoiceSegmentedButtonRow（月/周/日切换）
  * - 主区：根据 viewType 渲染 MonthCalendarGrid / WeekCalendarView / DayCalendarView
- * - 底部：用户点击日期 → 弹出 DayDetailSheet（仅 MONTH/WEEK 视图触发）
+ * - 底部：月视图点日期 → 网格下方的 MonthTagList 列出当天内容
+ *   （Phase 14 起不再弹 DayDetailSheet —— 那个组件已删除）
  * - 浮动操作按钮（FAB）：点击 → 启动 EditEventSheet 新建事件（按 selectedDate/今天）
- * - DayDetailSheet 内事件项点击 → 启动 EditEventSheet 编辑
  *
  * @param navController 保留参数供 Phase 8 导航使用（暂时 unused）
  */
@@ -119,6 +119,9 @@ fun CalendarScreen(
     // Phase 20.3：日历「显示设置」的开关
     var showDisplaySettings by remember { mutableStateOf(false) }
 
+    // Phase 24B：补卡面板（给月视图选中的那一天补习惯打卡）
+    var showHabitCheckInSheet by remember { mutableStateOf(false) }
+
     // Phase 15 P1-2.3：月份选择器（ModalBottomSheet 走独立 dialog 窗口，放在 Scaffold 前后都行）
     if (showMonthPicker) {
         MonthPickerSheet(
@@ -151,6 +154,19 @@ fun CalendarScreen(
             onSave = { startAt, endAt -> viewModel.saveTaskTimeRange(task.id, startAt, endAt) },
             onClear = { viewModel.saveTaskTimeRange(task.id, null, null) },
             onDismiss = { viewModel.clearTaskTimeRangeEditor() },
+        )
+    }
+
+    // Phase 24B：补卡面板 —— 给选中的那一天补习惯打卡
+    //
+    // 日期取 selectedDate（月视图里选中的那天），count 也来自那一天的 habits。
+    if (showHabitCheckInSheet) {
+        val targetDate = selectedDate ?: DateUtils.todayStartMillis()
+        HabitCheckInSheet(
+            date = targetDate,
+            habits = selectedDayDetail?.habits.orEmpty(),
+            onCheckIn = { habitId, delta -> viewModel.checkInHabit(habitId, targetDate, delta) },
+            onDismiss = { showHabitCheckInSheet = false },
         )
     }
 
@@ -242,6 +258,8 @@ IconButton(onClick = { viewModel.goToCurrent() }) {
                             // 用户在日历里看到任务却摸不着它。
                             onTaskClick = { task -> navController.navigate(Screen.DetailTask.build(task.id)) },
                             onCourseClick = { course -> navController.navigate(Screen.EditCourse.build(course.id)) },
+                            // Phase 24B：点「习惯」标签 → 打开补卡面板（给选中的那一天补打卡）
+                            onHabitClick = { showHabitCheckInSheet = true },
                         )
                     }
                     CalendarViewType.WEEK -> WeekCalendarView(
@@ -273,6 +291,10 @@ IconButton(onClick = { viewModel.goToCurrent() }) {
                                 onTaskTimeRangeClick = { task -> viewModel.startEditTaskTimeRange(task) },
                                 // Phase 20.5：清单项 ↔ 课程 的冲突提示
                                 conflicts = dayConflicts,
+                                // Phase 24B：习惯打卡的 + / −（落在选中日，不一定是今天）
+                                onHabitCheckIn = { habitId, delta ->
+                                    viewModel.checkInHabit(habitId, anchor, delta)
+                                },
                             )
                         } else {
                             EmptyViewPlaceholder(text = "请回到今天")

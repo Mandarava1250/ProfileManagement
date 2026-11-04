@@ -92,6 +92,8 @@ open class BackupCurrentSnapshotProvider @Inject constructor(
             habits = runCatching { database.habitDao().getAll() }.getOrDefault(emptyList()),
             // Phase 23：习惯打卡记录
             habitCheckIns = runCatching { database.habitCheckInDao().getAll() }.getOrDefault(emptyList()),
+            // 批次 C：零钱池
+            coinPools = runCatching { financeDao.getAllCoinPools() }.getOrDefault(emptyList()),
         )
     }
 

@@ -3,6 +3,7 @@ package com.example.personalassistant.feature.finance.data.repository
 import com.example.personalassistant.feature.finance.domain.model.AccountBalanceSum
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
 import com.example.personalassistant.feature.finance.domain.model.Category
+import com.example.personalassistant.feature.finance.domain.model.CoinPool
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.domain.model.GlobalMonthlySums
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
@@ -33,6 +34,8 @@ class FakeFinanceRepository : FinanceRepository {
     private val transactionsState = MutableStateFlow<List<Transaction>>(emptyList())
     private val budgetsState = MutableStateFlow<List<MonthlyBudget>>(emptyList())
     private val dailyPoolsState = MutableStateFlow<List<DailyPool>>(emptyList())
+    private val coinPoolsState = MutableStateFlow<List<CoinPool>>(emptyList())
+    private var nextCoinPoolId = 1L
 
     private var nextCategoryId = 1L
     private var nextTxId = 1L
@@ -330,6 +333,47 @@ class FakeFinanceRepository : FinanceRepository {
         }
     }
 
+    // ===== 批次 C：零钱池 =====
+
+    override fun observeCoinPool(): Flow<CoinPool?> =
+        coinPoolsState.map { list -> list.firstOrNull() }
+
+    override suspend fun adjustCoinPool(delta: Double, note: String?): Double {
+        val existing = coinPoolsState.value.firstOrNull()
+        val newBalance = (existing?.balance ?: 0.0) + delta
+        writeCoinPool(newBalance, note, existing)
+        return newBalance
+    }
+
+    override suspend fun setCoinPoolBalance(balance: Double, note: String?): Double {
+        writeCoinPool(balance, note, coinPoolsState.value.firstOrNull())
+        return balance
+    }
+
+    private fun writeCoinPool(balance: Double, note: String?, existing: CoinPool?) {
+        val now = System.currentTimeMillis()
+        coinPoolsState.value = if (existing == null) {
+            listOf(
+                CoinPool(
+                    id = nextCoinPoolId++,
+                    accountId = CURRENT_ACCOUNT_ID,
+                    balance = balance,
+                    note = note,
+                    createdAt = now,
+                    updatedAt = now,
+                )
+            )
+        } else {
+            listOf(
+                existing.copy(
+                    balance = balance,
+                    note = note ?: existing.note,
+                    updatedAt = now,
+                )
+            )
+        }
+    }
+
     // ===== 测试辅助 =====
 
     fun reset() {
@@ -337,6 +381,8 @@ class FakeFinanceRepository : FinanceRepository {
         transactionsState.value = emptyList()
         budgetsState.value = emptyList()
         dailyPoolsState.value = emptyList()
+        coinPoolsState.value = emptyList()
+        nextCoinPoolId = 1L
         budgetSummariesState.value = emptyList()
         balanceSumsState.value = emptyList()
         globalMonthlySumsState.value = null

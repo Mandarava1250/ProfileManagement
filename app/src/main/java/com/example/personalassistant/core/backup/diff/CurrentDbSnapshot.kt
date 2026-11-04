@@ -5,6 +5,7 @@ import com.example.personalassistant.core.holiday.model.HolidayEntity
 import com.example.personalassistant.feature.calendar.data.local.EventCategoryEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
@@ -55,4 +56,6 @@ data class CurrentDbSnapshot(
     val studentProfile: List<StudentProfileEntity> = emptyList(),
     val habits: List<HabitEntity> = emptyList(),
     val habitCheckIns: List<HabitCheckInEntity> = emptyList(),
+    // 批次 C：零钱池
+    val coinPools: List<CoinPoolEntity> = emptyList(),
 )

@@ -34,6 +34,7 @@ import com.example.personalassistant.feature.finance.domain.usecase.ObserveGloba
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveMonthlyBudgetUseCase
 import com.example.personalassistant.feature.finance.domain.usecase.ObserveTodayPoolUseCase
 import com.example.personalassistant.feature.habit.domain.repository.HabitDisplayRepository
+import com.example.personalassistant.feature.habit.domain.usecase.CheckInHabitUseCase
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.usecase.ToggleTaskCompleteUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.GetCoursesByWeekUseCase
@@ -107,6 +108,9 @@ class CalendarViewModel @Inject constructor(
     private val habitDisplayRepository: HabitDisplayRepository,
     // Phase 20.1：给清单项设置 / 清除时间段
     private val setTaskTimeRange: SetTaskTimeRangeUseCase,
+    // Phase 24B：习惯打卡写入口 —— 走 habit 域的 UseCase，
+    // 跟 toggleTask 走 ToggleTaskCompleteUseCase 是同一个规矩（规则只在习惯域里定义一份）
+    private val checkInHabitUseCase: CheckInHabitUseCase,
 ) : ViewModel() {
 
     private val _currentYearMonth = MutableStateFlow(DateUtils.currentYearMonth())
@@ -693,6 +697,24 @@ class CalendarViewModel @Inject constructor(
         viewModelScope.launch { habitDisplayRepository.setShowInCalendar(enabled) }
     }
 
+    // ===== Phase 24B：习惯打卡 =====
+
+    /**
+     * 打卡 / 撤销打卡
+     *
+     * 走习惯模块的 CheckInHabitUseCase —— 规则（一天一条 + count 累加、
+     * 减到 0 删行、并发不丢次数）都定义在 habit 域里，日历这边不重复实现。
+     *
+     * @param date 打卡落在哪一天（当天 00:00 的毫秒时间戳）—— 传过去的日期就是**补卡**
+     * @param delta +1 打卡 / -1 撤销
+     */
+    fun checkInHabit(habitId: Long, date: Long, delta: Int) {
+        viewModelScope.launch {
+            runCatching { checkInHabitUseCase(habitId, date, delta) }
+                .onFailure { error -> _editorError.value = error.message ?: "打卡失败" }
+        }
+    }
+
     // ===== Phase 20.1：清单项时间段 =====
 
     /**
@@ -763,6 +785,8 @@ class CalendarViewModel @Inject constructor(
                                 courses = visibleCourses.filter { it.dayOfWeek == dayOfWeek },
                                 events = dayDetail?.events.orEmpty(),
                                 tasks = dayDetail?.tasks.orEmpty(),
+                                // Phase 24B：习惯打卡跟着自己那天走（习惯没有时刻，进全天标签区）
+                                habits = dayDetail?.habits.orEmpty(),
                             )
                         },
                     )
@@ -914,6 +938,8 @@ class CalendarViewModel @Inject constructor(
                         eventCount = daySummary?.eventCount ?: 0,
                         taskCount = daySummary?.taskCount ?: 0,
                         courseCount = daySummary?.courseCount ?: 0,
+                        // Phase 24B：习惯打卡角标
+                        habitCount = daySummary?.habitCount ?: 0,
                     ),
                 )
             }

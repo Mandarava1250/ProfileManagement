@@ -44,6 +44,18 @@ interface HabitCheckInDao {
     @Query("SELECT * FROM habit_checkins WHERE `date` = :date")
     fun observeByDate(date: Long): Flow<List<HabitCheckInEntity>>
 
+    /**
+     * 闭区间 [start, end] 内**所有习惯**的打卡记录
+     *
+     * Phase 24B：日历月视图的角标要的是「这个月哪天有习惯打卡」，
+     * 它横跨了好几个习惯 —— 单习惯的 [observeRange] 和单日的 [observeByDate] 都答不了，
+     * 所以这里补一条跨习惯的区间查询。
+     */
+    @Query(
+        "SELECT * FROM habit_checkins WHERE `date` BETWEEN :start AND :end ORDER BY `date` ASC",
+    )
+    fun observeRangeAll(start: Long, end: Long): Flow<List<HabitCheckInEntity>>
+
     @Query("DELETE FROM habit_checkins WHERE habitId = :habitId AND `date` = :date")
     suspend fun deleteByHabitAndDate(habitId: Long, date: Long)
 

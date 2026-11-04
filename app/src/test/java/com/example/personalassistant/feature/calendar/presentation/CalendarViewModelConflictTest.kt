@@ -2,6 +2,7 @@ package com.example.personalassistant.feature.calendar.presentation
 
 import com.example.personalassistant.core.lunar.DefaultLunarCalendar
 import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarDisplayRepository
+import com.example.personalassistant.feature.calendar.data.repository.FakeHabitRepository
 import com.example.personalassistant.feature.calendar.data.repository.FakeCalendarRepository
 import com.example.personalassistant.feature.calendar.data.repository.FakeEventCategoryRepository
 import com.example.personalassistant.feature.calendar.data.repository.FakeHabitDisplayRepository
@@ -28,6 +29,7 @@ import com.example.personalassistant.feature.calendar.domain.usecase.ObserveEven
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.SetTaskTimeRangeUseCase
+import com.example.personalassistant.feature.habit.domain.usecase.CheckInHabitUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpsertEventCategoryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.fake.FakeCourseDao
@@ -212,6 +214,8 @@ class CalendarViewModelConflictTest {
             calendarDisplayRepository = FakeCalendarDisplayRepository(),
             habitDisplayRepository = FakeHabitDisplayRepository(),
             setTaskTimeRange = SetTaskTimeRangeUseCase(repo),
+            // Phase 24B：习惯打卡（写入口走 habit 域的 UseCase）
+            checkInHabitUseCase = CheckInHabitUseCase(FakeHabitRepository()),
         )
     }
 

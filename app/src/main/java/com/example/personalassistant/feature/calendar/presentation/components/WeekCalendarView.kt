@@ -286,6 +286,16 @@ private fun WeekDayColumn.allDayItems(primary: Color): List<AllDayItem> {
     events.filter { it.isEffectivelyAllDay }.forEach { event ->
         result += AllDayItem(text = event.title, color = Color(event.color), task = null)
     }
+    // Phase 24B：习惯没有时刻，也进「全天标签区」
+    // isMet 复用成「已达标」→ 走删除线 + 淡化的既有渲染
+    habits.forEach { habit ->
+        result += AllDayItem(
+            text = habit.name,
+            color = Color(habit.color),
+            task = null,
+            isCompleted = habit.isMet,
+        )
+    }
     return result
 }
 

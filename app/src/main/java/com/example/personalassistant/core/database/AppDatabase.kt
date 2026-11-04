@@ -10,6 +10,7 @@ import com.example.personalassistant.feature.calendar.data.local.EventCategoryEn
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
@@ -47,12 +48,12 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
  *
  * ⚠️ 升版时必须同步：本常量 + 新 Migration + `BackupFormatVersion.DB_VERSION`。
  */
-const val APP_DATABASE_VERSION = 17
+const val APP_DATABASE_VERSION = 18
 
 /**
  * App 主数据库
  *
- * 17 张表：
+ * 18 张表：
  * 1. courses          - 课程
  * 2. semesters        - 学期
  * 3. tasks            - 任务（Phase 16：加清单归属 / 父任务 / 金额 / 时间段 / 完成时间 / 置顶 7 列）
@@ -70,6 +71,7 @@ const val APP_DATABASE_VERSION = 17
  * 15. student_profile  - 「我」档案（Phase 12 新增）
  * 16. habits          - 习惯（Phase 23 新增：名称 / 图标 / 颜色 / 目标类型 / 目标次数 / 单位 / 顺序 / 归档）
  * 17. habit_checkins  - 习惯打卡记录（Phase 23 新增：习惯 + 日期 + 次数 + 备注）
+ * 18. coin_pools      - 零钱池（批次 C：账户零用钱余额，可负；accountId 唯一 + 外键 → user_profiles）
  *
  * ⚠️ schema 变更必须按以下流程：
  *   1. 修改对应 Entity
@@ -104,6 +106,8 @@ const val APP_DATABASE_VERSION = 17
         // 习惯打卡（Phase 23）
         HabitEntity::class,
         HabitCheckInEntity::class,
+        // 记账（批次 C：零钱池）
+        CoinPoolEntity::class,
     ],
     // v10（Phase 5）：transactions.transferAccountId + user_profiles.initialBalance
     // v11（Phase 12）：courses.credit + courses.gradePoint + student_profile 表
@@ -115,6 +119,7 @@ const val APP_DATABASE_VERSION = 17
     // + sub_task_tag_cross_ref 并入 task_tag_cross_ref。数据搬迁用恒定 id 偏移。
     // v16（Phase 21 清单↔记账）：transactions 加 linkedTaskId 列 + 索引（弱引用，不加外键）。
     // v17（Phase 23 习惯打卡）：新建 habits + habit_checkins 两张表（见 Migration_16_17）。
+    // v18（批次 C 零钱池）：新建 coin_pools（账户零用钱余额，可负；accountId 唯一 + 外键 → user_profiles）。
     version = APP_DATABASE_VERSION,
     exportSchema = true
 )
@@ -161,6 +166,7 @@ abstract class AppDatabase : RoomDatabase() {
                 Migration_14_15,
                 MIGRATION_15_16,
                 MIGRATION_16_17,
+                MIGRATION_17_18,
             )
     }
 }

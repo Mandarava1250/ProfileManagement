@@ -74,4 +74,7 @@ class HabitRepositoryImpl @Inject constructor(
 
     override fun observeCheckInsOn(date: Long): Flow<List<HabitCheckIn>> =
         checkInDao.observeByDate(date).map { list -> list.map { it.toDomain() } }
+
+    override fun observeCheckInsInRange(start: Long, end: Long): Flow<List<HabitCheckIn>> =
+        checkInDao.observeRangeAll(start, end).map { list -> list.map { it.toDomain() } }
 }

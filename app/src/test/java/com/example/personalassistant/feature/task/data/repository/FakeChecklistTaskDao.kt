@@ -74,6 +74,19 @@ class FakeChecklistTaskDao : TaskDao {
         }
     }
 
+    /**
+     * Phase 24：置顶 / 取消置顶
+     *
+     * `TaskDao.setPinned` 是 Phase 24 新加的，这个 fake 当时漏了实现，
+     * 导致单元测试源码集编译不过（`not abstract and does not implement setPinned`）。
+     * 这里给真实现而不是 `notUsed` —— 清单测试后面可能会用到置顶状态。
+     */
+    override suspend fun setPinned(id: Long, pinned: Boolean, now: Long) {
+        tasksState.value = tasksState.value.map {
+            if (it.id == id) it.copy(isPinned = pinned, updatedAt = now) else it
+        }
+    }
+
     override suspend fun updateManualOrder(id: Long, order: Long, now: Long) {
         tasksState.value = tasksState.value.map {
             if (it.id == id) it.copy(manualOrder = order, updatedAt = now) else it

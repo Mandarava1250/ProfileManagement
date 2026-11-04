@@ -26,6 +26,7 @@ import com.example.personalassistant.feature.task.domain.usecase.ObserveTaskList
 import com.example.personalassistant.feature.task.domain.usecase.RecordExpenseFromTaskUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RenameTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.RestoreChecklistItemUseCase
+import com.example.personalassistant.feature.task.domain.usecase.SetTaskPinnedUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.UpdateChecklistItemUseCase
 import com.example.personalassistant.feature.task.data.repository.FakeTaskListRepository
@@ -215,6 +216,7 @@ class ChecklistViewModelTest {
         repo: FakeChecklistRepository = FakeChecklistRepository(),
         tagRepo: TagRepository = FakeTagRepository(),
         listRepo: FakeTaskListRepository = FakeTaskListRepository(),
+        taskRepo: FakeTaskRepository = FakeTaskRepository(),
     ): ChecklistViewModel = ChecklistViewModel(
         observeChecklistItems = ObserveChecklistItemsUseCase(repo),
         addChecklistItem = AddChecklistItemUseCase(repo),
@@ -245,6 +247,8 @@ class ChecklistViewModelTest {
         restoreChecklistItem = RestoreChecklistItemUseCase(repo),
         // ===== Phase 18.3：快速输入里的 #标签 =====
         createTag = CreateTagUseCase(tagRepo),
+        // ===== Phase 24：置顶 =====
+        setTaskPinned = SetTaskPinnedUseCase(taskRepo),
     )
 
     private fun tag(id: Long): Tag = Tag(
@@ -700,5 +704,60 @@ class ChecklistViewModelTest {
         vm.addItem("买牛奶")
 
         assertEquals("买牛奶", repo.items.single().title)
+    }
+
+    // ===== Phase 24：左滑 / 右滑的单条操作 =====
+
+    @Test
+    fun setItemPinnedForwardsToRepository() = runTest {
+        val taskRepo = FakeTaskRepository()
+        val vm = makeVm(taskRepo = taskRepo)
+
+        vm.setItemPinned(7L, pinned = true)
+
+        assertEquals(listOf(7L to true), taskRepo.pinnedCalls)
+    }
+
+    @Test
+    fun setItemPinnedCanUnpin() = runTest {
+        val taskRepo = FakeTaskRepository()
+        val vm = makeVm(taskRepo = taskRepo)
+
+        vm.setItemPinned(7L, pinned = false)
+
+        assertEquals(listOf(7L to false), taskRepo.pinnedCalls)
+    }
+
+    @Test
+    fun setItemDueDateUpdatesTheItem() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, title = "买牛奶")))
+        val vm = makeVm(repo)
+
+        vm.setItemDueDate(1L, dueDate = 123L)
+
+        assertEquals(123L, repo.items.single().dueDate)
+    }
+
+    @Test
+    fun setItemDueDateWithNullClearsTheDueDate() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, title = "买牛奶", dueDate = 123L)))
+        val vm = makeVm(repo)
+
+        vm.setItemDueDate(1L, dueDate = null)
+
+        assertNull(repo.items.single().dueDate)
+    }
+
+    @Test
+    fun moveItemToListUpdatesTheListId() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, title = "买牛奶")))
+        val vm = makeVm(repo)
+
+        vm.moveItemToList(1L, listId = 42L)
+
+        assertEquals(42L, repo.items.single().listId)
     }
 }

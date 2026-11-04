@@ -193,6 +193,17 @@ class BackupDiffCalculator @Inject constructor() {
             currentIds = current.habitCheckIns.map { it.id }.toSet(),
             idOf = { it.id },
         )
+        // 批次 C：零钱池
+        //
+        // ⚠️ 按 **accountId** 判等，不按 id —— `coin_pools` 的 UNIQUE 与业务主键都是 accountId，
+        // `id` 只是自增列，备份导入 REPLACE 时会变。按 id 判等会让 diff 报告与实际写入对不上
+        // （详见 `BackupImporter.mergeCoinPools` 的注释）。先例：`student_profile`。
+        val coinPoolsDiff = diffById(
+            tableName = "coin_pools",
+            backup = payload.coinPools,
+            currentIds = current.coinPools.map { it.accountId }.toSet(),
+            idOf = { it.accountId },
+        )
 
         val rawPerTable = listOf(
             userProfilesDiff,
@@ -212,6 +223,7 @@ class BackupDiffCalculator @Inject constructor() {
             studentProfileDiff,
             habitsDiff,
             habitCheckInsDiff,
+            coinPoolsDiff,
         )
 
         // ===== 2. 外键级联 SKIP 推断 =====
@@ -386,6 +398,7 @@ class BackupDiffCalculator @Inject constructor() {
             "student_profile" to setOf("user_profiles"),         // student_profile.accountId → user_profiles.id
             "habits" to emptySet(),                              // 习惯本体自身无父表
             "habit_checkins" to setOf("habits"),                 // habit_checkins.habitId → habits.id
+            "coin_pools" to setOf("user_profiles"),               // 批次 C：coin_pools.accountId → user_profiles.id（真外键）
         )
     }
 }

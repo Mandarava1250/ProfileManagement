@@ -35,7 +35,8 @@ import com.example.personalassistant.core.database.APP_DATABASE_VERSION
  *     ├── holidays.json         ← Phase 8 Sub-step 7 新增（v6 起）
  *     ├── student_profile.json  ← Phase 16 新增（「我」档案，一账户一行）
  *     ├── habits.json           ← Phase 23 新增（习惯本体）
- *     └── habit_checkins.json   ← Phase 23 新增（习惯打卡记录）
+ *     ├── habit_checkins.json   ← Phase 23 新增（习惯打卡记录）
+ *     └── coin_pools.json       ← 批次 C 新增（零钱池）
  * ```
  */
 object BackupFormatVersion {
@@ -61,6 +62,10 @@ object BackupFormatVersion {
      * 两个新字段都有 `@Serializable` 默认值（`= emptyList()`），
      * 旧备份（formatVersion ≤ 2）解出来是空列表 → 导入端据此判断「备份没带这两张表」
      * → 不清空用户现有的习惯数据。
+     *
+     * 批次 C：**同样没升它**（仍是 2）。新增 `coin_pools` 属于「新增表」，
+     * `BackupPayload.coinPools` 有 `= emptyList()` 默认值 → 旧备份解出空列表 →
+     * 导入端按「备份里有没有这个条目」判断要不要清表（见 `BackupImporter`）。
      *
      * ⚠️ 什么时候才需要升 v3：删字段 / 改字段语义 / 改表集合的**既有**表结构时。
      */
