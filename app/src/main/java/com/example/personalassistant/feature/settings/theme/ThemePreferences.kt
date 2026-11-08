@@ -44,7 +44,7 @@ enum class BackgroundStyle(
     DEFAULT("default", "默认", 0xFFFAFBFF),
 
     /** 暖白：偏米，像纸 */
-    PAPER("paper", "暖白", 0xFFFBF8F4),
+    PAPER("paper", "暖白", 0xFFF7F6F3),
 
     /** 薄荷：淡青绿 */
     MINT("mint", "薄荷", 0xFFF4FAF7),

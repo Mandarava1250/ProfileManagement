@@ -43,11 +43,15 @@ fun HighlightedText(
  * 把 [text] 里匹配 [query] 的片段包上高亮样式。
  *
  * 抽成独立函数是为了让它也能被 JVM 单测直接验证。
+ *
+ * Phase 26：高亮色从旧方案的玫红 #E91E63 换成品牌蓝 #0B57D0 ——
+ * 玫红是上一版樱花粉方案的强调色，新方案里红色只留给「危险 / 收入」这类语义，
+ * 搜索命中属于普通强调，用品牌蓝才和其余界面一致。
  */
 fun buildHighlightedString(
     text: String,
     query: String,
-    highlightColor: ComposeColor = ComposeColor(0xFFE91E63),
+    highlightColor: ComposeColor = ComposeColor(0xFF0B57D0),
 ): AnnotatedString {
     val ranges = SearchHighlight.ranges(text, query)
     if (ranges.isEmpty()) return AnnotatedString(text)

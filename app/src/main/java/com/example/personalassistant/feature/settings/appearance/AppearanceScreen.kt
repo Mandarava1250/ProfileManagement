@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,8 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import com.example.personalassistant.R
-import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -43,8 +42,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.personalassistant.core.ui.components.AppCard
+import com.example.personalassistant.core.ui.components.BigTitleHeader
+import com.example.personalassistant.core.ui.components.SectionLabel
 import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.core.ui.theme.AppSpacing
+import com.example.personalassistant.core.ui.theme.LocalAppSurfaces
 import com.example.personalassistant.core.ui.theme.onColorFor
 import com.example.personalassistant.feature.settings.theme.BackgroundStyle
 import com.example.personalassistant.feature.settings.theme.ThemeMode
@@ -73,8 +75,8 @@ fun AppearanceScreen(
 
     Scaffold(
         topBar = {
-            AppTopBar(
-                title = { Text(stringResource(R.string.appearance_title)) },
+            BigTitleHeader(
+                title = "外观",
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -92,7 +94,7 @@ fun AppearanceScreen(
             verticalArrangement = Arrangement.spacedBy(AppSpacing.xs),
         ) {
             // ===== 主题模式 =====
-            SectionTitle("主题模式")
+            SectionLabel("主题模式")
             Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.xs)) {
                 listOf(ThemeMode.SYSTEM, ThemeMode.LIGHT, ThemeMode.DARK).forEach { mode ->
                     FilterChip(
@@ -106,9 +108,11 @@ fun AppearanceScreen(
             Spacer(Modifier.height(AppSpacing.xs))
 
             // ===== 主题色 =====
-            SectionTitle("主题色")
+            SectionLabel("主题色")
             AppCard(
                 modifier = Modifier.fillMaxWidth(),
+                containerColor = LocalAppSurfaces.current.paper,
+                shape = RoundedCornerShape(AppRadii.card14),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(AppSpacing.md),
             ) {
                 ColorGrid(
@@ -128,9 +132,11 @@ fun AppearanceScreen(
             Spacer(Modifier.height(AppSpacing.xs))
 
             // ===== 背景 =====
-            SectionTitle("背景")
+            SectionLabel("背景")
             AppCard(
                 modifier = Modifier.fillMaxWidth(),
+                containerColor = LocalAppSurfaces.current.paper,
+                shape = RoundedCornerShape(AppRadii.card14),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(AppSpacing.md),
             ) {
                 BackgroundGrid(
@@ -144,6 +150,8 @@ fun AppearanceScreen(
                 Spacer(Modifier.height(AppSpacing.xs))
                 AppCard(
                     modifier = Modifier.fillMaxWidth(),
+                    containerColor = LocalAppSurfaces.current.paper,
+                    shape = RoundedCornerShape(AppRadii.card14),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(AppSpacing.md),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -166,16 +174,6 @@ fun AppearanceScreen(
             }
         }
     }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.padding(top = AppSpacing.xs, bottom = 2.dp),
-    )
 }
 
 /**

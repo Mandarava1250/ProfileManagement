@@ -24,11 +24,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import com.example.personalassistant.R
-import com.example.personalassistant.core.ui.components.AppTopBar
+import com.example.personalassistant.core.ui.components.BigTitleHeader
+import com.example.personalassistant.core.ui.components.UnderlineTabs
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -207,7 +206,7 @@ fun SettingsScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             // Tab 页不放返回箭头 —— 与其它 5 个 Tab 保持一致。
-            AppTopBar(title = { Text(stringResource(R.string.settings_title)) })
+            BigTitleHeader(title = stringResource(R.string.settings_title))
         },
     ) { padding ->
         Column(
@@ -443,13 +442,9 @@ private fun SettingsNavBar(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
 ) {
-    TabRow(selectedTabIndex = selectedIndex) {
-        SETTINGS_SECTION_TITLES.forEachIndexed { index, title ->
-            Tab(
-                selected = selectedIndex == index,
-                onClick = { onSelect(index) },
-                text = { Text(title) },
-            )
-        }
-    }
+    UnderlineTabs(
+        tabs = SETTINGS_SECTION_TITLES,
+        selectedIndex = selectedIndex,
+        onSelect = onSelect,
+    )
 }
