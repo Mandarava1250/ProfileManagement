@@ -45,11 +45,13 @@ import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.example.personalassistant.R
 import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.feature.calendar.CalendarScreen
 import com.example.personalassistant.feature.calendar.presentation.CalendarScreenMode
+import com.example.personalassistant.feature.calendar.presentation.CalendarViewModel
 import com.example.personalassistant.feature.finance.FinanceScreen
 import com.example.personalassistant.feature.finance.presentation.budget.BudgetScreen
 import com.example.personalassistant.feature.finance.presentation.category.CategoryManagementScreen
@@ -92,6 +94,10 @@ import com.example.personalassistant.feature.timetable.presentation.settings.Tim
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
+    // 日历三视图共享的 ViewModel —— 挂在 NavHost（Activity）作用域上，
+    // 所以「日 / 周 / 月」切来切去，「选中日」不会丢。
+    val calendarViewModel: CalendarViewModel = hiltViewModel()
+
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -138,21 +144,20 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
         NavHost(
             navController = navController,
             // Phase 14：首屏改为日历 —— 日历的「日」视图就是「今日」，符合今日优先的思路
-            startDestination = BottomTab.Calendar.screen.route,
+            startDestination = Screen.CalendarDay.route,
             modifier = Modifier.padding(innerPadding),
         ) {
             // === 4 个主 Tab + 「我」「设置」（后两者从更多面板进入）===
-            composable(BottomTab.Calendar.screen.route) { CalendarScreen(navController) }
-            // Phase 26：日历的其它视图各走一条独立路由。
-            // 都是二级页（不进 BOTTOM_BAR_ROUTES），所以底栏不显示。
-            composable(Screen.CalendarMonth.route) { CalendarScreen(navController, CalendarScreenMode.MONTH) }
-            composable(Screen.CalendarWeek.route) { CalendarScreen(navController, CalendarScreenMode.WEEK) }
-            composable(Screen.CalendarDay.route) { CalendarScreen(navController, CalendarScreenMode.DAY) }
-            composable(Screen.CalendarWorkday.route) {
-                CalendarScreen(navController, CalendarScreenMode.AGENDA_WORKDAY)
+            // Phase 27：日历三视图都是顶层路由，共享 Activity 作用域的 ViewModel。
+            // 共享 → 切视图不丢「选中日」；顶层 → 返回键不会把栈底弹空。
+            composable(Screen.CalendarDay.route) {
+                CalendarScreen(navController, CalendarScreenMode.DAY, calendarViewModel)
             }
-            composable(Screen.CalendarRestday.route) {
-                CalendarScreen(navController, CalendarScreenMode.AGENDA_RESTDAY)
+            composable(Screen.CalendarWeek.route) {
+                CalendarScreen(navController, CalendarScreenMode.WEEK, calendarViewModel)
+            }
+            composable(Screen.CalendarMonth.route) {
+                CalendarScreen(navController, CalendarScreenMode.MONTH, calendarViewModel)
             }
             composable(BottomTab.Tasks.screen.route) { TaskScreen(navController) }
             composable(BottomTab.Timetable.screen.route) { TimetableScreen(navController) }
@@ -216,7 +221,7 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
                     onOpenInCalendar = {
                         // Phase 15 P0-1.1：统一走 navigateToTab —— 顺带把二级页一并弹掉，
                         // 栈里只剩「起点 + 日历」，底栏选中态也跟着回到日历
-                        navController.navigateToTab(Screen.Calendar.route)
+                        navController.navigateToTab(Screen.CalendarDay.route)
                     },
                 )
             }
@@ -330,7 +335,10 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
  * 而不是把实现复制到测试里（复制出来的版本迟早会漂移）。
  */
 internal val BOTTOM_BAR_ROUTES = setOf(
-    Screen.Calendar.route,
+    // 日历三视图都在白名单里 —— 日 / 周 / 月三个视图都常驻底栏
+    Screen.CalendarDay.route,
+    Screen.CalendarWeek.route,
+    Screen.CalendarMonth.route,
     Screen.Tasks.route,
     Screen.Timetable.route,
     Screen.Finance.route,
@@ -359,7 +367,9 @@ private fun isKnownDeepLinkRoute(route: String): Boolean {
     return route == Screen.Timetable.route ||
         route == Screen.Tasks.route ||
         route == Screen.Finance.route ||
-        route == Screen.Calendar.route ||
+        route == Screen.CalendarDay.route ||
+        route == Screen.CalendarWeek.route ||
+        route == Screen.CalendarMonth.route ||
         route == Screen.Me.route ||
         route == Screen.Settings.route ||
         route == Screen.GlobalSearch.route ||

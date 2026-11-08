@@ -16,27 +16,20 @@ sealed class Screen(val route: String) {
     data object Timetable : Screen("timetable")
     data object Tasks : Screen("tasks")
     data object Finance : Screen("finance")
-    data object Calendar : Screen("calendar")
-
     /**
-     * 日历 · 月视图（独立路由）
+     * 日历 · 日视图（日历日视图 + 选中日的日程流）
      *
-     * 属于二级页：**不进** [BOTTOM_BAR_ROUTES]，所以底栏不显示，
-     * [BottomBarRoutesTest] 断言的「恰好 6 条」也不受影响。
+     * 日历三视图都是**顶层**路由，日历 Tab 的落点。
+     * 共享的 `CalendarViewModel` 挂在 NavHost（Activity）作用域上，
+     * 所以切视图不会丢「选中日」，而返回键也不会把栈底弹空。
      */
-    data object CalendarMonth : Screen("calendar/month")
-
-    /** 日历 · 周视图（独立路由，二级页） */
-    data object CalendarWeek : Screen("calendar/week")
-
-    /** 日历 · 日视图 · 时间轴（独立路由，二级页） */
     data object CalendarDay : Screen("calendar/day")
 
-    /** 日历 · 工作日日程（独立路由，二级页） */
-    data object CalendarWorkday : Screen("calendar/workday")
+    /** 日历 · 周视图（周日历 + 工作日日程流 + 休息日日程流） */
+    data object CalendarWeek : Screen("calendar/week")
 
-    /** 日历 · 休息日日程（独立路由，二级页） */
-    data object CalendarRestday : Screen("calendar/restday")
+    /** 日历 · 月视图（月日历网格 + 选中日的标签列表） */
+    data object CalendarMonth : Screen("calendar/month")
     data object Settings : Screen("settings")
     /** Phase 12：底部 5 号 Tab「我」 */
     data object Me : Screen("me")
@@ -142,7 +135,7 @@ enum class BottomTab(
     @StringRes val labelRes: Int,
     val icon: ImageVector,
 ) {
-    Calendar(Screen.Calendar, R.string.tab_calendar, Icons.Rounded.CalendarMonth),
+    Calendar(Screen.CalendarDay, R.string.tab_calendar, Icons.Rounded.CalendarMonth),
     Tasks(Screen.Tasks, R.string.tab_tasks, Icons.Rounded.Checklist),
     Timetable(Screen.Timetable, R.string.tab_timetable, Icons.Rounded.Today),
     Finance(Screen.Finance, R.string.tab_finance, Icons.Rounded.AccountBalanceWallet);
