@@ -3226,4 +3226,5 @@ Box {                                        ← 底层：动作区（5 个彩�
 
 8. **本轮两个 commit 是同一份代码拆开提交的** —— 一起编译、一起跑单测（`BUILD SUCCESSFUL` / 1174 全绿）。单独 revert 其中一个后需要重跑一次编译
 9. **日历的六条路由还只进了 NavHost，没进 `navigateToTab`** —— 视图切换器走的是 `navigate` + `popUpTo`，底栏选中态在这些二级页上不跟随。需要的话下一轮可以把日历的二级页也纳入 tab 选中判定
+10. **日历六条路由各自持有独立的 `CalendarViewModel`** —— `hiltViewModel()` 的 scope 是 NavBackStackEntry，不同路由 = 不同实例 = 各自一份 `selectedDate`。实际表现：**在月视图里选了 11 月 20 号，切到周视图会跳回今天**。修法是把这一组路由收进一个嵌套 `navigation()` 图，共享图级 scope 的 VM —— 下一轮做
 
