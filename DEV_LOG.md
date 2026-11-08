@@ -3337,6 +3337,47 @@ Column(verticalScroll)
   `['11月2日 星期一', '11月3日 星期二', '11月4日 星期三', '11月5日 星期四', '11月6日 星期五', '11月7日 星期六', '11月8日 星期日']`
   —— **七天连着排，一天不缺**，一次滑动到底（只剩一个滚动条）
 
+### Phase 27.2 —— 底栏日历图标在周 / 月视图下不标注（2026-11-09）
+
+伙伴反馈：处于日历的周 / 月模块时，底栏的「日历」图标没有选中标注，只有日模块才有。
+
+#### 根因
+
+`BottomTabItem` 里写死了单路由比较：
+
+```kotlin
+val selected = currentRoute == tab.screen.route
+```
+
+日历 Tab 的 `screen` 是 `Screen.CalendarDay`（route = `calendar/day`）。站在周视图时 `currentRoute` 是 `calendar/week`，不相等 → 图标不亮。
+
+Phase 27 把日历拆成三条路由时，底栏这层没跟着改 —— 上一轮把它记成了「已知边界 9」，这轮直接修掉。
+
+#### 改法
+
+`BottomTab` 加一个 `routes` 字段：**这个 Tab 认领的所有路由**，底栏选中态按它判定。
+
+```kotlin
+val routes: Set<String> = setOf(screen.route)   // 默认只认自己的入口
+```
+
+日历 Tab 显式认领三条：`calendar/day` / `calendar/week` / `calendar/month`。其余 Tab 走默认值，不用改。
+
+顺带把 `onClick` 的「已选中就跳过」去掉了 —— 站在周 / 月视图时点「日历」要能回到日视图（`navigateToTab` 的 `popUpTo(起点)` 会把周 / 月弹掉）。跨 Tab 再回来时 `restoreState` 恢复上次看的那个视图。
+
+#### 验证
+
+- `gradlew :app:assembleDebug :app:testDebugUnitTest` —— **BUILD SUCCESSFUL**，**1178 个 JVM 单测全绿**（新增两条：日历 Tab 认领日 / 周 / 月三条路由；每个 Tab 至少认领自己的入口路由）
+- 真机（读底栏 `selected="true"` 的节点）：
+
+```
+日视图 选中: ['日', '日历']
+周视图 选中: ['周', '日历']     ← 修好了
+月视图 选中: ['月', '日历']     ← 修好了
+清单页 选中: ['清单']            ← 切到别的 Tab 不会误选
+```
+
+
 
 #### 顺带澄清的两件事
 
