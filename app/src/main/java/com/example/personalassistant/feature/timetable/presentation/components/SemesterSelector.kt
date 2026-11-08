@@ -67,30 +67,64 @@ fun SemesterSelector(
             )
         }
 
-        DropdownMenu(
+        SemesterDropdownMenu(
             expanded = expanded,
+            semesters = semesters,
+            current = current,
+            onSelect = onSelect,
+            onRequestCreate = onRequestCreate,
             onDismissRequest = { expanded = false },
-        ) {
-            semesters.forEach { sem ->
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            sem.name + if (sem.isCurrent) " · 当前" else "",
-                            color = if (sem.isCurrent)
-                                MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface,
-                        )
-                    },
-                    onClick = {
-                        expanded = false
-                        onSelect(sem.name)
-                    },
-                )
-            }
-            if (onRequestCreate != null) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                DropdownMenuItem(
-                    text = {
+        )
+    }
+}
+
+/**
+ * 学期下拉菜单 —— 独立出来给别的触发器复用。
+ *
+ * 课表页的副标题里那个「⌄」要自己控制展开状态、还要能点开菜单，
+ * 用 [SemesterSelector] 那个固定样式的胶囊触发器不合适 —— 抽成菜单本体，
+ * 触发器由调用方自己决定长什么样。
+ *
+ * @param expanded 菜单是否展开
+ * @param semesters 全部学期
+ * @param current 当前学期（会被标成「· 当前」并染成品牌色）
+ * @param onSelect 选中某个学期（参数是学期名）
+ * @param onRequestCreate 点了「新建学期」；null = 不显示这一项
+ * @param onDismissRequest 菜单收起
+ */
+@Composable
+fun SemesterDropdownMenu(
+    expanded: Boolean,
+    semesters: List<Semester>,
+    current: Semester?,
+    onSelect: (String) -> Unit,
+    onRequestCreate: (() -> Unit)? = null,
+    onDismissRequest: () -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+    ) {
+        semesters.forEach { sem ->
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        sem.name + if (sem.isCurrent) " · 当前" else "",
+                        color = if (sem.isCurrent)
+                            MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface,
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onSelect(sem.name)
+                },
+            )
+        }
+        if (onRequestCreate != null) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            DropdownMenuItem(
+                text = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
@@ -104,12 +138,11 @@ fun SemesterSelector(
                         )
                     }
                 },
-                    onClick = {
-                        expanded = false
-                        onRequestCreate()
-                    },
-                )
-            }
+                onClick = {
+                    onDismissRequest()
+                    onRequestCreate()
+                },
+            )
         }
     }
 }

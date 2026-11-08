@@ -20,6 +20,13 @@ data class TimetableUiState(
     val currentSemester: Semester? = null,
     val currentWeekNumber: Int = 1,
     /**
+     * 当前学期的总周数（0 = 没有学期 / 学期信息缺失）。
+     *
+     * 翻周的时候用它把周数钳在 `[0, totalWeeks]` —— 往前翻不会翻出负数，
+     * 往后翻也不会翻到学期外面去。
+     */
+    val totalWeeks: Int = 0,
+    /**
      * 当前是否停在「本周」。
      *
      * 手动翻到别的周之后才为 false —— 「回到本周」按钮也就只有这时才该出现。

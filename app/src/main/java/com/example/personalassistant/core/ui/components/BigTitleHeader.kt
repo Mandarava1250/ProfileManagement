@@ -28,6 +28,9 @@ import com.example.personalassistant.core.ui.theme.AppPageSubtitle
  *
  * @param title 主标题，26sp
  * @param subtitle 副标题（日期 / 统计口径），12sp；null 则不画
+ * @param subtitleContent 副标题的**自定义内容**槽（可交互）。
+ *        与 [subtitle] 二选一；给了它就用它，忽略 [subtitle]。
+ *        课表页的「⌄」要随下拉展开状态变化，还得点它开菜单 —— 纯字符串做不到。
  * @param navigationIcon 左侧导航位（44dp 圆形按钮）
  * @param actions 右侧操作区，每个动作自己保证 ≥ 44dp 触达
  */
@@ -36,6 +39,7 @@ fun BigTitleHeader(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    subtitleContent: (@Composable () -> Unit)? = null,
     navigationIcon: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
@@ -50,15 +54,18 @@ fun BigTitleHeader(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = AppPageSubtitle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
+                when {
+                    subtitleContent != null -> subtitleContent()
+                    subtitle != null -> {
+                        Text(
+                            text = subtitle,
+                            style = AppPageSubtitle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                 }
             }
             actions()

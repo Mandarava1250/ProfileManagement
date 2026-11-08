@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.timetable
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -21,6 +23,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -34,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,12 +48,14 @@ import com.example.personalassistant.core.ui.components.BigTitleHeader
 import com.example.personalassistant.core.ui.components.EmptyState
 import com.example.personalassistant.core.ui.components.SectionLabel
 import com.example.personalassistant.core.ui.components.UnderlineTabs
+import com.example.personalassistant.core.ui.theme.AppPageSubtitle
 import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.feature.timetable.presentation.TimetableViewModel
 import com.example.personalassistant.feature.timetable.presentation.TimetableViewType
 import com.example.personalassistant.feature.timetable.presentation.components.DayHeaderRow
 import com.example.personalassistant.feature.timetable.presentation.components.SemesterCreateDialog
+import com.example.personalassistant.feature.timetable.presentation.components.SemesterDropdownMenu
 import com.example.personalassistant.feature.timetable.presentation.components.SemesterSelector
 import com.example.personalassistant.feature.timetable.presentation.components.TIMETABLE_AXIS_WIDTH
 import com.example.personalassistant.feature.timetable.presentation.components.TimetableGrid
@@ -115,12 +122,52 @@ fun TimetableScreen(
         }
     }
 
+    // 副标题末尾那个「⌄」：
+    // 只有一个学期时没有可切换的对象，箭头就不画 —— 摆个点不动的箭头骗人。
+    // 展开时换成「⌃」，让用户知道菜单已经开了。
+    val canSwitchSemester = state.semesters.size > 1
+    var semesterMenuOpen by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             Column {
                 BigTitleHeader(
                     title = stringResource(R.string.tab_timetable),
-                    subtitle = subtitle,
+                    // 副标题末尾挂一个活的学期下拉：
+                    // 字符随展开状态变（⌄ / ⌃），点了真能开菜单。
+                    subtitleContent = {
+                        Box {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = subtitle,
+                                    style = AppPageSubtitle,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                                if (canSwitchSemester) {
+                                    Text(
+                                        text = if (semesterMenuOpen) " ⌃" else " ⌄",
+                                        style = AppPageSubtitle,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .clickable { semesterMenuOpen = true }
+                                            .padding(horizontal = 4.dp),
+                                    )
+                                }
+                            }
+                            SemesterDropdownMenu(
+                                expanded = semesterMenuOpen,
+                                semesters = state.semesters,
+                                current = state.currentSemester,
+                                onSelect = { viewModel.switchSemester(it) },
+                                onRequestCreate = { showCreateSemester = true },
+                                onDismissRequest = { semesterMenuOpen = false },
+                            )
+                        }
+                    },
                     actions = {
                         // 导入入口：点一下弹 Snackbar 提示「开发中」，
                         // 未来接 ICS / 教务抓取时在这里替换 onClick 即可，UI 入口形状不变。
