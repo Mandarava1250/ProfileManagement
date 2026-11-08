@@ -73,20 +73,33 @@ val OutlineVariantDark = Color(0xFF44474E)
 val ScrimDark = Color(0xFF000000)
 
 // =====================================================================
-// 零钱池与记账专用色（业务色板，与主题色区分）
+// 业务语义色板 —— Phase 26「秩序 / 留白」方案
 //
-// 这些是「收入绿 / 支出红 / 预算黄」，属于业务语义 —— 不随主题主色变。
-// 用户换了主色也不该让「超支」变成蓝色。
+// 这一组是**封闭系统**：每个语义只有一个值，浅色 / 深色各一套，
+// 而且**永远不跟随用户自选主色**（[applyAccent] 不碰它们）。
+//
+// 为什么必须封闭：
+// 现状里「收入」在本月报表是主题蓝、在流水列表是绿；「支出」有
+// #BA1A1A 与 #B3261E 两个红；「当前时刻」和「超支」共用 error 红。
+// 同一件事两套颜色，用户换个主题色报表就跟着变色 —— 数字会读错。
+//
+// 颜色取自 docs/ui-mockups/plan-d.html 的设计基线表，
+// 浅色一栏在白底上均 ≥ 4.5:1，深色一栏在 #1A1B20 上均 ≥ 4.5:1。
 // =====================================================================
-val IncomeGreen = Color(0xFF2E7D32)
-val ExpenseRed = Color(0xFFC62828)
-val BudgetYellow = Color(0xFFF9A825)
-val BudgetAlertRed = Color(0xFFD32F2F)
 
-// 任务优先级色
-val PriorityHigh = Color(0xFFD32F2F)
-val PriorityMedium = Color(0xFFF9A825)
-val PriorityLow = Color(0xFF388E3C)
+// —— 浅色 ——
+val SemanticIncomeLight = Color(0xFF2E6B33)
+val SemanticExpenseLight = Color(0xFFB23A2E)
+val SemanticTransferLight = Color(0xFF4A5560)
+val SemanticBudgetLight = Color(0xFF7A4A00)
+val SemanticNowLight = Color(0xFFB45309)
+
+// —— 深色（深底上必须换亮色，同一个值会糊进背景）——
+val SemanticIncomeDark = Color(0xFFA5D6A7)
+val SemanticExpenseDark = Color(0xFFFFB4AB)
+val SemanticTransferDark = Color(0xFFB0BEC5)
+val SemanticBudgetDark = Color(0xFFFFD180)
+val SemanticNowDark = Color(0xFFFFB980)
 
 // 课程默认 8 色（课程表色卡）
 val CoursePalette: List<Color> = listOf(

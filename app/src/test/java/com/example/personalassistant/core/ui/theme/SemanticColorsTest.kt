@@ -60,6 +60,12 @@ class SemanticColorsTest {
             LightSemanticColors.onTransferContainer,
         ),
         Group(
+            "当前时刻",
+            LightSemanticColors.nowInk,
+            LightSemanticColors.nowContainer,
+            LightSemanticColors.onNowContainer,
+        ),
+        Group(
             "高优先级",
             LightSemanticColors.priorityHighInk,
             LightSemanticColors.priorityHighContainer,
@@ -103,6 +109,12 @@ class SemanticColorsTest {
             DarkSemanticColors.transferInk,
             DarkSemanticColors.transferContainer,
             DarkSemanticColors.onTransferContainer,
+        ),
+        Group(
+            "当前时刻",
+            DarkSemanticColors.nowInk,
+            DarkSemanticColors.nowContainer,
+            DarkSemanticColors.onNowContainer,
         ),
         Group(
             "高优先级",

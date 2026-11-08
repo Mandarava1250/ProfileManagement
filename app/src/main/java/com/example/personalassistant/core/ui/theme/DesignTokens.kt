@@ -42,6 +42,14 @@ object AppRadii {
     val card: Dp = 20.dp
     val fab: Dp = 20.dp
     val hero: Dp = 28.dp
+
+    /**
+     * 14dp —— Phase 26「秩序 / 留白」方案的卡片圆角。
+     *
+     * 单独加一档而不是把 [card] 从 20 改成 14：[card] 有 11 个既有调用点，
+     * 改常量会把本次范围之外的页面一起带偏。本次涉及的四模块显式传 14dp。
+     */
+    val card14: Dp = 14.dp
 }
 
 /**
@@ -80,6 +88,10 @@ data class AppSemanticColors(
     val transferInk: Color,
     val transferContainer: Color,
     val onTransferContainer: Color,
+    // —— 当前时刻（课表 / 日历的「现在」线）——
+    val nowInk: Color,
+    val nowContainer: Color,
+    val onNowContainer: Color,
     // —— 任务优先级 ——
     val priorityHighInk: Color,
     val priorityHighContainer: Color,
@@ -95,26 +107,35 @@ data class AppSemanticColors(
     val onUnknownCategory: Color,
 )
 
-/** 浅色语义色 */
+/**
+ * 浅色语义色。
+ *
+ * 三值一组：ink（画在普通底上的文字 / 图标）、container（浅底）、onContainer（浅底上的字）。
+ * 浅色主题里「收入 / 预算 / 转账 / 当前时刻 / 中低优先级」的 ink 刻意等于 onContainer ——
+ * 同一个深色既画在白底上，也画在浅底上，是设计上的复用（见 SemanticColorsTest 的口径说明）。
+ */
 val LightSemanticColors = AppSemanticColors(
-    incomeInk = Color(0xFF1B5E20),
-    incomeContainer = Color(0xFFE1F3E2),
-    onIncomeContainer = Color(0xFF1B5E20),
-    expenseInk = Color(0xFFB3261E),
-    expenseContainer = Color(0xFFFDE8E6),
-    onExpenseContainer = Color(0xFF8C1D18),
-    budgetInk = Color(0xFF7A4A00),
+    incomeInk = SemanticIncomeLight,
+    incomeContainer = Color(0xFFE6F2E7),
+    onIncomeContainer = SemanticIncomeLight,
+    expenseInk = SemanticExpenseLight,
+    expenseContainer = Color(0xFFFBE6E3),
+    onExpenseContainer = SemanticExpenseLight,
+    budgetInk = SemanticBudgetLight,
     budgetContainer = Color(0xFFFFF0DC),
-    onBudgetContainer = Color(0xFF7A4A00),
-    transferInk = Color(0xFF37474F),
+    onBudgetContainer = SemanticBudgetLight,
+    transferInk = SemanticTransferLight,
     transferContainer = Color(0xFFECEFF1),
-    onTransferContainer = Color(0xFF263238),
+    onTransferContainer = SemanticTransferLight,
+    nowInk = SemanticNowLight,
+    nowContainer = Color(0xFFFFF3E0),
+    onNowContainer = SemanticNowLight,
     priorityHighInk = Color(0xFFB3261E),
     priorityHighContainer = Color(0xFFFDE8E6),
     onPriorityHighContainer = Color(0xFF8C1D18),
-    priorityMediumInk = Color(0xFF7A4A00),
+    priorityMediumInk = SemanticBudgetLight,
     priorityMediumContainer = Color(0xFFFFF0DC),
-    onPriorityMediumContainer = Color(0xFF7A4A00),
+    onPriorityMediumContainer = SemanticBudgetLight,
     priorityLowInk = Color(0xFF1B5E20),
     priorityLowContainer = Color(0xFFE1F3E2),
     onPriorityLowContainer = Color(0xFF1B5E20),
@@ -122,27 +143,35 @@ val LightSemanticColors = AppSemanticColors(
     onUnknownCategory = Color(0xFFFFFFFF),
 )
 
-/** 深色语义色 */
+/**
+ * 深色语义色。
+ *
+ * 深底上必须用亮色：同一个 #2E6B33 画在 #1A1B20 上只有 2.4:1，直接糊进背景。
+ * 深色这一栏每组 ink / container / onContainer 三值互不相同（浅色允许 ink == onContainer）。
+ */
 val DarkSemanticColors = AppSemanticColors(
-    incomeInk = Color(0xFFA5D6A7),
+    incomeInk = SemanticIncomeDark,
     incomeContainer = Color(0xFF1B3A20),
     onIncomeContainer = Color(0xFFC8E6C9),
-    expenseInk = Color(0xFFFFB4AB),
+    expenseInk = SemanticExpenseDark,
     expenseContainer = Color(0xFF4A1512),
     onExpenseContainer = Color(0xFFFFDAD6),
-    budgetInk = Color(0xFFFFD180),
+    budgetInk = SemanticBudgetDark,
     budgetContainer = Color(0xFF3D2B00),
     onBudgetContainer = Color(0xFFFFE0B2),
-    transferInk = Color(0xFFB0BEC5),
+    transferInk = SemanticTransferDark,
     transferContainer = Color(0xFF263238),
     onTransferContainer = Color(0xFFCFD8DC),
+    nowInk = SemanticNowDark,
+    nowContainer = Color(0xFF3D2B12),
+    onNowContainer = Color(0xFFFFE0B2),
     priorityHighInk = Color(0xFFFFB4AB),
     priorityHighContainer = Color(0xFF4A1512),
     onPriorityHighContainer = Color(0xFFFFDAD6),
-    priorityMediumInk = Color(0xFFFFD180),
+    priorityMediumInk = SemanticBudgetDark,
     priorityMediumContainer = Color(0xFF3D2B00),
     onPriorityMediumContainer = Color(0xFFFFE0B2),
-    priorityLowInk = Color(0xFFA5D6A7),
+    priorityLowInk = SemanticIncomeDark,
     priorityLowContainer = Color(0xFF1B3A20),
     onPriorityLowContainer = Color(0xFFC8E6C9),
     unknownCategory = Color(0xFF616161),
@@ -153,6 +182,43 @@ val DarkSemanticColors = AppSemanticColors(
  * 语义色的读取入口。由 [PersonalAssistantTheme] 注入，深浅色各一套。
  */
 val LocalAppColors = staticCompositionLocalOf { LightSemanticColors }
+
+/**
+ * 表面色 —— 与语义色分开的第二组 token。
+ *
+ * 为什么要单独一组：Material 3 的 surface / surfaceVariant 是**冷调**的
+ * （#FAFBFF / #E0E2EC），而本次方案用的是**暖白**分层（#F7F6F3 卡片底 /
+ * #ECE9E3 分隔线）。硬改 surfaceVariant 会波及全 App 几十处调用点，
+ * 所以这里另开一组，只给需要暖白分层的新组件用。
+ *
+ * - [paper] 卡片底 —— 托住「今天最重要的那张卡」
+ * - [divider] 分隔线 —— 行与行之间
+ * - [dividerSoft] 更弱的网格线 —— 课表 / 日历的网格
+ */
+@Immutable
+data class AppSurfaceColors(
+    val paper: Color,
+    val divider: Color,
+    val dividerSoft: Color,
+    val barTrack: Color,
+)
+
+val LightSurfaceColors = AppSurfaceColors(
+    paper = Color(0xFFF7F6F3),
+    divider = Color(0xFFECE9E3),
+    dividerSoft = Color(0xFFF2F0EB),
+    barTrack = Color(0xFFEDEAE3),
+)
+
+val DarkSurfaceColors = AppSurfaceColors(
+    paper = Color(0xFF232120),
+    divider = Color(0xFF393734),
+    dividerSoft = Color(0xFF2E2C2A),
+    barTrack = Color(0xFF33312E),
+)
+
+/** 表面色的读取入口。由 [PersonalAssistantTheme] 注入，深浅各一套。 */
+val LocalAppSurfaces = staticCompositionLocalOf { LightSurfaceColors }
 
 /**
  * 给「用户自选底色」挑一个能看清的前景色。
