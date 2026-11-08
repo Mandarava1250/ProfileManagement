@@ -129,13 +129,19 @@ class CalendarViewModel @Inject constructor(
     private val _selectedDate = MutableStateFlow<Long?>(DateUtils.todayStartMillis())
     val selectedDate: StateFlow<Long?> = _selectedDate.asStateFlow()
 
-    // Phase 26：日程流的聚合范围（日 / 工作日 / 休息日）。
+    // Phase 27：三种聚合范围各一条流 —— 日 / 工作日 / 休息日。
     // 独立 StateFlow，不进主 combine —— 切范围只是换个筛选条件，
     // 不该牵动整条订阅链重建。
-    private val _agendaScope = MutableStateFlow(AgendaScope.DAY)
-    val agendaScope: StateFlow<AgendaScope> = _agendaScope.asStateFlow()
+    /** 选中日的日程流（1 天） */
+    val dayAgendaDays: StateFlow<List<AgendaDay>> = agendaDaysFlow(AgendaScope.DAY)
 
-    // Phase 26：翻页单位。跟路由绑定 —— 「日日程」翻天、「工作日日程」翻周。
+    /** 所在那一周工作日（周一~周五）的日程流 */
+    val workdayAgendaDays: StateFlow<List<AgendaDay>> = agendaDaysFlow(AgendaScope.WORKDAY)
+
+    /** 所在那一周休息日（周六日）的日程流 */
+    val restdayAgendaDays: StateFlow<List<AgendaDay>> = agendaDaysFlow(AgendaScope.RESTDAY)
+
+    // Phase 26：翻页单位。跟路由绑定 —— 日翻天、周翻周、月翻月。
     private val _navUnit = MutableStateFlow(CalendarNavUnit.DAY)
     val navUnit: StateFlow<CalendarNavUnit> = _navUnit.asStateFlow()
 
@@ -144,9 +150,9 @@ class CalendarViewModel @Inject constructor(
      *
      * **「日日程」只有一天** —— 不展开成整周。整周是「工作日 / 休息日日程」才做的事。
      */
-    val agendaDays: StateFlow<List<AgendaDay>> =
-        combine(_selectedDate, _agendaScope) { date, scope -> date to scope }
-            .flatMapLatest { (date, scope) ->
+    private fun agendaDaysFlow(scope: AgendaScope): StateFlow<List<AgendaDay>> =
+        _selectedDate
+            .flatMapLatest { date ->
                 if (date == null) flowOf(emptyList()) else observeAgendaDays(date, scope)
             }
             .stateIn(
@@ -862,29 +868,17 @@ class CalendarViewModel @Inject constructor(
      */
     fun applyMode(mode: CalendarScreenMode) {
         when (mode) {
-            CalendarScreenMode.AGENDA_DAY -> {
-                _agendaScope.value = AgendaScope.DAY
+            CalendarScreenMode.DAY -> {
+                _viewType.value = CalendarViewType.DAY
                 _navUnit.value = CalendarNavUnit.DAY
-            }
-            CalendarScreenMode.AGENDA_WORKDAY -> {
-                _agendaScope.value = AgendaScope.WORKDAY
-                _navUnit.value = CalendarNavUnit.WEEK
-            }
-            CalendarScreenMode.AGENDA_RESTDAY -> {
-                _agendaScope.value = AgendaScope.RESTDAY
-                _navUnit.value = CalendarNavUnit.WEEK
-            }
-            CalendarScreenMode.MONTH -> {
-                _viewType.value = CalendarViewType.MONTH
-                _navUnit.value = CalendarNavUnit.MONTH
             }
             CalendarScreenMode.WEEK -> {
                 _viewType.value = CalendarViewType.WEEK
                 _navUnit.value = CalendarNavUnit.WEEK
             }
-            CalendarScreenMode.DAY -> {
-                _viewType.value = CalendarViewType.DAY
-                _navUnit.value = CalendarNavUnit.DAY
+            CalendarScreenMode.MONTH -> {
+                _viewType.value = CalendarViewType.MONTH
+                _navUnit.value = CalendarNavUnit.MONTH
             }
         }
     }
