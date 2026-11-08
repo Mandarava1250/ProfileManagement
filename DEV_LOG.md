@@ -3288,7 +3288,55 @@ Box(Modifier.fillMaxWidth().height(2.dp).background(...))   // 下划线槽
   - 三个视图里 **App 底栏都在**
   - 周视图副标题「本周 5 项安排 ⌄」，月视图有月份网格 + 标签列表
   - **从「月」按返回键回到「日」**（不再退出 App）—— 这条是上一轮那个 bug 的回归验证
-- 工具留在 `.cyrene/`（gitignore 的工具目录，不进仓库）：`tap.py`（按文字点设备）、`dump.py`（层级转文字）、`verify.py`（三视图一键核对）
+- 工具留在 `.cyrene/`（gitignore 的工具目录，不进仓库）：`tap.py`（按文字点设备）、`dump.py`（层级转文字）、`verify.py`（三视图一键核对）、`week.py`（周视图日期顺序核对）
+
+### Phase 27.1 —— 周视图布局错乱修复（2026-11-09）
+
+伙伴反馈：日历的周模块 UI/UX 布局错乱，要求**按周一~周日的顺序、按日期前后排列，显示所有安排与清单**。
+
+#### 错在哪（真机 dump 出来的）
+
+```
+一 2 | 二 3 | 三 4 | 四 5 | 五 6 | 六 7 | 日 8     ← 星期头
+15:00 16:00 17:00                                    ← 时间刻度只剩 3 个！
+11月2日 星期一
+08:00 test class
+11月3日 星期二
+11月4日 星期三
+11月7日 星期六
+11月8日 星期日
+```
+
+三个问题叠在一起：
+
+- **时间轴只剩 3 小时** —— 24 小时（46dp × 24 = 1104dp）被塞进 1/3 屏
+- **11 月 5 日、6 日直接消失** —— 工作日流只占 1/3 高，看不见后面的
+- **三个可滚区各占 1/3** —— 周历（内部滚）+ 工作日流（内部滚）+ 休息日流（内部滚），滚轮打架
+
+根因是上一轮合并「周」时，把周日历和工作日/休息日两条流都塞进了 `weight(1f)` 里。
+
+#### 怎么改的
+
+**整页一个滚动条**：
+
+```
+Column(verticalScroll)
+├── WeekCalendarView(时间轴跟着整页滚)
+└── AgendaStream(整周 7 天，lazy = false)
+```
+
+- `AgendaScope` 加 `WEEK` 值；`agendaDates(anchor, WEEK)` 返回周一~周日七天
+- VM 加 `weekAgendaDays`；`workdayAgendaDays` / `restdayAgendaDays` 不再被页面订阅
+- `WeekCalendarView` 加 `timeGridScrollState` 参数：传外部的滚动条时，时间轴不再自己滚、也不抢 `weight(1f)`（「现在」线用的是固定 `HourHeight` 算的，不依赖 `scrollState.value`，所以挪走不影响定位）
+- `AgendaStream` 加 `lazy` 参数：`LazyColumn` 不能嵌在 `verticalScroll` 里（无限高度约束会崩），所以整周清单走非惰性版 —— 一周的数据量完全扛得住
+
+#### 验证
+
+- `gradlew :app:assembleDebug :app:testDebugUnitTest` —— **BUILD SUCCESSFUL**，**1176 个 JVM 单测全绿**（新增 `AgendaRangeTest` 两条：整周是周一~周日七天连排、整周 == 工作日 + 休息日）
+- 真机 dump 滚到底：
+  `['11月2日 星期一', '11月3日 星期二', '11月4日 星期三', '11月5日 星期四', '11月6日 星期五', '11月7日 星期六', '11月8日 星期日']`
+  —— **七天连着排，一天不缺**，一次滑动到底（只剩一个滚动条）
+
 
 #### 顺带澄清的两件事
 
