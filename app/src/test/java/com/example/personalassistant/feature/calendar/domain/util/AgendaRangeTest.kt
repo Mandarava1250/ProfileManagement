@@ -72,4 +72,22 @@ class AgendaRangeTest {
             (workday + restday),
         )
     }
+
+    @Test
+    fun `整周是周一到周日七天连着排`() {
+        val dates = agendaDates(day(2026, 11, 4), AgendaScope.WEEK, zone)
+        assertEquals(7, dates.size)
+        assertEquals(day(2026, 11, 2), dates.first())
+        assertEquals(day(2026, 11, 8), dates.last())
+        // 严格递增 —— 周视图的清单靠这个顺序排
+        assertEquals(dates.sorted(), dates)
+    }
+
+    @Test
+    fun `整周等于工作日加休息日`() {
+        val week = agendaDates(day(2026, 11, 4), AgendaScope.WEEK, zone)
+        val workday = agendaDates(day(2026, 11, 4), AgendaScope.WORKDAY, zone)
+        val restday = agendaDates(day(2026, 11, 4), AgendaScope.RESTDAY, zone)
+        assertEquals(week, workday + restday)
+    }
 }

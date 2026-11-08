@@ -15,4 +15,7 @@ enum class AgendaScope(val label: String) {
 
     /** 所在那一周的周六 ~ 周日 */
     RESTDAY("休息日日程"),
+
+    /** 整周：周一 ~ 周日，七天连成一条 */
+    WEEK("整周"),
 }

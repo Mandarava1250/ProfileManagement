@@ -46,31 +46,54 @@ fun AgendaStream(
     days: List<AgendaDay>,
     modifier: Modifier = Modifier,
     onItemClick: (AgendaItem) -> Unit = {},
+    lazy: Boolean = true,
 ) {
     val surfaces = LocalAppSurfaces.current
-    LazyColumn(modifier = modifier.fillMaxWidth()) {
-        days.forEach { day ->
-            item(key = "day-${day.date}") {
-                Text(
-                    text = DateUtils.formatChineseDate(day.date),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(
-                        horizontal = AppSpacing.md,
-                        vertical = AppSpacing.xs,
-                    ),
-                )
+    if (lazy) {
+        LazyColumn(modifier = modifier.fillMaxWidth()) {
+            days.forEach { day ->
+                item(key = "day-${day.date}") { AgendaDayTitle(day) }
+                items(day.items, key = { it.key }) { item ->
+                    AgendaRow(
+                        item = item,
+                        onClick = { onItemClick(item) },
+                        dividerColor = surfaces.divider,
+                    )
+                }
             }
-            items(day.items, key = { it.key }) { item ->
-                AgendaRow(
-                    item = item,
-                    onClick = { onItemClick(item) },
-                    dividerColor = surfaces.divider,
-                )
+        }
+    } else {
+        // 非惰性版：给「外层已经有一个滚动条」的场合用。
+        // LazyColumn 不能嵌在 verticalScroll 里（无限高度约束会崩），
+        // 所以这里用普通 Column 全量渲染 —— 一周的数据量完全扛得住。
+        Column(modifier = modifier.fillMaxWidth()) {
+            days.forEach { day ->
+                AgendaDayTitle(day)
+                day.items.forEach { item ->
+                    AgendaRow(
+                        item = item,
+                        onClick = { onItemClick(item) },
+                        dividerColor = surfaces.divider,
+                    )
+                }
             }
         }
     }
+}
+
+/** 一天的小标题（日期） */
+@Composable
+private fun AgendaDayTitle(day: AgendaDay) {
+    Text(
+        text = DateUtils.formatChineseDate(day.date),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(
+            horizontal = AppSpacing.md,
+            vertical = AppSpacing.xs,
+        ),
+    )
 }
 
 /** 一行事项 */

@@ -22,10 +22,16 @@ fun agendaDates(
         // 日日程：只这一天，不展开成整周
         AgendaScope.DAY -> listOf(anchor.startOfDayMillis(zone))
 
-        AgendaScope.WORKDAY, AgendaScope.RESTDAY -> {
+        AgendaScope.WORKDAY, AgendaScope.RESTDAY, AgendaScope.WEEK -> {
             // 周起始是周一（与 CalendarViewModel.computeWeekRange 一致）
             val weekStart = anchor.minusDays((anchor.dayOfWeek.value - 1).toLong())
-            val offsets = if (scope == AgendaScope.WORKDAY) 0L..4L else 5L..6L
+            val offsets = when (scope) {
+                AgendaScope.WORKDAY -> 0L..4L
+                AgendaScope.RESTDAY -> 5L..6L
+                // 整周：周一 ~ 周日，七天连着排
+                AgendaScope.WEEK -> 0L..6L
+                AgendaScope.DAY -> 0L..0L
+            }
             offsets.map { weekStart.plusDays(it).startOfDayMillis(zone) }
         }
     }

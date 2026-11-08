@@ -141,6 +141,9 @@ class CalendarViewModel @Inject constructor(
     /** 所在那一周休息日（周六日）的日程流 */
     val restdayAgendaDays: StateFlow<List<AgendaDay>> = agendaDaysFlow(AgendaScope.RESTDAY)
 
+    /** 所在那一周整周（周一 ~ 周日）的日程流 —— 周视图用，七天连成一条 */
+    val weekAgendaDays: StateFlow<List<AgendaDay>> = agendaDaysFlow(AgendaScope.WEEK)
+
     // Phase 26：翻页单位。跟路由绑定 —— 日翻天、周翻周、月翻月。
     private val _navUnit = MutableStateFlow(CalendarNavUnit.DAY)
     val navUnit: StateFlow<CalendarNavUnit> = _navUnit.asStateFlow()

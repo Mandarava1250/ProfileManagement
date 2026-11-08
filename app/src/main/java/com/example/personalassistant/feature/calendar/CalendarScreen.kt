@@ -1,7 +1,10 @@
 package com.example.personalassistant.feature.calendar
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -81,8 +84,7 @@ fun CalendarScreen(
     val selectedDate by viewModel.selectedDate.collectAsStateWithLifecycle()
     val selectedDayDetail by viewModel.selectedDayDetail.collectAsStateWithLifecycle()
     val dayAgendaDays by viewModel.dayAgendaDays.collectAsStateWithLifecycle()
-    val workdayAgendaDays by viewModel.workdayAgendaDays.collectAsStateWithLifecycle()
-    val restdayAgendaDays by viewModel.restdayAgendaDays.collectAsStateWithLifecycle()
+    val weekAgendaDays by viewModel.weekAgendaDays.collectAsStateWithLifecycle()
     val editingState by viewModel.editingState.collectAsStateWithLifecycle()
     val editorError by viewModel.editorError.collectAsStateWithLifecycle()
     val eventCategories by viewModel.eventCategories.collectAsStateWithLifecycle()
@@ -155,8 +157,7 @@ fun CalendarScreen(
 
     val itemCount = when (mode) {
         CalendarScreenMode.DAY -> dayAgendaDays.sumOf { it.items.size }
-        CalendarScreenMode.WEEK -> workdayAgendaDays.sumOf { it.items.size } +
-            restdayAgendaDays.sumOf { it.items.size }
+        CalendarScreenMode.WEEK -> weekAgendaDays.sumOf { it.items.size }
         CalendarScreenMode.MONTH -> 0
     }
     val subtitle = when (mode) {
@@ -254,33 +255,36 @@ fun CalendarScreen(
                     AgendaStream(
                         days = dayAgendaDays,
                         modifier = Modifier.weight(1f),
-                        onItemClick = { item -> openAgendaItem(navController, viewModel, agendaDaysOf(dayAgendaDays), item) },
+                        onItemClick = { item -> openAgendaItem(navController, viewModel, dayAgendaDays, item) },
                     )
                 }
 
-                // 周：周日历在上，工作日日程流 + 休息日日程流在下
+                // 周：整页一个滚动条 —— 上半周日历（时间轴跟着一起滚），
+                // 下半整周清单（周一 → 周日七天连着排，显示所有安排与清单）
                 CalendarScreenMode.WEEK -> {
-                    WeekCalendarView(
-                        timeline = weekTimeline,
-                        selectedDate = selectedDate,
-                        onDateClick = viewModel::onDateClick,
-                        onToggleTask = { task, done -> viewModel.toggleTask(task, done) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    AgendaStream(
-                        days = workdayAgendaDays,
-                        modifier = Modifier.weight(1f),
-                        onItemClick = { item ->
-                            openAgendaItem(navController, viewModel, agendaDaysOf(workdayAgendaDays), item)
-                        },
-                    )
-                    AgendaStream(
-                        days = restdayAgendaDays,
-                        modifier = Modifier.weight(1f),
-                        onItemClick = { item ->
-                            openAgendaItem(navController, viewModel, agendaDaysOf(restdayAgendaDays), item)
-                        },
-                    )
+                    val weekScroll = rememberScrollState()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(weekScroll),
+                    ) {
+                        WeekCalendarView(
+                            timeline = weekTimeline,
+                            selectedDate = selectedDate,
+                            onDateClick = viewModel::onDateClick,
+                            onToggleTask = { task, done -> viewModel.toggleTask(task, done) },
+                            timeGridScrollState = weekScroll,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        AgendaStream(
+                            days = weekAgendaDays,
+                            // 清单跟时间轴共用一个滚动条，所以这里用非惰性版
+                            lazy = false,
+                            onItemClick = { item ->
+                                openAgendaItem(navController, viewModel, weekAgendaDays, item)
+                            },
+                        )
+                    }
                 }
 
                 // 月：月日历网格在上，选中日标签列表在下
@@ -383,8 +387,6 @@ private fun openAgendaItem(
         }
     }
 }
-
-private fun agendaDaysOf(days: List<AgendaDay>): List<AgendaDay> = days
 
 /** 视图 → 路由 */
 private fun routeOf(mode: CalendarScreenMode): String = when (mode) {

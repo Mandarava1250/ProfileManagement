@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.calendar.presentation.components
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -74,6 +75,14 @@ fun WeekCalendarView(
     onDateClick: (Long) -> Unit,
     onToggleTask: (Task, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
+    /**
+     * 时间轴的滚动条。
+     *
+     * 传 null = 时间轴自己滚（周视图独占一屏时用）；
+     * 传外层的 = 时间轴跟着整页一起滚 —— 周视图要跟下面的「整周清单」
+     * 共用一个滚动条时用，不然两个滚动区叠在一起，滚轮打架。
+     */
+    timeGridScrollState: ScrollState? = null,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -96,13 +105,19 @@ fun WeekCalendarView(
 
         // ===== 3. 时间轴 7 列 =====
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            modifier = if (timeGridScrollState != null) {
+                // 交给外层滚：这里不能再抢 weight，否则整页高度算不出来
+                Modifier.fillMaxWidth()
+            } else {
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            },
         ) {
             WeekTimeGrid(
                 days = timeline.days,
                 onToggleTask = onToggleTask,
+                externalScrollState = timeGridScrollState,
             )
         }
     }
@@ -308,8 +323,11 @@ private fun WeekDayColumn.allDayItems(primary: Color): List<AllDayItem> {
 private fun WeekTimeGrid(
     days: List<WeekDayColumn>,
     onToggleTask: (Task, Boolean) -> Unit,
+    externalScrollState: ScrollState? = null,
 ) {
-    val scrollState = rememberScrollState()
+    val ownScrollState = rememberScrollState()
+    // 外部传了就跟整页一起滚；没传就自己滚
+    val scrollState = externalScrollState ?: ownScrollState
     val density = LocalDensity.current
     val nowMinute = remember { DateUtils.currentMinuteOfDay() }
     val todayIndex = remember(days) { days.indexOfFirst { isToday(it.date) } }
@@ -326,9 +344,14 @@ private fun WeekTimeGrid(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(scrollState),
+        modifier = if (externalScrollState != null) {
+            // 外层已经在滚了，这里再加一个 verticalScroll 会打架
+            Modifier.fillMaxWidth()
+        } else {
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(ownScrollState)
+        },
     ) {
         Row(
             modifier = Modifier
