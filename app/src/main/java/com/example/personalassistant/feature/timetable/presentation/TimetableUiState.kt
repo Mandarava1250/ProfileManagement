@@ -19,6 +19,13 @@ data class TimetableUiState(
     val semesters: List<Semester> = emptyList(),
     val currentSemester: Semester? = null,
     val currentWeekNumber: Int = 1,
+    /**
+     * 当前是否停在「本周」。
+     *
+     * 手动翻到别的周之后才为 false —— 「回到本周」按钮也就只有这时才该出现。
+     * 之前这个值是写死的 `true`，按钮永远不显示，用户手动翻周之后回不去。
+     */
+    val isCurrentWeek: Boolean = true,
     val courses: List<Course> = emptyList(),
     val timeSlotSchedule: TimeSlotSchedule = TimeSlotSchedule.default(),
     val isLoading: Boolean = true,

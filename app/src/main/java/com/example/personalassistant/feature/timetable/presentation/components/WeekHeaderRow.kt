@@ -2,6 +2,7 @@ package com.example.personalassistant.feature.timetable.presentation.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronLeft
@@ -86,38 +88,48 @@ fun DayHeaderRow(
 ) {
     val labels = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
     // ⚠️ 这里刻意**不写** fillMaxWidth()。
-    // 调用方（TimetableScreen）把它放进 `Row { Spacer(TIMETABLE_AXIS_WIDTH); DayHeaderRow(weight=1f) }`，
-    // fillMaxWidth 会强行撑满父 Row、吃掉 weight 算出来的宽度，Spacer 之外的部分就错位了。
-    // 单独使用（无 weight）时行为不变：weight 默认 0 时 Row 会给它剩余全部宽度。
+    // Phase 26：列宽从「均分」改成「固定 60dp」，表头高固定 52dp。
+    //
+    // 网格那边已经改成 7 列 × 60dp 固定宽 + 横向滑动，表头必须用同一套基准，
+    // 否则滑网格时星期标签停在原地，两边对不上。
+    // 调用方把表头和网格放进**同一个** horizontalScroll，共用一个 ScrollState。
     Row(
         modifier = modifier.padding(horizontal = 4.dp),
     ) {
         labels.forEachIndexed { index, label ->
             val date = weekStart.plusDays(index.toLong())
             val isToday = date == today
-            val containerColor = if (isToday) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-            val textColor = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-
-            Box(
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(2.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(containerColor)
-                    .padding(vertical = 6.dp),
-                contentAlignment = Alignment.Center,
+                    .width(TIMETABLE_COLUMN_WIDTH)
+                    .height(52.dp)
+                    .padding(2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textColor,
-                    )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isToday) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // 今天：22dp 品牌蓝圆 + 白字
+                Box(
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Text(
                         text = "${date.dayOfMonth}",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                        color = textColor,
+                        color = if (isToday) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }

@@ -102,6 +102,8 @@ class TimetableViewModel @Inject constructor(
                     initial.copy(
                         currentSemester = effectiveSemester,
                         currentWeekNumber = weekNumber,
+                        // manualWeek 为 null = 没手动翻过周 = 跟着真实本周走。
+                        isCurrentWeek = manualWeek == null,
                         courses = activeCourses,
                     )
                 }
@@ -135,6 +137,34 @@ class TimetableViewModel @Inject constructor(
     /** 回到当前周 */
     fun jumpToCurrentWeek() {
         _manualWeekNumber.value = null
+    }
+
+    // ==================== Phase 26：双视图 ====================
+
+    /**
+     * 当前视图（时间线 / 整周网格）。
+     *
+     * 走**独立** StateFlow 而不是塞进 `uiState`：那条 combine 里有 `flatMapLatest`，
+     * 往里塞新字段会牵动整个订阅链重建。视图类型是纯 UI 状态，
+     * 也不需要跟着数据库变化重算，单独一条成本最低。
+     */
+    private val _viewType = MutableStateFlow(TimetableViewType.TIMELINE)
+    val viewType: StateFlow<TimetableViewType> = _viewType.asStateFlow()
+
+    fun setViewType(type: TimetableViewType) {
+        _viewType.value = type
+    }
+
+    /**
+     * 时间线视图当前选中的星期（1..7）。
+     *
+     * 独立 StateFlow，同上。
+     */
+    private val _selectedDay = MutableStateFlow(1)
+    val selectedDay: StateFlow<Int> = _selectedDay.asStateFlow()
+
+    fun selectDay(day: Int) {
+        _selectedDay.value = day.coerceIn(1, 7)
     }
 
     /** 保存课程（含冲突处理：抛 CourseConflictException 时进入"是否强制"分支） */

@@ -1,19 +1,16 @@
 package com.example.personalassistant.feature.timetable
 
-import androidx.compose.foundation.layout.Arrangement
-import com.example.personalassistant.core.ui.components.EmptyState
-import androidx.compose.material3.Button
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.FileUpload
@@ -23,12 +20,10 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import com.example.personalassistant.core.ui.components.AppTopBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,13 +39,20 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.example.personalassistant.R
+import com.example.personalassistant.core.ui.components.BigTitleHeader
+import com.example.personalassistant.core.ui.components.EmptyState
+import com.example.personalassistant.core.ui.components.SectionLabel
+import com.example.personalassistant.core.ui.components.UnderlineTabs
+import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.feature.timetable.presentation.TimetableViewModel
+import com.example.personalassistant.feature.timetable.presentation.TimetableViewType
 import com.example.personalassistant.feature.timetable.presentation.components.DayHeaderRow
 import com.example.personalassistant.feature.timetable.presentation.components.SemesterCreateDialog
 import com.example.personalassistant.feature.timetable.presentation.components.SemesterSelector
 import com.example.personalassistant.feature.timetable.presentation.components.TIMETABLE_AXIS_WIDTH
 import com.example.personalassistant.feature.timetable.presentation.components.TimetableGrid
+import com.example.personalassistant.feature.timetable.presentation.components.TimetableTimelineView
 import com.example.personalassistant.feature.timetable.presentation.components.WeekHeaderRow
 import com.example.personalassistant.navigation.Screen
 import kotlinx.coroutines.launch
@@ -59,18 +61,22 @@ import java.time.LocalDate
 /**
  * 课表主页
  *
- *  - 顶部 AppBar：学期选择 + 第几周 + 右上角「导入课表」入口
- *  - 中部：周一-周日日期头
- *  - 主体：7 列课程网格
- *  - 底部 FAB：新建课程
- *  - Snackbar：处理 errorMessage / 导入提示
+ * ## Phase 26：双视图
  *
- * Phase 10：TopAppBar 加 actions slot 放导入按钮
+ * 原来只有「整周网格」一个视图。现在拆成两个标签：
  *
- * 之前 AppBar 只有 title，没有 actions 槽，用户找不到怎么批量导入课表（从教务系统 /
- * ICS 文件 / Excel 等导入）。补一个 `Icons.Rounded.FileUpload` 图标按钮作为入口，
- * 后续接解析逻辑；现在点这条接入。点击后通过已有 SnackbarHost 给个友好提示，
- * 这样 UI 占位和后续实现可以分开演进。
+ * - **时间线**：一天一列到底，课程名 / 地点 / 教师都读得全（`TimetableTimelineView`）
+ * - **整周网格**：7 列横滑，看一周的分布与空档（`TimetableGrid`）
+ *
+ * 整周网格下面还挂一段「今日课程」竖排列表 —— 网格那张图看的是分布，
+ * 真要确认「今天几点在哪上课」，竖排列表才读得舒服。
+ *
+ * ## 横向滚动为什么表头和网格共用一个 ScrollState
+ *
+ * 网格是 7 列 × 60dp 固定宽（合计 420dp，比屏幕宽），表头也是 7 × 60dp。
+ * 两者必须共用同一个 `ScrollState`，否则滑网格时星期标签停在原地，对不上。
+ *
+ * @see com.example.personalassistant.feature.timetable.presentation.components.TimetableGrid
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,13 +85,18 @@ fun TimetableScreen(
     viewModel: TimetableViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // Phase 26：视图类型与时间线选中的星期（都是独立 StateFlow）
+    val viewType by viewModel.viewType.collectAsStateWithLifecycle()
+    val selectedDay by viewModel.selectedDay.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val importHint = stringResource(R.string.timetable_action_import_coming_soon)
 
-    // Phase 10 修复 2：学期创建对话框状态。无学期时"点 +"会进这里；
-    // 有学期时 SemesterSelector 菜单底部也能触发新学期。
+    // 学期创建对话框状态。无学期时"点 +"会进这里；有学期时 SemesterSelector 菜单底部也能触发新学期。
     var showCreateSemester by remember { mutableStateOf(false) }
+
+    // 表头与网格共用的横向滚动状态
+    val hScroll = rememberScrollState()
 
     LaunchedEffect(state.errorMessage) {
         val msg = state.errorMessage
@@ -95,51 +106,49 @@ fun TimetableScreen(
         }
     }
 
+    // 副标题：学期 · 第 N 周 · 本周 N 节
+    val subtitle = buildString {
+        state.currentSemester?.name?.let { append(it).append(" · ") }
+        append("第 ${state.currentWeekNumber} 周")
+        if (state.activeCoursesCount > 0) {
+            append(" · 本周 ${state.activeCoursesCount} 节")
+        }
+    }
+
     Scaffold(
         topBar = {
             Column {
-                AppTopBar(
-                    title = { Text(stringResource(R.string.tab_timetable)) },
+                BigTitleHeader(
+                    title = stringResource(R.string.tab_timetable),
+                    subtitle = subtitle,
                     actions = {
-                        // Phase 10：右上角导入入口 —— 之前 AppBar 只有左侧 title，actions 槽空着。
-                        // 用 FileUpload 图标，点击后弹个 Snackbar 提示"开发中"，等真正接 ICS / 教务
-                        // 抓取实现时直接替换 onClick 即可，不影响布局。
-                        IconButton(
-                            onClick = {
-                                // Phase 10：先弹一个"开发中"提示占位（用户能立刻看到点击有反馈）。
-                                // 未来接 ICS / 教务抓取时，这里替换成
-                                // `navController.navigate(Screen.ImportCourse.route)` 或
-                                // `viewModel.requestImport()` 即可，UI 入口形状不变。
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar(importHint)
-                                }
-                            },
-                            modifier = Modifier.padding(end = 4.dp),
-                        ) {
+                        // 导入入口：点一下弹 Snackbar 提示「开发中」，
+                        // 未来接 ICS / 教务抓取时在这里替换 onClick 即可，UI 入口形状不变。
+                        IconButton(onClick = {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(importHint)
+                            }
+                        }) {
                             Icon(
                                 imageVector = Icons.Rounded.FileUpload,
                                 contentDescription = stringResource(R.string.timetable_action_import),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
-                        // Phase 11：右上角 ⚙️ 入口 → 跳到课表设置页（学期编辑 + 课时表编辑）
-                        IconButton(
-                            onClick = { navController.navigate(Screen.TimetableSettings.route) },
-                            modifier = Modifier.padding(end = 4.dp),
-                        ) {
+                        // 课表设置页（学期编辑 + 课时表编辑）
+                        IconButton(onClick = { navController.navigate(Screen.TimetableSettings.route) }) {
                             Icon(
                                 imageVector = Icons.Rounded.Settings,
                                 contentDescription = "课表设置",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                         }
                     },
                 )
+
+                // 学期切换
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        .padding(horizontal = AppSpacing.md, vertical = AppSpacing.xxs),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SemesterSelector(
@@ -148,20 +157,20 @@ fun TimetableScreen(
                         onSelect = { viewModel.switchSemester(it) },
                         onRequestCreate = { showCreateSemester = true },
                     )
-                    if (state.activeCoursesCount > 0) {
-                        Text(
-                            text = "本周 ${state.activeCoursesCount} 节课",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
                 }
-                HorizontalDivider()
+
+                // 双视图切换
+                UnderlineTabs(
+                    tabs = TimetableViewType.ordered.map { it.label },
+                    selectedIndex = TimetableViewType.ordered.indexOf(viewType).coerceAtLeast(0),
+                    onSelect = { index -> viewModel.setViewType(TimetableViewType.ordered[index]) },
+                    modifier = Modifier.padding(horizontal = AppSpacing.md),
+                )
             }
         },
         floatingActionButton = {
-            // Phase 10 修复 2：学期为空时按 + 不让进 EditCourse（没学期→课程建出来
-            // 观察流也查不到，等于白建），强制走学期创建流程；有学期才进课程编辑。
+            // 学期为空时按 + 不进 EditCourse（没学期 → 课程建出来观察流也查不到，等于白建），
+            // 强制走学期创建流程；有学期才进课程编辑。
             FloatingActionButton(
                 onClick = {
                     if (state.semesters.isEmpty()) {
@@ -187,9 +196,6 @@ fun TimetableScreen(
                 .padding(padding),
         ) {
             if (state.semesters.isEmpty()) {
-                // Phase 10 修复 2：原来 FAB 跳 EditCourse 是错的——没学期时 Course.semester 拿不到
-                // 任何有效值，保存到数据库后会被 observeBySemester 过滤掉、UI 上"加完不显示"。
-                // 修正路径：FAB 改为"创建学期"弹窗；学期建好之后下方的"+ 新建课程"才出现。
                 EmptySemesterHint(
                     onCreateSemester = { showCreateSemester = true },
                 )
@@ -198,42 +204,13 @@ fun TimetableScreen(
 
             WeekHeaderRow(
                 weekNumber = state.currentWeekNumber,
-                isCurrentWeek = true, // TODO: 拿到用户实际是否在手动选周
+                // Phase 26 修：之前写死 true，「回到本周」按钮永远不出现，
+                // 用户手动翻到别的周之后回不去。
+                isCurrentWeek = state.isCurrentWeek,
                 onPrevWeek = { viewModel.selectWeek(state.currentWeekNumber - 1) },
                 onNextWeek = { viewModel.selectWeek(state.currentWeekNumber + 1) },
                 onJumpToCurrent = { viewModel.jumpToCurrentWeek() },
             )
-
-            Spacer(Modifier.height(4.dp))
-
-            // 周几表头必须与下方 TimetableGrid 的列严格对齐。
-            //
-            // TimetableGrid 是「左 TIMETABLE_AXIS_WIDTH 时间轴 + 右 7 列 weight=1f 均分剩余宽度」，
-            // 而 DayHeaderRow 原本整宽均分 7 列 —— 两者横向基准差一个轴宽，
-            // 导致标签与实际列错位（周一被推到最右、标签被切一半）。
-            //
-            // 修法（A2）：外层 Row 左边补一个等宽 Spacer，
-            // 让 DayHeaderRow 只占「剩余宽度」，与 grid 的 7 列共享同一套宽度基准。
-            // 轴宽常量从 TimetableGrid 导出，两边引用同一个值，杜绝以后再漂。
-            // 本周起点：应用存活期间保持不变 —— remember 一次即可，
-            // 免得每次重组都取两次当前时间再算一遍周偏移
-            val currentWeekStart = remember {
-                LocalDate.now().minusDays(((LocalDate.now().dayOfWeek.value - 1).toLong()))
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Spacer(Modifier.width(TIMETABLE_AXIS_WIDTH))
-                DayHeaderRow(
-                    weekStart = currentWeekStart,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-            HorizontalDivider(thickness = 0.5.dp)
-
-            Spacer(Modifier.height(4.dp))
 
             // 按 dayOfWeek 分组：课程列表没变时分组结果也不会变，缓存住，
             // 免得每次重组都重建 7 组 filter + 7 个新 List
@@ -243,16 +220,70 @@ fun TimetableScreen(
                 }
             }
 
-            TimetableGrid(
-                coursesByDay = coursesByDay,
-                onCourseClick = { course -> navController.navigate(Screen.EditCourse.build(course.id)) },
-                timeSlotSchedule = state.timeSlotSchedule,
-                modifier = Modifier.fillMaxSize(),
-            )
+            // 本周起点：应用存活期间保持不变 —— remember 一次即可，
+            // 免得每次重组都取两次当前时间再算一遍周偏移
+            val currentWeekStart = remember {
+                LocalDate.now().minusDays(((LocalDate.now().dayOfWeek.value - 1).toLong()))
+            }
+            val todayDayOfWeek = remember { LocalDate.now().dayOfWeek.value }
+
+            when (viewType) {
+                TimetableViewType.TIMELINE -> {
+                    TimetableTimelineView(
+                        coursesByDay = coursesByDay,
+                        selectedDay = selectedDay,
+                        onSelectDay = { viewModel.selectDay(it) },
+                        onCourseClick = { course ->
+                            navController.navigate(Screen.EditCourse.build(course.id))
+                        },
+                        weekStart = currentWeekStart,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+
+                TimetableViewType.WEEK_GRID -> {
+                    // 周几表头必须与下方网格的列严格对齐：
+                    // 左边补一个等宽 Spacer（时间轴不随横向滚动），
+                    // 右边 7 列与网格共用同一个 horizontalScroll。
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Spacer(Modifier.width(TIMETABLE_AXIS_WIDTH))
+                        Row(modifier = Modifier.horizontalScroll(hScroll)) {
+                            DayHeaderRow(weekStart = currentWeekStart)
+                        }
+                    }
+
+                    HorizontalDivider(thickness = 0.5.dp)
+
+                    TimetableGrid(
+                        coursesByDay = coursesByDay,
+                        onCourseClick = { course ->
+                            navController.navigate(Screen.EditCourse.build(course.id))
+                        },
+                        timeSlotSchedule = state.timeSlotSchedule,
+                        currentDayOfWeek = todayDayOfWeek,
+                        hScrollState = hScroll,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    // 网格看的是分布，「今天几点在哪上课」还得靠竖排列表读
+                    SectionLabel(title = "今日课程")
+                    TimetableTimelineView(
+                        coursesByDay = coursesByDay,
+                        selectedDay = todayDayOfWeek,
+                        onSelectDay = { },
+                        onCourseClick = { course ->
+                            navController.navigate(Screen.EditCourse.build(course.id))
+                        },
+                        weekStart = currentWeekStart,
+                        showDateStrip = false,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
     }
 
-    // Phase 10 修复 2：学期创建对话框（弹窗式 + FAB 入口共用）。
+    // 学期创建对话框（弹窗式 + FAB 入口共用）。
     // 成功创建后 VM 会写入数据库并 switchSemester，state.semesters 状态自动刷新，
     // empty-state 分支会因为学期非空而被跳过。
     if (showCreateSemester) {
@@ -274,7 +305,7 @@ private fun EmptySemesterHint(onCreateSemester: () -> Unit) {
             title = stringResource(R.string.empty_timetable_title),
             description = stringResource(R.string.empty_timetable_desc),
             action = {
-                Button(onClick = onCreateSemester) {
+                androidx.compose.material3.Button(onClick = onCreateSemester) {
                     Text(stringResource(R.string.timetable_create_semester))
                 }
             },
