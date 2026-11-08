@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.personalassistant.core.ui.theme.LocalAppSurfaces
 import com.example.personalassistant.feature.habit.domain.model.HabitHeatmapWeek
 
 /**
@@ -23,7 +24,11 @@ import com.example.personalassistant.feature.habit.domain.model.HabitHeatmapWeek
  * 排布与 GitHub 贡献图一致：**一列一周**，从上到下是周一 → 周日，
  * 横向可滚动（53~54 列在手机上放不下）。
  *
- * 色阶：0 = 没打卡（浅灰），1~3 = 部分完成（主色逐渐加深），4 = 达成目标（主色）。
+ * 色阶：0 = 没打卡（暖白底），1~3 = 部分完成（主色逐渐加深），4 = 达成目标（主色）。
+ *
+ * Phase 26：方块从 12dp 收到 10dp、圆角 3dp —— 一年 53×7 = 371 格，
+ * 12dp 的方块在 360dp 宽的屏上根本看不出「哪几天连着」；
+ * 空格子底色也从冷调 surfaceVariant 换成暖白 paper。
  */
 @Composable
 fun HabitHeatmap(
@@ -42,7 +47,7 @@ fun HabitHeatmap(
                 week.cells.forEach { cell ->
                     Box(
                         modifier = Modifier
-                            .size(12.dp)
+                            .size(10.dp)
                             .background(
                                 color = heatmapColor(cell.level),
                                 shape = RoundedCornerShape(3.dp),
@@ -57,7 +62,7 @@ fun HabitHeatmap(
 /** 热力图色阶 */
 @Composable
 private fun heatmapColor(level: Int) = when (level) {
-    0 -> MaterialTheme.colorScheme.surfaceVariant
+    0 -> LocalAppSurfaces.current.paper
     1 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
     2 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
     3 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
@@ -83,7 +88,7 @@ fun HabitHeatmapLegend(modifier: Modifier = Modifier) {
                     .size(10.dp)
                     .background(
                         color = heatmapColor(level),
-                        shape = RoundedCornerShape(2.dp),
+                        shape = RoundedCornerShape(3.dp),
                     ),
             )
         }

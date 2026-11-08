@@ -14,7 +14,11 @@ data class Habit(
     val id: Long = 0L,
     val name: String,
     val iconKey: String = "star",
-    val color: Int = 0xFFFF69B4.toInt(),
+    // Phase 26：默认色从旧樱花粉 #FF69B4 换成蓝系 #3F7DE0 ——
+    // 粉红是上一版方案的品牌色，新方案的品牌色是靛蓝，
+    // 新建的习惯若还带粉色会在一屏蓝里显得像「别的 App 的东西」。
+    // 注意：这只影响**新建**习惯的默认值，已存库的粉色习惯保持原样（不改数据）。
+    val color: Int = 0xFF3F7DE0.toInt(),
     val targetType: HabitTargetType = HabitTargetType.DAILY,
     val targetCount: Int = 1,
     val unit: String? = null,

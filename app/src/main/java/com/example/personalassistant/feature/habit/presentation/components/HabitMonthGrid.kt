@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.core.ui.theme.AppSpacing
+import com.example.personalassistant.core.ui.theme.LocalAppSurfaces
 import com.example.personalassistant.feature.habit.domain.model.HabitDayCell
 import com.example.personalassistant.feature.habit.domain.util.HabitDates
 
@@ -26,6 +27,9 @@ import com.example.personalassistant.feature.habit.domain.util.HabitDates
  *
  * 一行 7 格（周一 → 周日），没打卡的日子也占一格（浅色）——
  * 用户要能一眼看出「哪天漏了」，只画有记录的日子就失去意义了。
+ *
+ * Phase 26：空格底色从冷调 `surfaceVariant` 换成暖白 `paper`，
+ * 让月表和热力图落在同一套暖白分层上。
  */
 @Composable
 fun HabitMonthGrid(
@@ -77,7 +81,7 @@ private fun MonthCell(
                 } else if (cell.count > 0) {
                     MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
                 } else {
-                    MaterialTheme.colorScheme.surfaceVariant
+                    LocalAppSurfaces.current.paper
                 },
                 shape = CircleShape,
             ),
