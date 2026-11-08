@@ -72,6 +72,25 @@ class BottomBarRoutesTest {
     }
 
     @Test
+    fun `日历 Tab 涵盖日周月三条路由`() {
+        val calendar = BottomTab.Calendar
+        // 站在周 / 月视图里，底栏的「日历」图标也得算选中
+        assertTrue(Screen.CalendarDay.route in calendar.routes)
+        assertTrue(Screen.CalendarWeek.route in calendar.routes)
+        assertTrue(Screen.CalendarMonth.route in calendar.routes)
+    }
+
+    @Test
+    fun `每个 Tab 至少认领自己的入口路由`() {
+        BottomTab.entries.forEach { tab ->
+            assertTrue(
+                "Tab 必须认领自己的入口路由：${tab.screen.route}",
+                tab.screen.route in tab.routes,
+            )
+        }
+    }
+
+    @Test
     fun `secondary pages are not bottom bar routes`() {
         val secondary = listOf(
             // 任务：详情 / 编辑

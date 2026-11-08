@@ -134,8 +134,25 @@ enum class BottomTab(
     val screen: Screen,
     @StringRes val labelRes: Int,
     val icon: ImageVector,
+    /**
+     * 这个 Tab 涵盖的所有路由 —— 底栏的选中态按它判定。
+     *
+     * 日历 Tab 有三个视图（日 / 周 / 月），各走一条独立路由；
+     * 站在周视图或月视图里时，底栏的「日历」图标也得亮着，
+     * 不然用户会以为自己在别的 Tab 上。
+     */
+    val routes: Set<String> = setOf(screen.route),
 ) {
-    Calendar(Screen.CalendarDay, R.string.tab_calendar, Icons.Rounded.CalendarMonth),
+    Calendar(
+        Screen.CalendarDay,
+        R.string.tab_calendar,
+        Icons.Rounded.CalendarMonth,
+        routes = setOf(
+            Screen.CalendarDay.route,
+            Screen.CalendarWeek.route,
+            Screen.CalendarMonth.route,
+        ),
+    ),
     Tasks(Screen.Tasks, R.string.tab_tasks, Icons.Rounded.Checklist),
     Timetable(Screen.Timetable, R.string.tab_timetable, Icons.Rounded.Today),
     Finance(Screen.Finance, R.string.tab_finance, Icons.Rounded.AccountBalanceWallet);

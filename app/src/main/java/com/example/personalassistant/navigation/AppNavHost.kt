@@ -428,14 +428,16 @@ private fun RowScope.BottomTabItem(
     currentRoute: String?,
     onNavigateToTab: (String) -> Unit,
 ) {
-    val selected = currentRoute == tab.screen.route
+    // 选中态按 Tab 涵盖的**所有**路由判定 —— 日历 Tab 有日 / 周 / 月三条路由，
+    // 站在周视图里时「日历」图标同样要亮。
+    val selected = currentRoute != null && currentRoute in tab.routes
     NavigationBarItem(
         selected = selected,
         onClick = {
-            if (currentRoute != tab.screen.route) {
-                // Phase 15 P0-1.1：统一走 navigateToTab —— 栈行为与页面内跨 Tab 跳转一致
-                onNavigateToTab(tab.screen.route)
-            }
+            // 不按「已选中」跳过 —— 站在周 / 月视图时点「日历」也走一次导航，
+            // navigateToTab 的 popUpTo(起点) 会把周 / 月弹掉，回到日视图。
+            // （跨 Tab 再回来时 restoreState 会恢复上次看的那个视图。）
+            onNavigateToTab(tab.screen.route)
         },
         // 文字标签已经承担了语义，图标 contentDescription 设 null 避免读屏重复朗读
         icon = { Icon(tab.icon, contentDescription = null) },
