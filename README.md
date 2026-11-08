@@ -96,12 +96,14 @@
 | 🟨 | 人工 UI 验收：「设期初 → 转账 → 两账本各多一行 → 删转账 → 总览卡数字」；头像圆角观感 | 阶段 Phase 4 / 5 |
 | 🔜 | 附件旧文件回收：`AttachmentStore.delete()` / `deleteAll()` 至今**零生产调用**，旧附件从未清理 | 模块 Phase 7b / 阶段 Phase 2 |
 | 🔜 | 备份 / CSV 导入对转账配对的往返验证（`transferImbalanced` 目前只提示、不阻止） | 阶段 Phase 5 |
-| 🔜 | **设置页与全局搜索在 UI 上没有任何入口**：`settings` / `globalsearch` 两条路由已在 `AppNavHost` 注册，但全仓 11 处 `navigate()` 调用（feature 层 5 处：课表 ×3 / 任务 ×2；`AppNavHost` 内 6 处：BottomBar ×1 + 搜索结果跳转 ×4 + 详情页编辑 ×1）**无一处指向这两页**。`Screen.Settings` 仅以 `BottomTab.SETTINGS` 常量形式存在，注释里说的「底部溢出菜单」并未实现。本轮 `Walk` 走查只能在 4 个 Tab 间循环，这两页**无法人工验收** | 本轮真机走查实测 |
+| ✅ | ~~设置页与全局搜索在 UI 上没有任何入口~~ —— **旧结论已作废**（Phase 26 核实：两者现在都有入口）。**设置页**：底栏第 5 位「更多」→ 设置（`AppNavHost.kt:389-390`、`:478`），以及「我的」页底部的设置入口（`MeScreen.kt:138`）。**全局搜索**：清单页顶栏 🔍（`TaskScreen.kt:226`）与「我的」页顶栏 🔍（`MeScreen.kt:118`） | Phase 26 核实 |
 | 🔜 | `Screen.EditEvent` / `AddTransaction` / `MonthlyBudget` 三条路由已声明但 `NavHost` 未注册。记账/日历靠各页就地弹层（`AddTransactionSheet` / `BudgetSheet` / `EditEventSheet`）完成闭环，所以**目前不崩**；但 `AppNavHost` 第 118 行会 navigate 到未注册的 `calendar/edit/{id}` —— 一旦全局搜索接入可达，点「事件」命中项将直接抛 `IllegalArgumentException`（潜伏缺陷，非现役崩溃） | 本轮导航核对 |
 | 🔜 | 记账页顶部**账户切换快捷入口**（当前只能进设置页换） | 阶段 Phase 3 |
 | 🔜 | 图片 EXIF 旋转处理（附件与头像均未做） | 阶段 Phase 2 |
 | 🔜 | **设置页「清除数据」入口**：旧 README 列为 Phase 6 计划项，本轮已落地（设置页底部红色 Card + 备份建议 + 长按 3 秒确认 + 完成反馈） | 阶段 Phase 6 ✅ |
 | ⏳ | `feature/phase-14-ui-refresh` → `Develop` 回合合并（Phase 14 UI 收口后） | Phase 14 |
+| 🟨 | **Phase 26 UI 改造（方案 D）人工验收** —— 6 屏 × 浅色 / 深色两套，逐项清单见 `docs/manual-verification/phase26-ui-checklist.md`。本机 AVD（`aosp_atd` 镜像）全黑屏，无法自动目测 | 阶段 Phase 26 |
+| 🟨 | 课表 / 日历的「现在」线、13% 淡底 + 3dp 左条、课表后排课程高度 —— 均已改，需真机确认一眼 | 阶段 Phase 26 |
 
 ---
 

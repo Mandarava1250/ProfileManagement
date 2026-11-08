@@ -62,6 +62,7 @@
 | 7b | 记账编辑闭环 + 报表 + 搜索 + 导入导出 + 自定义图标 | 1 | 2026-09-07 | 月度报表 / CSV 导入导出 |
 | 7c | Calendar 模块（5 个 sub-step） | 6 | 2026-09-07 | `EventEntity` / 月视图 / 周日视图 / DayDetailSheet / 编辑闭环 |
 | 8 | 多 sub-step 复合 phase | 18 | 2026-09-07~09-09 | Event 智能提醒 / 5 档优先级 / 全局搜索 / 备份恢复 / 主题 / 节假日 / Settings / 分类管理 / RRULE / 冲突检测 / 农历 |
+| 26 | 方案 D 全量 UI 改造 | 8 | 2026-11-08 | 设计令牌层 / 公共组件层 / 课表双视图 / 日历日程流 / 暖白 + 固定语义色 |
 
 ---
 
@@ -3094,3 +3095,80 @@ Box {                                        ← 底层：动作区（5 个彩�
 - **内容层底色默认 `surface`** —— 如果清单列表所在容器的底色不是 `surface`，行与行之间会有一条色差。清单页当前列表区是 Scaffold 底色（`surface` 家族），看不出差别；若日后换容器底色，`SwipeActionBox` 的 `contentBackground` 参数就是给这用的。
 - **这一版没做整体的视觉重设计** —— 只修了「色块外露」这个硬伤 + 把散色收敛成语义色。清单项的排版节奏（行高、meta 区换行）上一轮已经调过。
 - **没做真机截图比对** —— 效果需要伙伴在设备上看一眼：滑动时动作区露出应该是一条浅蓝底 + 一个红色删除按钮，不再是五彩条纹。
+
+---
+
+### 📦 Phase 26：方案 D 全量 UI 改造（8 个独立 commit）
+
+> 六个模块整体换成 D 方案：清单 / 记账 / 课表 / 日历 / 习惯 / 我的·设置·外观·账户。
+> 外加一层新的设计令牌（P0）与公共组件（P1）。
+> **按阶段拆成 8 个 commit**，任一阶段出问题可单独 `git revert` 而不影响其它阶段。
+
+#### `198ebe9` —— P0 设计令牌层
+
+- **完成项**：暖白底 `#F7F6F3`；固定语义色（收入 `#2E6B33` / 支出 `#B23A2E` / 转账 `#4A5560` / 临界 `#7A4A00` / **当前时刻 `#B45309`**）—— 语义色**不跟随用户主题色**
+- 新增 `LocalAppSurfaces`（paper / divider / dividerSoft / barTrack）、`LocalAppColors`（语义色入口）
+- 字号基准：大标题 26sp/700、行标题 15.5sp、正文 15sp、次要 11.5sp、分组标题 13.5sp/700，**最小 10sp**
+- `DateUtils.currentMinuteOfDay()` —— 课表 / 日历的「现在」线共用一份
+
+#### `3120475` —— P1 公共组件层
+
+- **完成项**：`BigTitleHeader` / `UnderlineTabs` / `SectionLabel` / `GroupEntryRow` / `RingCheckbox` / `ColorBar`（+ 顶层 `ensureBarContrast`）/ `ThinProgressBar`
+- `AppCard` 加 `shape` 参数（14dp 走 `AppRadii.card14`，不动全局圆角常量）
+- `AppTopBar` 渐变默认关闭（`showGradient = false`）
+
+#### `6b99393` —— P2 记账模块
+
+- **完成项**：四标签「流水 / 报表 / 零钱池 / 预算」；今日剩余卡改 A 结构 × C 皮肤（暖白 + 左侧 3dp 品牌蓝竖条 + 34sp Light 金额）
+- 流水行改 3dp 分类竖条，副行去掉「· SOURCE」尾巴；月报收支结余走固定语义色
+- 5 处白底图标改用 `onColorFor` 判前景色（深浅底都看得清）
+
+#### `3f30c00` —— P3 课表模块（双视图 + 修存量 bug）
+
+- **完成项**：时间线 / 整周网格双视图（独立 StateFlow，不进主 combine）；60dp 固定列 + 横向滑动；课程卡 13% 淡底 + 3dp 实色左条 + 8dp 圆角；当前时刻线（2dp `now` 色 + 8dp 圆点）；时间轴只画整点；`DayHeaderRow` 52dp + 今天 22dp 蓝圆
+- **修了 `isCurrentWeek` 写死 `true`** —— 「回到本周」按钮因此永远不出现，用户手动翻周后回不去
+- **修了 modifier 顺序 bug**：`.height(h)` 后面跟 `.padding(top = t)`，把 t 从 h 内部扣掉，子内容可用高度变成 `h - t`。排在后面的课（9:45 之后）高度被压到 ≤ 0，**整门课在 App 里根本不显示**。改用 `.offset(y = t)`（offset 不参与测量）
+- 抽出 `TimetableLayout.courseSlot()` 纯函数 → `TimetableLayoutTest` 4 个单测（守住「高度只跟时长有关，与排在第几行无关」）
+- 删除零调用点的死代码 `CourseCard.kt`
+
+#### `ddb236f` —— P4 清单模块
+
+- **完成项**：圆环勾选框（`RingCheckbox`）；meta 一行纯文字（分类 3dp 竖条 → 优先级 → 截止 → 金额），去掉胶囊底；meta 与标题左缘对齐
+- 快速添加改内联底线；筛选按钮改 44dp 圆形 + 自绘徽标；侧滑动作区改直角块，`ACTION_WIDTH` 64 → 56dp
+- 抽屉选中态改「3dp 蓝竖条 + 蓝图标 + SemiBold」三重信号；补「+ 新建清单」入口；**修「删除清单」死路径**（`deletingList` 状态被赋值但没有入口触发）
+- 删除 `CompletionStatsCard.kt`（完成率已由大标题副标题承载）
+
+#### `97815ac` —— P5 日历模块
+
+- **完成项**：新增 `AgendaStream` 日程流 —— 事件 + 课程 + 任务三类拍平成一条竖线（44dp 时刻 + 7dp 圆点 + 标题 + 副信息 + 1px 上边框）；**全天事项排在带时刻事项之前，其余按开始时刻升序**（沿用 `DayDetail` 既有约定）
+- `AgendaDay.buildAgendaDay()` 纯函数 → `AgendaDayTest` 5 个单测
+- 日历页改 `BigTitleHeader`（「11 月」+「今天 N 项安排 ⌄」）+ `UnderlineTabs` 四标签（日程 / 月 / 周 / 日）
+- **「现在」线从 `colorScheme.error`（红）改固定 `now` 语义色** —— 红色是冲突 / 逾期的语义，「现在」撞色会让人以为出错了
+- 时间轴块从「16% 底 + 32% 描边」改「13% 淡底 + 3dp 实色左条」（`drawBehind` 画，不占布局）
+- 农历角标 9sp → 10sp；非本月日期从 `onSurfaceVariant @ 40%`（约 2.3:1）改完整色值（≥ 4.5:1）
+- 习惯打卡按钮 32dp → 44dp 触达 + 34dp 蓝色方块
+
+#### `d71dd68` —— P6 习惯模块
+
+- **完成项**：「今日」区块一物一块；`HabitRow` 重画为 `HabitBlock`（34dp 圆角方块图标 + 名称 + 目标 + 计数 + 2dp 进度条 + 右下**文字**打卡按钮）；接上 `Habit.iconKey`（之前 UI 写死 `Icons.Rounded.Star`）
+- 默认色 `#FF69B4`（旧樱花粉）→ `#3F7DE0`（蓝系）；只影响新建，存量数据不动
+
+#### `6f3659e` —— P7 我的 / 设置 / 外观 / 账户
+
+- **完成项**：「我的」页新增档案卡（64dp 圆形头像 + 名字 20sp + 账户名副行，不虚构学号）；GPA 改 38sp Light + 3dp 进度条；「外观」入口拆成分组文字行；`SettingsNavBar` 的 `TabRow` → 下划线标签
+- 搜索高亮色写死玫红 `#E91E63` → 品牌蓝
+
+#### 验证
+
+- `gradlew :app:assembleDebug :app:testDebugUnitTest` —— **BUILD SUCCESSFUL**，**1161 个 JVM 单测全绿，0 失败**（Phase 25 是 1138 个，新增 23 个）
+- 新增单测：`TimetableLayoutTest`（4）+ `AgendaDayTest`（5）+ `SemanticColorsTest` 扩写
+
+#### 已知边界（留给下一轮 / 需真机确认）
+
+1. **真机无法目测** —— 本机 AVD 是 `aosp_atd` 镜像，全黑屏不可见。验收走 `docs/manual-verification/phase26-ui-checklist.md`（6 屏 × 浅色 / 深色两套，逐项可勾）
+2. **课表 modifier 顺序的回归测试只覆盖到算式层**（`TimetableLayoutTest`）。Modifier 链本身的顺序要 instrumented test 才量得到真实尺寸 —— 清单第 3.1 条得在真机上看一眼
+3. **课表副标题的「⌄」是静态字符**，还没做成真下拉；学期切换仍走下方那行 `SemesterSelector`
+4. **日历的日程流按选中日聚合**，不是整周滚动。组件本身支持多天（`AgendaStream(days = List<AgendaDay>)`），接上区间观察流即可扩
+5. **月 / 周 / 日三种网格是标签页，不是独立路由** —— 功能没丢，但没做成「二级页」
+6. **`docs/ui-mockups/plan-d.html` 原型与实现有出入**（原型仍是单视图课表、课表时间线带日程行），原型同步排在下一步
+7. **中间 commit 未逐个编译验证** —— 8 个阶段是一次性改完再统一验证的，只有最终 HEAD 是确认全绿的。单独 revert 某个阶段后建议先跑一次编译
