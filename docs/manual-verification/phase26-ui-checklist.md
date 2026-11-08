@@ -134,7 +134,7 @@
 2. **日历的日程流目前按选中日聚合**，不是整周滚动。组件本身支持多天（`AgendaStream(days = List<AgendaDay>)`），接上区间观察流即可扩。
 3. **月 / 周 / 日三种网格是标签页，不是独立路由** —— 功能没丢，但没做成「二级页」。
 4. **课表 modifier 顺序的回归测试只覆盖到算式层**（`TimetableLayoutTest`），Modifier 链本身的顺序要 instrumented test 才量得到；3.1 这条得真机看一眼。
-5. `docs/ui-mockups/plan-d.html` 原型与实现有出入（原型仍是单视图课表、课表时间线带日程行），原型同步排在下一步。
+5. `docs/ui-mockups/plan-d.html` 原型**已同步到实现**（D1 抽屉入口 + 近 7 天完成率 / D3 只留课程 / D5 日程流 + 四标签 / D7 账户名副行）。
 
 ---
 
