@@ -3228,3 +3228,71 @@ Box {                                        ← 底层：动作区（5 个彩�
 9. **日历的六条路由还只进了 NavHost，没进 `navigateToTab`** —— 视图切换器走的是 `navigate` + `popUpTo`，底栏选中态在这些二级页上不跟随。需要的话下一轮可以把日历的二级页也纳入 tab 选中判定
 10. **日历六条路由各自持有独立的 `CalendarViewModel`** —— `hiltViewModel()` 的 scope 是 NavBackStackEntry，不同路由 = 不同实例 = 各自一份 `selectedDate`。实际表现：**在月视图里选了 11 月 20 号，切到周视图会跳回今天**。修法是把这一组路由收进一个嵌套 `navigation()` 图，共享图级 scope 的 VM —— 下一轮做
 
+### Phase 27 —— 日历三视图（日 / 周 / 月）重整（2026-11-08）
+
+伙伴要求：视图合并成三档，视图切换列表放在标题组件下方、顺序 日→周→月，三视图都显示下方导航栏（视图切换栏 + App 底栏）。
+
+#### 三笔 commit
+
+| commit | 内容 |
+|---|---|
+| `8a05aac` | 日历三视图独立路由 + 底栏白名单扩到 8 条 |
+| `9bdc187` | 日历视图合并为日/周/月 + 标题下方下划线标签 |
+| `00c682a` | fix: `UnderlineTabs` 标签等宽铺满 |
+
+#### 合并后的结构
+
+| 视图 | 路由 | 上半（组件） | 下半（列表） |
+|---|---|---|---|
+| **日** | `calendar/day` | `DayCalendarView`（时间轴 + 今日课程 + 预算横条） | `AgendaStream` 选中日 |
+| **周** | `calendar/week` | `WeekCalendarView` | 工作日 `AgendaStream`（周一~周五）+ 休息日 `AgendaStream`（周六日） |
+| **月** | `calendar/month` | `MonthCalendarGrid` | `MonthTagList` 选中日标签列表 |
+
+- 视图切换从导航栏的下拉菜单改成**标题下方的 `UnderlineTabs`**（日 / 周 / 月）
+- 导航栏右侧的「切换视图」图标按钮删掉；右侧剩 `显示设置 / 选择月份 / 下一个`，左侧仍是 `上一个 / 回到今天`
+- `CalendarScreenMode` 从 6 个值简化成 `DAY / WEEK / MONTH`
+- `CalendarViewModel` 的 `_agendaScope` 单值流换成三条并行流：`dayAgendaDays` / `workdayAgendaDays` / `restdayAgendaDays`
+- `agendaDates(anchor, scope)` 纯函数与 `AgendaScope` 枚举原样保留（`AgendaRangeTest` 6 个用例不用改）
+- 底栏白名单 6 → 8 条（三条日历路由都进去），deeplink 白名单同步补三条
+
+#### 走过的两条弯路（都留在这段记录里）
+
+**一、嵌套 NavGraph —— 白屏**
+
+按计划先把三条路由收进 `navigation()` 图（想顺带解决「切视图丢选中日」）。真机一按返回键，**整页变空白**：
+
+图的 startDestination 是「日」，NavHost 的 startDestination 是那张图。栈是 `[图, 日]`，返回键把「日」弹掉 → 图里没有 destination 可显示 → 白屏。
+
+改回**三条顶层路由 + Activity 作用域共享 ViewModel**：在 `AppNavHost` 里 `hiltViewModel<CalendarViewModel>()`（scope = Activity）拿到共享实例，传给三个视图；切视图用 `navigate(target) { popUpTo("calendar/day") { inclusive = false } }`，栈底「日」永远留着。
+
+**二、`UnderlineTabs` 只渲染出第一个标签**
+
+真机上标签栏只有「日」，「周」「月」点不到。根因在公共组件：
+
+```kotlin
+Box(Modifier.fillMaxWidth().height(2.dp).background(...))   // 下划线槽
+```
+
+`fillMaxWidth()` 在 `Row` 里取的是**剩余空间**（≈ 整行宽），于是第一个标签的 `Column` 撑满整行，后面的标签被推到屏幕外。
+
+- 先试 `Modifier.width(IntrinsicSize.Min)` → **无限测量**，整个界面 dump 不出来（Intrinsic 测量下 `fillMaxWidth` 的 maxWidth 是无穷）
+- 最终解：标签 `Column` 加 `weight(1f)` **等宽铺满**（Material Tab 的做法），文字居中
+
+这个组件是公共的，课表页的「学期 / 课时表」、设置页也在用 —— 一并修好了。
+
+#### 验证
+
+- `gradlew :app:assembleDebug :app:testDebugUnitTest` —— **BUILD SUCCESSFUL**，**1174 个 JVM 单测全绿，0 失败**
+- 真机（`pm_ui36` 模拟器，google_apis 镜像）用 `uiautomator dump` 逐项核对：
+  - 标题下方出现「日 / 周 / 月」下划线标签，**顺序正确**
+  - 三个视图里 **App 底栏都在**
+  - 周视图副标题「本周 5 项安排 ⌄」，月视图有月份网格 + 标签列表
+  - **从「月」按返回键回到「日」**（不再退出 App）—— 这条是上一轮那个 bug 的回归验证
+- 工具留在 `.cyrene/`（gitignore 的工具目录，不进仓库）：`tap.py`（按文字点设备）、`dump.py`（层级转文字）、`verify.py`（三视图一键核对）
+
+#### 顺带澄清的两件事
+
+- **上一轮报的黑屏不是 App 的锅** —— `emulator.exe` 和 `qemu` 两个进程都消失了（渲染进程退出，窗口框架留着），crash buffer 空、logcat 无异常。重启模拟器后 App 渲染完全正常（435 种颜色）
+- **「本机无法目测」这条过期了** —— 现在跑的是 `pm_ui36`（google_apis 镜像），能显示；`adb shell uiautomator dump` + 像素直方图可以替代肉眼验收
+
+
