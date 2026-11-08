@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
@@ -28,6 +29,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -177,16 +179,25 @@ internal fun CalendarHabitRow(
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
         )
-        IconButton(onClick = onCheckIn, modifier = Modifier.size(32.dp)) {
+        // 34dp 方块 + 44dp 触达。
+        //
+        // 原来整个 IconButton 就是 32dp —— 低于 44dp 的触达下限，
+        // 排队打卡时很容易点空。视觉块 34dp 不变（方块，不用圆形，
+        // 跟清单模块的方块勾选框同一套语言），触达区撑到 44dp。
+        IconButton(onClick = onCheckIn, modifier = Modifier.size(44.dp)) {
             Icon(
                 imageVector = Icons.Rounded.Add,
                 contentDescription = "打卡一次",
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primary),
+                tint = MaterialTheme.colorScheme.onPrimary,
             )
         }
         // 没打过卡时不显示撤销按钮 —— 「减一」在 0 上没有意义
         if (habit.count > 0) {
-            IconButton(onClick = onUndo, modifier = Modifier.size(32.dp)) {
+            IconButton(onClick = onUndo, modifier = Modifier.size(44.dp)) {
                 Icon(
                     imageVector = Icons.Rounded.Remove,
                     contentDescription = "撤销一次",

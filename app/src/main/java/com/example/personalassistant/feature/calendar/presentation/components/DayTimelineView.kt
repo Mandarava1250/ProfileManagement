@@ -21,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -28,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.core.ui.theme.AppSpacing
+import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.core.ui.theme.onColorFor
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.Event
@@ -107,7 +110,7 @@ fun DayTimelineView(
     val gutterWidth = 42.dp
     val columnGap = 3.dp
     // 进入时取一次当前时刻就固定住 —— 红线跟着秒针跳的话看着晕
-    val nowMinute = remember { currentMinuteOfDay() }
+    val nowMinute = remember { DateUtils.currentMinuteOfDay() }
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val totalWidth = maxWidth
@@ -147,15 +150,20 @@ fun DayTimelineView(
                     )
                 }
 
-                // Phase 14：「现在」红线。
+                // Phase 14：「现在」线。
                 // 24 小时的轴一眼望过去看不出「现在几点」，画一条线就一目了然 ——
                 // 线上方是已经过去的，下面是还没到的。
+                //
+                // 用固定的 `now` 语义色（#B45309），不跟主题色走 ——
+                // 「现在」是时间事实，不是品牌偏好。之前用 colorScheme.error（红），
+                // 跟「冲突 / 逾期」撞色，看到一条红线会以为出错了。
+                val nowInk = LocalAppColors.current.nowInk
                 if (showNowLine) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(2.dp)
-                            .background(MaterialTheme.colorScheme.error)
+                            .background(nowInk)
                             .align(Alignment.TopStart)
                             .offset(y = hourHeight * (nowMinute / 60f)),
                     )
@@ -312,12 +320,6 @@ internal fun minuteOfDay(millis: Long): Int? {
     return time.hour * 60 + time.minute
 }
 
-/** 此刻是今天的第几分钟（0..1439） */
-internal fun currentMinuteOfDay(): Int {
-    val now = java.time.LocalDateTime.now(ZoneId.systemDefault())
-    return now.hour * 60 + now.minute
-}
-
 /** 这天是不是今天（按本地日期比） */
 internal fun isToday(millis: Long): Boolean {
     val zone = ZoneId.systemDefault()
@@ -344,12 +346,27 @@ private fun TimelineBlockCard(
                         .background(block.color.copy(alpha = if (block.filled) 0.5f else 0.08f))
                         .border(1.dp, block.color.copy(alpha = 0.20f), RoundedCornerShape(AppRadii.chip))
                     block.filled -> Modifier.background(block.color.copy(alpha = 0.85f))
-                    else -> Modifier
-                        .background(block.color.copy(alpha = 0.16f))
-                        .border(1.dp, block.color.copy(alpha = 0.32f), RoundedCornerShape(AppRadii.chip))
+                    // 13% 淡底。之前是 16% 底 + 32% 描边 ——
+                    // 描边会把四边都描上，一屏几十个块全是框线，看着像表格而不是日程。
+                    else -> Modifier.background(block.color.copy(alpha = 0.13f))
                 }
             )
-            .padding(horizontal = 6.dp, vertical = 3.dp),
+            .then(
+                if (block.filled) {
+                    // 实心底色上再画同色左条等于没画
+                    Modifier
+                } else {
+                    // 3dp 实色左条 —— 用 drawBehind 画在内容层底下，
+                    // 不占布局，也就不会把标题挤窄。
+                    Modifier.drawBehind {
+                        drawRect(
+                            color = block.color,
+                            size = Size(3.dp.toPx(), size.height),
+                        )
+                    }
+                }
+            )
+            .padding(start = 8.dp, end = 6.dp, top = 3.dp, bottom = 3.dp),
     ) {
         Column {
             Text(

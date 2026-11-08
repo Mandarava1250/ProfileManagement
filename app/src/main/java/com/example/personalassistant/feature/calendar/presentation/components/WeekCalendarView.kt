@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.personalassistant.core.ui.theme.AppSpacing
+import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.util.CalendarTaskFilter
@@ -310,7 +311,7 @@ private fun WeekTimeGrid(
 ) {
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
-    val nowMinute = remember { currentMinuteOfDay() }
+    val nowMinute = remember { DateUtils.currentMinuteOfDay() }
     val todayIndex = remember(days) { days.indexOfFirst { isToday(it.date) } }
     val primary = MaterialTheme.colorScheme.primary
 
@@ -427,13 +428,18 @@ private fun WeekDayColumnView(
             }
         }
 
-        // 「现在」红线：只画在今天那一列，左边带个小圆点
+        // 「现在」线：只画在今天那一列，左边带个小圆点。
+        //
+        // 用固定的 `now` 语义色（#B45309），不跟主题色走 ——
+        // 「现在」是时间事实，不是品牌偏好。之前用 colorScheme.error（红），
+        // 跟「冲突 / 逾期」撞色，看到一条红线会以为出错了。
+        val nowInk = LocalAppColors.current.nowInk
         if (showNowLine) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(2.dp)
-                    .background(MaterialTheme.colorScheme.error)
+                    .background(nowInk)
                     .align(Alignment.TopStart)
                     .offset(y = HourHeight * (nowMinute / 60f)),
             )
@@ -441,7 +447,7 @@ private fun WeekDayColumnView(
                 modifier = Modifier
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.error)
+                    .background(nowInk)
                     .align(Alignment.TopStart)
                     .offset(x = (-4).dp, y = HourHeight * (nowMinute / 60f) - 3.dp),
             )

@@ -29,6 +29,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import com.example.personalassistant.core.ui.components.AppTopBar
+import com.example.personalassistant.core.ui.components.BigTitleHeader
+import com.example.personalassistant.core.ui.components.UnderlineTabs
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +51,9 @@ import com.example.personalassistant.feature.calendar.presentation.CalendarViewM
 import com.example.personalassistant.navigation.Screen
 import com.example.personalassistant.navigation.navigateToTab
 import com.example.personalassistant.feature.calendar.presentation.EventEditState
+import com.example.personalassistant.feature.calendar.presentation.components.AgendaKind
+import com.example.personalassistant.feature.calendar.presentation.components.AgendaStream
+import com.example.personalassistant.feature.calendar.presentation.components.buildAgendaDay
 import com.example.personalassistant.feature.calendar.presentation.components.DayCalendarView
 import com.example.personalassistant.feature.calendar.presentation.components.EditEventSheet
 import com.example.personalassistant.feature.calendar.presentation.components.HabitCheckInSheet
@@ -122,6 +127,17 @@ fun CalendarScreen(
     // Phase 24B：补卡面板（给月视图选中的那一天补习惯打卡）
     var showHabitCheckInSheet by remember { mutableStateOf(false) }
 
+    // Phase 26：日程流是第四种视图。
+    //
+    // 月 / 周 / 日三种网格各有自己的翻页语义（按月 / 按周 / 按天），
+    // 走 ViewModel 的 viewType；日程流按天走，没有独立语义，
+    // 所以做成页面本地的 tab 状态，切过去时把 viewType 对齐到 DAY ——
+    // 这样左右箭头翻的是天，跟日程流里显示的那一天是同一件事。
+    var tab by remember { mutableStateOf(CalendarTab.AGENDA) }
+    val agendaDay = remember(selectedDayDetail) {
+        selectedDayDetail?.let { listOf(buildAgendaDay(it)) }.orEmpty()
+    }
+
     // Phase 15 P1-2.3：月份选择器（ModalBottomSheet 走独立 dialog 窗口，放在 Scaffold 前后都行）
     if (showMonthPicker) {
         MonthPickerSheet(
@@ -172,8 +188,10 @@ fun CalendarScreen(
 
     Scaffold(
         topBar = {
-            AppTopBar(
-                title = { Text(text = headerTitle(viewType, uiState.yearMonth, selectedDate)) },
+            // Phase 26：大标题 + 副标题（C 风格），不再用 M3 的 TopAppBar
+            BigTitleHeader(
+                title = monthTitle(uiState.yearMonth),
+                subtitle = "今天 ${agendaDay.firstOrNull()?.items?.size ?: 0} 项安排 ⌄",
                 navigationIcon = {
                     IconButton(onClick = { viewModel.goToPrevious() }) {
                         Icon(prevIcon(viewType), contentDescription = "上一个")
@@ -187,12 +205,12 @@ fun CalendarScreen(
                     }
 
                     // Phase 15 P1-2.3：月视图右上角加「选择月份」—— 原来只能一格格挪
-                    if (viewType == CalendarViewType.MONTH) {
+                    if (tab == CalendarTab.MONTH) {
                         IconButton(onClick = { showMonthPicker = true }) {
                             Icon(Icons.Rounded.DateRange, contentDescription = "选择月份")
                         }
                     }
-IconButton(onClick = { viewModel.goToCurrent() }) {
+                    IconButton(onClick = { viewModel.goToCurrent() }) {
                         Icon(Icons.Rounded.Today, contentDescription = "回到今天")
                     }
                     IconButton(onClick = { viewModel.goToNext() }) {
@@ -213,30 +231,59 @@ IconButton(onClick = { viewModel.goToCurrent() }) {
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            // 视图切换 SegmentedButton
-            SingleChoiceSegmentedButtonRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                CalendarViewType.entries.forEachIndexed { index, type ->
-                    SegmentedButton(
-                        selected = viewType == type,
-                        onClick = { viewModel.setViewType(type) },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index = index,
-                            count = CalendarViewType.entries.size,
-                        ),
-                    ) {
-                        Text(text = type.label)
+            // 视图切换：Phase 26 换成 C 风格下划线标签，多一个「日程」
+            UnderlineTabs(
+                tabs = CalendarTab.entries.map { it.label },
+                selectedIndex = CalendarTab.entries.indexOf(tab).coerceAtLeast(0),
+                onSelect = { index ->
+                    val next = CalendarTab.entries[index]
+                    tab = next
+                    // 三种网格各自走 ViewModel 的 viewType；
+                    // 日程流按天走，把 viewType 对齐到 DAY，翻页箭头才跟内容一致。
+                    when (next) {
+                        CalendarTab.AGENDA -> viewModel.setViewType(CalendarViewType.DAY)
+                        CalendarTab.MONTH -> viewModel.setViewType(CalendarViewType.MONTH)
+                        CalendarTab.WEEK -> viewModel.setViewType(CalendarViewType.WEEK)
+                        CalendarTab.DAY -> viewModel.setViewType(CalendarViewType.DAY)
                     }
-                }
-            }
+                },
+                modifier = Modifier.padding(horizontal = AppSpacing.md),
+            )
 
             // 主视图
             Box(modifier = Modifier.fillMaxSize()) {
-                when (viewType) {
-                    CalendarViewType.MONTH -> Column(
+                when (tab) {
+                    CalendarTab.AGENDA -> {
+                        if (agendaDay.isEmpty()) {
+                            EmptyViewPlaceholder(text = "这一天没有安排")
+                        } else {
+                            AgendaStream(
+                                days = agendaDay,
+                                modifier = Modifier.fillMaxSize(),
+                                onItemClick = { item ->
+                                    val detail = selectedDayDetail
+                                    if (detail != null) {
+                                        when (item.kind) {
+                                            AgendaKind.EVENT -> detail.events
+                                                .firstOrNull { "event-${it.id}" == item.key }
+                                                ?.let { viewModel.startEditEvent(it) }
+                                            AgendaKind.COURSE -> detail.courses
+                                                .firstOrNull { "course-${it.id}" == item.key }
+                                                ?.let {
+                                                    navController.navigate(Screen.EditCourse.build(it.id))
+                                                }
+                                            AgendaKind.TASK -> detail.tasks
+                                                .firstOrNull { "task-${it.id}" == item.key }
+                                                ?.let {
+                                                    navController.navigate(Screen.DetailTask.build(it.id))
+                                                }
+                                        }
+                                    }
+                                },
+                            )
+                        }
+                    }
+                    CalendarTab.MONTH -> Column(
                         modifier = Modifier.fillMaxSize(),
                     ) {
                         MonthCalendarGrid(
@@ -262,14 +309,14 @@ IconButton(onClick = { viewModel.goToCurrent() }) {
                             onHabitClick = { showHabitCheckInSheet = true },
                         )
                     }
-                    CalendarViewType.WEEK -> WeekCalendarView(
+                    CalendarTab.WEEK -> WeekCalendarView(
                         timeline = weekTimeline,
                         selectedDate = selectedDate,
                         onDateClick = viewModel::onDateClick,
                         onToggleTask = { task, done -> viewModel.toggleTask(task, done) },
                         modifier = Modifier.fillMaxSize(),
                     )
-                    CalendarViewType.DAY -> {
+                    CalendarTab.DAY -> {
                         val anchor = selectedDate
                         if (anchor != null) {
                             // 复用 selectedDayDetail（已经是 selectedDate 派生）
@@ -365,6 +412,25 @@ IconButton(onClick = { viewModel.goToCurrent() }) {
             )
         }
     }
+}
+
+/**
+ * 日历的四种「看的方式」（Phase 26）。
+ *
+ * 前三种是网格，它们各有自己的翻页语义，走 ViewModel 的 viewType；
+ * 日程流按天走，做成页面本地状态。
+ */
+private enum class CalendarTab(val label: String) {
+    AGENDA("日程"),
+    MONTH("月"),
+    WEEK("周"),
+    DAY("日"),
+}
+
+/** 大标题：月份（"11 月"） */
+private fun monthTitle(yearMonth: String): String {
+    val parts = yearMonth.split("-")
+    return if (parts.size == 2) "${parts[1].toInt()} 月" else yearMonth
 }
 
 /** 顶部标题：MONTH=月份；WEEK=周首末日期；DAY=具体日期 */
