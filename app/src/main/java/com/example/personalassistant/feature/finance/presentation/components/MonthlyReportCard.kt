@@ -1,4 +1,4 @@
-package com.example.personalassistant.feature.finance.presentation.components
+﻿package com.example.personalassistant.feature.finance.presentation.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -30,10 +30,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.finance.domain.model.Category
+import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.core.ui.theme.LocalAppColors
+import com.example.personalassistant.core.ui.theme.LocalAppSurfaces
 import com.example.personalassistant.feature.finance.domain.model.MonthlyReport
 import com.example.personalassistant.feature.finance.presentation.util.IconRegistry
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
+import com.example.personalassistant.core.ui.theme.onColorFor
 
 /**
  * Phase 7b：月度报表卡片（主页中部）
@@ -57,8 +60,9 @@ fun MonthlyReportCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        // Phase 26：16dp → 14dp（本次改造统一的卡片圆角），底色改暖白。
+        shape = RoundedCornerShape(AppRadii.card14),
+        colors = CardDefaults.cardColors(containerColor = LocalAppSurfaces.current.paper),
     ) {
         Column(
             modifier = Modifier
@@ -108,18 +112,20 @@ fun MonthlyReportCard(
                 SummaryItem(
                     label = "支出",
                     amount = report.totalExpense,
-                    color = MaterialTheme.colorScheme.error,
+                    // Phase 26：改固定语义色。「支出红」不该跟着用户主题色变 ——
+                    // 用户把主题换成绿色时，花出去的钱不能变成绿的。
+                    color = LocalAppColors.current.expenseInk,
                 )
                 SummaryItem(
                     label = "收入",
                     amount = report.totalIncome,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = LocalAppColors.current.incomeInk,
                 )
                 SummaryItem(
                     label = "结余",
                     amount = report.balance,
-                    color = if (report.balance >= 0) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.error,
+                    color = if (report.balance >= 0) LocalAppColors.current.incomeInk
+                    else LocalAppColors.current.expenseInk,
                 )
             }
 
@@ -201,7 +207,7 @@ private fun CategoryExpenseBar(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = GraphicsColor.White,
+                tint = onColorFor(color),
                 modifier = Modifier.padding(4.dp),
             )
         }

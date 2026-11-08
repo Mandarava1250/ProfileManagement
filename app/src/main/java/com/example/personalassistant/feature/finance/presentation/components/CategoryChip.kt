@@ -1,4 +1,4 @@
-package com.example.personalassistant.feature.finance.presentation.components
+﻿package com.example.personalassistant.feature.finance.presentation.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.presentation.util.IconRegistry
+import com.example.personalassistant.core.ui.theme.onColorFor
 
 /**
  * Phase 7a：分类选择 chip（用于 AddTransactionSheet）
@@ -50,7 +51,7 @@ fun CategoryChip(
                 Icon(
                     imageVector = IconRegistry.resolve(category.iconName),
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = onColorFor(color),
                     modifier = Modifier.padding(2.dp),
                 )
             }

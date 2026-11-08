@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material3.Icon
@@ -14,8 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.personalassistant.core.ui.components.AppCard
+import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.core.ui.theme.LocalAppColors
+import com.example.personalassistant.core.ui.theme.LocalAppSurfaces
 import com.example.personalassistant.feature.finance.domain.model.CoinPool
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
 import java.time.Instant
@@ -50,10 +53,17 @@ fun CoinPoolCard(
     modifier: Modifier = Modifier,
 ) {
     val appColors = LocalAppColors.current
+    val surfaces = LocalAppSurfaces.current
 
     AppCard(
         modifier = modifier.fillMaxWidth(),
-        accent = appColors.budgetInk,
+        // Phase 26：拆掉了原来那根 budgetInk 色条。
+        //
+        // 零钱池是「结转累加下来的钱」，预算临界是「快超了」——
+        // 拿预算语义的橙色去标一个储蓄账户，是在说一件不存在的事。
+        // 首页的今日剩余卡已经用品牌蓝竖条做了视觉锚点，这张不需要再抢。
+        containerColor = surfaces.paper,
+        shape = RoundedCornerShape(AppRadii.card14),
         contentPadding = PaddingValues(AppSpacing.lg),
     ) {
         // ===== 标题行：图标 + 「零钱池」=====

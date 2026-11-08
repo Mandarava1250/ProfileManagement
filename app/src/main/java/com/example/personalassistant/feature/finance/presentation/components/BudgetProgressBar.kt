@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
 
 /**
@@ -118,7 +119,7 @@ fun BudgetProgressBar(
                 text = progress.percentText,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (progress.isOverBudget) MaterialTheme.colorScheme.error
+                color = if (progress.isOverBudget) LocalAppColors.current.expenseInk
                 else MaterialTheme.colorScheme.primary,
             )
         }
@@ -127,17 +128,17 @@ fun BudgetProgressBar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
+                .height(3.dp)
+                .clip(RoundedCornerShape(1.5.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(progress.clampedRatio)
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(1.5.dp))
                     .background(
-                        if (progress.isOverBudget) MaterialTheme.colorScheme.error
+                        if (progress.isOverBudget) LocalAppColors.current.expenseInk
                         else MaterialTheme.colorScheme.primary,
                     ),
             )
@@ -167,7 +168,7 @@ fun BudgetProgressBar(
                     Text(
                         text = "已超出预算 ${MoneyFormat.formatPlain(-progress.remaining)}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                        color = LocalAppColors.current.expenseInk,
                     )
                 }
             }

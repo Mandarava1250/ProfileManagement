@@ -241,6 +241,24 @@ class FinanceViewModel @Inject constructor(
         _searchKeyword.value = keyword
     }
 
+    // ==================== Phase 26：首页四标签 ====================
+    // 见下方 `selectedTab`。
+
+    /**
+     * 首页当前标签（流水 / 报表 / 零钱池 / 预算）。
+     *
+     * 走**独立** StateFlow，理由跟 `todayRemainingMode` 一样：
+     * `uiState` 那条 combine 已经占满 5 个 flow 的上限，再塞一个就得改写成
+     * list + mapAt（丢类型安全），或者拆碎现有状态。标签本身是纯 UI 状态，
+     * 也不需要跟着数据库变化重算，单独一条成本最低。
+     */
+    private val _selectedTab = MutableStateFlow(FinanceTab.LEDGER)
+    val selectedTab: StateFlow<FinanceTab> = _selectedTab.asStateFlow()
+
+    fun selectTab(tab: FinanceTab) {
+        _selectedTab.value = tab
+    }
+
     // ==================== 批次 C：「今日剩余」口径与派生值 ====================
 
     /**
