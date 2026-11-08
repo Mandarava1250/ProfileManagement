@@ -40,6 +40,13 @@ data class AgendaDay(
     val date: Long,
     val dayOfWeek: Int,
     val items: List<AgendaItem>,
+    /**
+     * 这一天的原始详情。
+     *
+     * 点某一行时要拿到 Event / Task / Course 本体（比如日程要打开编辑面板），
+     * 光有 key 里的 id 不够 —— 事件编辑需要完整对象。
+     */
+    val detail: com.example.personalassistant.feature.calendar.domain.model.DayDetail? = null,
 ) {
     val isEmpty: Boolean get() = items.isEmpty()
 
@@ -114,5 +121,6 @@ fun buildAgendaDay(dayDetail: DayDetail): AgendaDay {
         items = items.sortedWith(
             compareByDescending<AgendaItem> { it.isAllDay }.thenBy { it.sortMinute },
         ),
+        detail = dayDetail,
     )
 }

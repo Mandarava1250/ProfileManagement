@@ -25,6 +25,10 @@ import com.example.personalassistant.feature.calendar.domain.usecase.ObserveEven
 import com.example.personalassistant.feature.calendar.domain.usecase.ObserveMonthSummaryUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEventReminderUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.SetTaskTimeRangeUseCase
+import com.example.personalassistant.feature.calendar.domain.model.AgendaScope
+import com.example.personalassistant.feature.calendar.domain.util.agendaDates
+import com.example.personalassistant.feature.calendar.presentation.components.AgendaDay
+import com.example.personalassistant.feature.calendar.presentation.components.buildAgendaDay
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
 import com.example.personalassistant.feature.calendar.domain.usecase.UpsertEventCategoryUseCase
 import com.example.personalassistant.feature.calendar.domain.util.CalendarConflictDetector
@@ -124,6 +128,32 @@ class CalendarViewModel @Inject constructor(
     // Phase 14：日视图默认锚定今天（原来默认 null，进日视图会显示「请回到今天」）
     private val _selectedDate = MutableStateFlow<Long?>(DateUtils.todayStartMillis())
     val selectedDate: StateFlow<Long?> = _selectedDate.asStateFlow()
+
+    // Phase 26：日程流的聚合范围（日 / 工作日 / 休息日）。
+    // 独立 StateFlow，不进主 combine —— 切范围只是换个筛选条件，
+    // 不该牵动整条订阅链重建。
+    private val _agendaScope = MutableStateFlow(AgendaScope.DAY)
+    val agendaScope: StateFlow<AgendaScope> = _agendaScope.asStateFlow()
+
+    // Phase 26：翻页单位。跟路由绑定 —— 「日日程」翻天、「工作日日程」翻周。
+    private val _navUnit = MutableStateFlow(CalendarNavUnit.DAY)
+    val navUnit: StateFlow<CalendarNavUnit> = _navUnit.asStateFlow()
+
+    /**
+     * 日程流聚合出来的天（按日期升序）。
+     *
+     * **「日日程」只有一天** —— 不展开成整周。整周是「工作日 / 休息日日程」才做的事。
+     */
+    val agendaDays: StateFlow<List<AgendaDay>> =
+        combine(_selectedDate, _agendaScope) { date, scope -> date to scope }
+            .flatMapLatest { (date, scope) ->
+                if (date == null) flowOf(emptyList()) else observeAgendaDays(date, scope)
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList(),
+            )
 
     /**
      * Sub-step 5：编辑状态（null = 关闭 EditEventSheet）
@@ -427,10 +457,12 @@ class CalendarViewModel @Inject constructor(
      * - DAY：上一天
      */
     fun goToPrevious() {
-        when (_viewType.value) {
-            CalendarViewType.MONTH -> _currentYearMonth.value = shiftMonth(_currentYearMonth.value, -1)
-            CalendarViewType.WEEK -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, -7) } ?: today
-            CalendarViewType.DAY -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, -1) } ?: today
+        // Phase 26：翻页单位跟着当前路由走，不再看 viewType ——
+        // 「工作日日程」聚合的是整周，翻一次就得翻一周。
+        when (_navUnit.value) {
+            CalendarNavUnit.MONTH -> _currentYearMonth.value = shiftMonth(_currentYearMonth.value, -1)
+            CalendarNavUnit.WEEK -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, -7) } ?: today
+            CalendarNavUnit.DAY -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, -1) } ?: today
         }
     }
 
@@ -441,10 +473,10 @@ class CalendarViewModel @Inject constructor(
      * - DAY：下一天
      */
     fun goToNext() {
-        when (_viewType.value) {
-            CalendarViewType.MONTH -> _currentYearMonth.value = shiftMonth(_currentYearMonth.value, 1)
-            CalendarViewType.WEEK -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, 7) } ?: today
-            CalendarViewType.DAY -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, 1) } ?: today
+        when (_navUnit.value) {
+            CalendarNavUnit.MONTH -> _currentYearMonth.value = shiftMonth(_currentYearMonth.value, 1)
+            CalendarNavUnit.WEEK -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, 7) } ?: today
+            CalendarNavUnit.DAY -> _selectedDate.value = _selectedDate.value?.let { shiftDay(it, 1) } ?: today
         }
     }
 
@@ -805,6 +837,56 @@ class CalendarViewModel @Inject constructor(
             observeDayDetail(weekStart + offset * WeekTimeline.ONE_DAY_MILLIS)
         }
         return combine(flows) { array -> array.toList() }
+    }
+
+    /**
+     * 日程流要聚合的那几天的详情。
+     *
+     * 「日日程」只有一天；「工作日 / 休息日」是那一周的 5 天 / 2 天。
+     * 每一天各自 observe 一次 DayDetail —— 数据层接口不动。
+     */
+    private fun observeAgendaDays(
+        anchor: Long,
+        scope: AgendaScope,
+    ): Flow<List<AgendaDay>> {
+        val flows = agendaDates(anchor, scope).map { observeDayDetail(it) }
+        return combine(flows) { array -> array.toList() }
+            .map { details -> details.map { buildAgendaDay(it) } }
+    }
+
+    /**
+     * 按当前路由切到对应的视图。
+     *
+     * 路由 → 视图的映射在这里收口：网格视图同步 [viewType]（老代码还在用），
+     * 日程流同步 [agendaScope]，翻页单位同步 [navUnit]。
+     */
+    fun applyMode(mode: CalendarScreenMode) {
+        when (mode) {
+            CalendarScreenMode.AGENDA_DAY -> {
+                _agendaScope.value = AgendaScope.DAY
+                _navUnit.value = CalendarNavUnit.DAY
+            }
+            CalendarScreenMode.AGENDA_WORKDAY -> {
+                _agendaScope.value = AgendaScope.WORKDAY
+                _navUnit.value = CalendarNavUnit.WEEK
+            }
+            CalendarScreenMode.AGENDA_RESTDAY -> {
+                _agendaScope.value = AgendaScope.RESTDAY
+                _navUnit.value = CalendarNavUnit.WEEK
+            }
+            CalendarScreenMode.MONTH -> {
+                _viewType.value = CalendarViewType.MONTH
+                _navUnit.value = CalendarNavUnit.MONTH
+            }
+            CalendarScreenMode.WEEK -> {
+                _viewType.value = CalendarViewType.WEEK
+                _navUnit.value = CalendarNavUnit.WEEK
+            }
+            CalendarScreenMode.DAY -> {
+                _viewType.value = CalendarViewType.DAY
+                _navUnit.value = CalendarNavUnit.DAY
+            }
+        }
     }
 
     /**

@@ -17,6 +17,26 @@ sealed class Screen(val route: String) {
     data object Tasks : Screen("tasks")
     data object Finance : Screen("finance")
     data object Calendar : Screen("calendar")
+
+    /**
+     * 日历 · 月视图（独立路由）
+     *
+     * 属于二级页：**不进** [BOTTOM_BAR_ROUTES]，所以底栏不显示，
+     * [BottomBarRoutesTest] 断言的「恰好 6 条」也不受影响。
+     */
+    data object CalendarMonth : Screen("calendar/month")
+
+    /** 日历 · 周视图（独立路由，二级页） */
+    data object CalendarWeek : Screen("calendar/week")
+
+    /** 日历 · 日视图 · 时间轴（独立路由，二级页） */
+    data object CalendarDay : Screen("calendar/day")
+
+    /** 日历 · 工作日日程（独立路由，二级页） */
+    data object CalendarWorkday : Screen("calendar/workday")
+
+    /** 日历 · 休息日日程（独立路由，二级页） */
+    data object CalendarRestday : Screen("calendar/restday")
     data object Settings : Screen("settings")
     /** Phase 12：底部 5 号 Tab「我」 */
     data object Me : Screen("me")

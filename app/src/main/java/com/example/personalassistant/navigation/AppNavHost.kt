@@ -49,6 +49,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.personalassistant.R
 import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.feature.calendar.CalendarScreen
+import com.example.personalassistant.feature.calendar.presentation.CalendarScreenMode
 import com.example.personalassistant.feature.finance.FinanceScreen
 import com.example.personalassistant.feature.finance.presentation.budget.BudgetScreen
 import com.example.personalassistant.feature.finance.presentation.category.CategoryManagementScreen
@@ -142,6 +143,17 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
         ) {
             // === 4 个主 Tab + 「我」「设置」（后两者从更多面板进入）===
             composable(BottomTab.Calendar.screen.route) { CalendarScreen(navController) }
+            // Phase 26：日历的其它视图各走一条独立路由。
+            // 都是二级页（不进 BOTTOM_BAR_ROUTES），所以底栏不显示。
+            composable(Screen.CalendarMonth.route) { CalendarScreen(navController, CalendarScreenMode.MONTH) }
+            composable(Screen.CalendarWeek.route) { CalendarScreen(navController, CalendarScreenMode.WEEK) }
+            composable(Screen.CalendarDay.route) { CalendarScreen(navController, CalendarScreenMode.DAY) }
+            composable(Screen.CalendarWorkday.route) {
+                CalendarScreen(navController, CalendarScreenMode.AGENDA_WORKDAY)
+            }
+            composable(Screen.CalendarRestday.route) {
+                CalendarScreen(navController, CalendarScreenMode.AGENDA_RESTDAY)
+            }
             composable(BottomTab.Tasks.screen.route) { TaskScreen(navController) }
             composable(BottomTab.Timetable.screen.route) { TimetableScreen(navController) }
             composable(BottomTab.Finance.screen.route) { FinanceScreen(navController) }
