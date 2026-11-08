@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.personalassistant.core.ui.theme.onColorFor
 import com.example.personalassistant.feature.task.domain.model.Tag
 
 /**
@@ -47,7 +48,10 @@ fun TagChip(
     val shape = RoundedCornerShape(50) // pill
 
     val containerColor = if (selected) tagColor.copy(alpha = 0.85f) else Color.Transparent
-    val contentColor = if (selected) onContainerColorFor(tagColor) else tagColor
+    // 前景色统一走 onColorFor —— 按相对亮度选黑 / 白。
+    // 之前这里自己算了一遍亮度（阈值 0.6），跟 core 的阈值（0.5）不一样，
+    // 同一个浅色标签在「添加标签」弹窗里和这里会显示成两种颜色。
+    val contentColor = if (selected) onColorFor(tagColor) else tagColor
     val borderStroke = if (selected) null else BorderStroke(1.5.dp, tagColor)
 
     Surface(
@@ -80,17 +84,4 @@ fun TagChip(
             )
         }
     }
-}
-
-/**
- * 简单决定文字色：色板是深色 → 白色文字；浅色 → 黑文字。
- *
- * 用 W3C 推荐的相对亮度近似（用 Color.red*0.299 + green*0.587 + blue*0.114）。
- * 我们的 6 色都是浅亮色，所以走黑色字是 OK 的；这里留个保险逻辑未来适配。
- */
-private fun onContainerColorFor(background: Color): Color {
-    val brightness = (background.red * 0.299f +
-        background.green * 0.587f +
-        background.blue * 0.114f)
-    return if (brightness > 0.6f) Color.Black else Color.White
 }

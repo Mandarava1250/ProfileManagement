@@ -20,7 +20,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -46,8 +45,8 @@ import kotlin.math.roundToInt
  *
  * ## 吸附规则（左右各自独立算）
  *
- * - 每个动作按钮占 [ACTION_WIDTH]（64dp）。
- * - 该侧的吸附距离 = 该侧动作数 × 64dp（左滑 3 个 = 192dp，右滑 2 个 = 128dp）。
+ * - 每个动作按钮占 [ACTION_WIDTH]（56dp）。
+ * - 该侧的吸附距离 = 该侧动作数 × 56dp（左滑 3 个 = 168dp，右滑 2 个 = 112dp）。
  * - 抬手时位移超过该侧吸附距离的**一半** → 吸附停住（露出全部图标，等用户点）；
  *   否则 → 弹回原位。
  *
@@ -104,10 +103,11 @@ fun SwipeActionBox(
 
     Box(modifier = modifier.fillMaxWidth()) {
         // 底层：动作区（右滑动作靠左排、左滑动作靠右排）
+        //
+        // 这里**不再 clip 圆角**：Phase 26 之后清单行是「无边框行」，
+        // 动作区跟行同高、跟行同宽，圆角缺口反而会让滑动时露出底下的白角。
         Box(
-            modifier = Modifier
-                .matchParentSize()
-                .clip(MaterialTheme.shapes.medium),
+            modifier = Modifier.matchParentSize(),
         ) {
             Row(
                 modifier = Modifier.matchParentSize(),
@@ -188,14 +188,17 @@ fun SwipeActionBox(
  * @param label 无障碍标签（contentDescription）。
  *        ⚠️ 硬编码中文，不走 strings.xml —— 本批次不允许改 `res/`。
  * @param backgroundColor 动作按钮的背景色
- * @param contentColor 图标颜色
+ * @param contentColor 图标颜色 —— **必填**。
+ *        之前默认值是白色，但每个动作的底色语义不同（primaryContainer / errorContainer），
+ *        白图标压在浅底上等于看不见。强制调用方按语义色指定，
+ *        就不会再出现「忘了传 → 白字看不见」这种默认坑。
  * @param onClick 点击图标时执行（执行完容器会自动归位）
  */
 data class SwipeAction(
     val icon: ImageVector,
     val label: String,
     val backgroundColor: Color,
-    val contentColor: Color = Color.White,
+    val contentColor: Color,
     val onClick: () -> Unit,
 )
 
@@ -222,5 +225,10 @@ private fun SwipeActionButton(action: SwipeAction, onDone: () -> Unit) {
     }
 }
 
-/** 单个动作按钮的宽度（dp）。 */
-private val ACTION_WIDTH = 64.dp
+/**
+ * 单个动作按钮的宽度（dp）。
+ *
+ * 64 → 56：左滑有 3 个动作，64dp 时一次要滑 192dp，占掉 360dp 屏的一半，
+ * 滑起来太费劲；56dp × 3 = 168dp，还是能一眼看出「右边还有东西」。
+ */
+private val ACTION_WIDTH = 56.dp

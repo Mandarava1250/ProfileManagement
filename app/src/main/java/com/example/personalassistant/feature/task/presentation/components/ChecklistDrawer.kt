@@ -1,7 +1,7 @@
 package com.example.personalassistant.feature.task.presentation.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -45,26 +44,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.personalassistant.core.ui.components.ColorBar
+import com.example.personalassistant.core.ui.components.ensureBarContrast
 import com.example.personalassistant.feature.task.domain.model.ChecklistView
 import com.example.personalassistant.feature.task.domain.model.NamedFilter
 import com.example.personalassistant.feature.task.domain.model.SmartList
 import com.example.personalassistant.feature.task.domain.model.TaskListWithCount
 
 /**
- * Phase 17：清单抽屉
+ * 清单抽屉
  *
- * 滴答清单的抽屉分两段：
- * - **智能清单**：收集箱 / 今天 / 最近 7 天 / 全部 / 已完成（系统视图，不占存储）
- * - **清单**：用户自建的归属地，每行带未完成数徽标
+ * 分三段：智能清单（系统视图）/ 筛选器（用户保存的条件组合）/ 用户清单（自建归属地）。
  *
- * Phase 19 加第三段：**筛选器**（用户保存的筛选条件组合，一键套用）。
+ * ## Phase 26 的改动
  *
- * @param currentView 当前视图（决定哪一行高亮）
- * @param lists 用户清单 + 未完成数
- * @param onSelect 切视图
- * @param onCreateList 新建清单（名字为空则忽略）
- * @param namedFilters 用户保存的命名过滤器
- * @param activeFilterName 当前套用的命名过滤器名字（高亮用；null = 没套用）
+ * - 选中态从「secondaryContainer 药丸」改成「左侧 3dp 竖条 + 品牌蓝图标 + SemiBold 文字」
+ *   三重信号 —— 药丸在暖白抽屉上几乎看不出边界。
+ * - 清单色点 10dp 圆点 → 3dp 竖条。
+ * - 补上「删除清单」的真实入口：以前 deletingList 有状态、有对话框，
+ *   却没有任何地方能给它赋值，删清单这个功能等于不存在。
  */
 @Composable
 fun ChecklistDrawer(
@@ -82,9 +80,9 @@ fun ChecklistDrawer(
     onDeleteNamedFilter: ((String) -> Unit)? = null,
     onSaveNamedFilter: ((String) -> Unit)? = null,
     /**
-     * Phase 23：打开习惯页。
+     * 打开习惯页。
      *
-     * 用**可选回调**而不是直接引用 habit 模块的组件 ——
+     * 用可选回调而不是直接引用 habit 模块的组件 ——
      * task 模块不反向依赖 habit，依赖方向保持单向。
      */
     onOpenHabits: (() -> Unit)? = null,
@@ -92,6 +90,7 @@ fun ChecklistDrawer(
     var showCreateDialog by remember { mutableStateOf(false) }
     var renamingList by remember { mutableStateOf<TaskListWithCount?>(null) }
     var deletingList by remember { mutableStateOf<TaskListWithCount?>(null) }
+    var managingList by remember { mutableStateOf<TaskListWithCount?>(null) }
     var savingFilter by remember { mutableStateOf(false) }
 
     ModalDrawerSheet(modifier = modifier) {
@@ -122,7 +121,7 @@ fun ChecklistDrawer(
                 )
             }
 
-            // 四象限（App 自有特色，跟滴答无关）—— 换排布而非筛选
+            // 四象限（App 自有特色）—— 换排布而非筛选
             DrawerRow(
                 icon = Icons.Rounded.GridView,
                 label = "四象限",
@@ -131,7 +130,7 @@ fun ChecklistDrawer(
                 onClick = { onSelect(ChecklistView.Quadrant) },
             )
 
-            // Phase 23：习惯（独立页面，不是清单视图 —— 所以不放 selected 态）
+            // 习惯（独立页面，不是清单视图 —— 所以不放 selected 态）
             if (onOpenHabits != null) {
                 DrawerRow(
                     icon = Icons.Rounded.DoneAll,
@@ -146,8 +145,8 @@ fun ChecklistDrawer(
             HorizontalDivider()
             Spacer(Modifier.height(12.dp))
 
-            // ===== Phase 19：筛选器 =====
-            // 滴答的「筛选器」= 用户把一组筛选条件存起来，起个名字，随时一键套用。
+            // ===== 筛选器 =====
+            // 用户把一组筛选条件存起来，起个名字，随时一键套用。
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -193,24 +192,14 @@ fun ChecklistDrawer(
             Spacer(Modifier.height(12.dp))
 
             // ===== 用户清单 =====
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "清单",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = { showCreateDialog = true }) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = "新建清单",
-                    )
-                }
-            }
+            Text(
+                text = "清单",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 12.dp),
+            )
+            Spacer(Modifier.height(4.dp))
 
             lists.forEach { entry ->
                 DrawerRow(
@@ -225,9 +214,36 @@ fun ChecklistDrawer(
                         null
                     } else {
                         {
-                            renamingList = entry
+                            managingList = entry
                         }
                     },
+                )
+            }
+
+            // 新建清单入口。
+            //
+            // 以前这个入口是「清单」标题行右边那个「＋」图标按钮 —— 抽屉里同时挂着
+            // 三个「＋」（保存筛选器 / 新建清单 / 筛选器那一行），光看形状分不清是哪一个。
+            // 现在标题行只留标题，新建落到列表下方做成一行文字。
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showCreateDialog = true }
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = "新建清单",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
                 )
             }
 
@@ -252,6 +268,37 @@ fun ChecklistDrawer(
                 onSaveNamedFilter?.invoke(name)
             },
             onDismiss = { savingFilter = false },
+        )
+    }
+
+    // 长按用户清单 → 管理菜单。
+    //
+    // 之前长按直接进重命名，「删除清单」那个对话框没有任何入口能触发，
+    // 删清单这个功能等于不存在。现在两个动作都在这儿。
+    managingList?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { managingList = null },
+            title = { Text("「${entry.list.displayName}」") },
+            text = { Text("可以重命名这个清单，或者把它删掉。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        managingList = null
+                        renamingList = entry
+                    },
+                ) { Text("重命名") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        managingList = null
+                        deletingList = entry
+                    },
+                ) {
+                    // 删除是破坏性操作 —— 红色是这套方案里唯一的「危险」信号。
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
         )
     }
 
@@ -302,6 +349,9 @@ fun ChecklistDrawer(
 /**
  * 抽屉里的一行
  *
+ * 选中态 = 左侧 3dp 品牌蓝竖条 + 品牌蓝图标 + 品牌蓝 SemiBold 文字。
+ * 三重信号一起给，暖白抽屉底上不会像以前那样「药丸底色糊成一片看不出选中了哪行」。
+ *
  * @param colorHex 清单色（智能清单传 null = 用主题色）
  */
 @Composable
@@ -314,6 +364,7 @@ private fun DrawerRow(
     colorHex: Long? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
+    val brand = MaterialTheme.colorScheme.primary
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -321,50 +372,40 @@ private fun DrawerRow(
                 onClick = onClick,
                 onLongClick = onLongClick,
             )
-            .background(
-                color = if (selected) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    Color.Transparent
-                },
-                shape = MaterialTheme.shapes.small,
-            )
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // 选中指示条
+        ColorBar(
+            color = if (selected) brand else Color.Transparent,
+            modifier = Modifier.height(20.dp),
+        )
+        Spacer(Modifier.width(9.dp))
+
         if (icon != null) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (selected) {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                tint = if (selected) brand else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
             )
-            Spacer(Modifier.width(12.dp))
         } else {
-            // 清单用色点代替图标
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .background(
-                        color = Color(colorHex ?: 0xFFFF69B4L),
-                        shape = CircleShape,
-                    ),
-            )
-            Spacer(Modifier.width(18.dp))
+            // 清单用 3dp 竖条代替圆点。
+            // 竖条是「非文字的 UI 元素」，浅色清单色在白底上会糊掉，
+            // 所以统一走 ensureBarContrast 压暗到 ≥ 3:1。
+            Box(modifier = Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                ColorBar(
+                    color = ensureBarContrast(Color(colorHex ?: 0xFF3F7DE0L)),
+                    modifier = Modifier.height(14.dp),
+                )
+            }
         }
+        Spacer(Modifier.width(12.dp))
 
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
-            color = if (selected) {
-                MaterialTheme.colorScheme.onSecondaryContainer
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
+            color = if (selected) brand else MaterialTheme.colorScheme.onSurface,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             modifier = Modifier.weight(1f),
         )
@@ -418,7 +459,7 @@ private fun RenameListDialog(
 }
 
 /**
- * Phase 19：保存当前筛选为命名过滤器
+ * 保存当前筛选为命名过滤器
  */
 @Composable
 private fun SaveFilterDialog(

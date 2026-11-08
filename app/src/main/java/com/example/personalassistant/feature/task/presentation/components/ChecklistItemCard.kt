@@ -227,7 +227,10 @@ fun ChecklistItemCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp * (depth + 1), top = 2.dp),
+                    // Phase 26：每层缩进 16dp → 32dp。
+                    // 父项的圆环在 12dp，父子只差 4dp 时层级根本看不出来；
+                    // 32dp 才是「这行缩进了一级」的可读距离。
+                    .padding(start = 32.dp * (depth + 1), top = 2.dp),
             ) {
                 item.children.forEach { child ->
                     ChecklistItemCard(
@@ -264,9 +267,13 @@ fun ChecklistItemCard(
 }
 
 /**
- * 子清单的折叠头 —— 展开箭头 + 完成进度徽标（如 2/5）。
+ * 子清单的折叠箭头 —— 挂在**标题行末尾**。
  *
- * 进度徽标的画法参考任务详情页的 `SubTaskSection`（`完成数/总数` + 次级文字色）。
+ * Phase 26：以前这是一条满宽左对齐的独立行（`ChecklistItemRow` 把 trailingContent
+ * 画在 Row 之外），视觉上像另一条内容，左缘还跟上面的标题不在一条竖线上。
+ * 现在收进标题行末尾，跟标题一起被单行省略号约束。
+ *
+ * 进度徽标（如 2/5）保留 —— 那是「这组子项做到哪儿了」的唯一提示。
  */
 @Composable
 private fun ChildrenHeader(
@@ -276,25 +283,26 @@ private fun ChildrenHeader(
     onToggle: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(start = 12.dp, top = 2.dp, bottom = 2.dp),
+        modifier = Modifier.clickable(onClick = onToggle),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Text(
+            text = stringResource(R.string.checklist_progress, completedCount, totalCount),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
         Icon(
             imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
             contentDescription = stringResource(
                 if (expanded) R.string.checklist_item_collapse else R.string.checklist_item_expand
             ),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(4.dp))
-        Text(
-            text = stringResource(R.string.checklist_progress, completedCount, totalCount),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // 44dp 触达区 + 20dp 视觉图标 —— 箭头只有 20dp 大，
+            // 光靠图标本身点不准，得给它留够触达面积。
+            modifier = Modifier
+                .size(44.dp)
+                .padding(12.dp),
         )
     }
 }

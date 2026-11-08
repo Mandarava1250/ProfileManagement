@@ -42,6 +42,23 @@ import com.example.personalassistant.feature.task.domain.model.ChecklistView
 import com.example.personalassistant.feature.task.domain.usecase.DeleteTaskListUseCase
 import com.example.personalassistant.navigation.Screen
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import com.example.personalassistant.core.ui.components.BigTitleHeader
+import com.example.personalassistant.core.ui.theme.AppRadii
+import com.example.personalassistant.core.utils.DateUtils
+import com.example.personalassistant.feature.task.presentation.activeConditionCount
+import com.example.personalassistant.feature.task.presentation.components.FilterEntryButton
+import java.time.DayOfWeek
+import java.time.LocalDate
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.setValue
 
 /**
  * 清单主页（Phase 17 重构）
@@ -110,6 +127,38 @@ fun TaskScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
+    // Phase 26：大标题。
+    // 多选时标题换成「已选 N 项」—— 多选过程中用户关心的是选了几个。
+    val title = if (selectedIds.isNotEmpty()) {
+        "已选 ${selectedIds.size} 项"
+    } else {
+        when (val view = checklistState.currentView) {
+            is ChecklistView.Quadrant -> "四象限"
+            else -> view.let {
+                checklistState.currentTitle.ifBlank {
+                    stringResource(id = com.example.personalassistant.R.string.tab_tasks)
+                }
+            }
+        }
+    }
+
+    // 副标题：日期 · 星期 · 近 7 天完成率。
+    //
+    // 口径是「近 7 天」（ObserveCompletionStatsUseCase 的默认窗口就是 7 天），
+    // 不能写成「本周」—— 跨周的那几天算不进来，数字会跟用户预期对不上。
+    val subtitle = buildString {
+        append(DateUtils.formatDate(System.currentTimeMillis()))
+        append(" · ")
+        append(weekdayLabel(LocalDate.now().dayOfWeek))
+        if (!completionStats.isEmpty) {
+            append(" · 近 7 天完成率 ${completionStats.completionPercent}%")
+        }
+    }
+
+    // Phase 26：筛选面板的开关提到 TaskScreen ——
+    // 筛选入口按钮跟着大标题搬到了右上角，面板开关状态跟着按钮走。
+    var showFilterSheet by remember { mutableStateOf(false) }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -148,52 +197,66 @@ fun TaskScreen(
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                AppTopBar(
-                    title = {
-                        Text(
-                            text = when (val view = checklistState.currentView) {
-                                is ChecklistView.Quadrant -> "四象限"
-                                else -> view.let {
-                                    checklistState.currentTitle.ifBlank {
-                                        stringResource(id = com.example.personalassistant.R.string.tab_tasks)
-                                    }
-                                }
-                            },
-                        )
-                    },
+                BigTitleHeader(
+                    title = title,
+                    subtitle = subtitle,
                     navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                        // 抽屉入口 —— 清单页的核心导航，不能删。
+                        // 44dp 圆形触达区 + 20dp 图标，跟右上角动作按钮同一套语言。
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .clickable { scope.launch { drawerState.open() } },
+                            contentAlignment = Alignment.Center,
+                        ) {
                             Icon(
                                 imageVector = Icons.Rounded.Menu,
                                 contentDescription = "打开清单抽屉",
+                                modifier = Modifier.size(20.dp),
                             )
                         }
                     },
                     actions = {
-                        // Phase 22.1：全局搜索入口
-                        // 滴答清单的搜索在顶部 —— 这里跟它的习惯一致，
-                        // 而不是把入口藏进「更多」里让用户找不到。
-                        IconButton(onClick = { navController.navigate(Screen.GlobalSearch.route) }) {
+                        // 全局搜索在顶部 —— 跟滴答清单的习惯一致。
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .clickable { navController.navigate(Screen.GlobalSearch.route) },
+                            contentAlignment = Alignment.Center,
+                        ) {
                             Icon(
                                 imageVector = Icons.Rounded.Search,
                                 contentDescription = "全局搜索",
+                                modifier = Modifier.size(20.dp),
                             )
                         }
+                        // 筛选入口：徽标数字 = 当前生效的筛选条件条数。
+                        FilterEntryButton(
+                            activeCount = checklistState.filter.activeConditionCount(),
+                            contentDescription = "筛选",
+                            onClick = { showFilterSheet = true },
+                        )
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    ),
                 )
             },
             floatingActionButton = {
-                FloatingActionButton(
-                    onClick = {
-                        navController.navigate(Screen.EditTask.build())
-                    },
+                // C 风格：46dp、14dp 圆角、品牌蓝底。
+                // FAB = 详细新建的完整表单；内联输入是快速加一条，两者分工不同。
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(RoundedCornerShape(AppRadii.card14))
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable { navController.navigate(Screen.EditTask.build()) },
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Add,
                         contentDescription = "新建清单项",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(24.dp),
                     )
                 }
             },
@@ -248,8 +311,11 @@ fun TaskScreen(
                     onSortChange = checklistViewModel::setSort,
                     onResetFilter = checklistViewModel::resetFilter,
                     modifier = Modifier.fillMaxSize(),
+                    // Phase 26：筛选面板的开关在 TaskScreen，
+                    // 因为筛选入口按钮跟着大标题搬到了右上角。
+                    showFilterSheet = showFilterSheet,
+                    onDismissFilterSheet = { showFilterSheet = false },
                     // Phase 22.6：完成率卡片
-                    completionStats = completionStats,
                     // ===== Phase 18.6：多选 + 批量操作 =====
                     selectedIds = selectedIds,
                     onToggleSelect = checklistViewModel::toggleSelection,
@@ -280,4 +346,15 @@ fun TaskScreen(
             }
         }
     }
+}
+
+/** 星期几（中文）—— 大标题副标题用。 */
+private fun weekdayLabel(dayOfWeek: DayOfWeek): String = when (dayOfWeek) {
+    DayOfWeek.MONDAY -> "周一"
+    DayOfWeek.TUESDAY -> "周二"
+    DayOfWeek.WEDNESDAY -> "周三"
+    DayOfWeek.THURSDAY -> "周四"
+    DayOfWeek.FRIDAY -> "周五"
+    DayOfWeek.SATURDAY -> "周六"
+    DayOfWeek.SUNDAY -> "周日"
 }

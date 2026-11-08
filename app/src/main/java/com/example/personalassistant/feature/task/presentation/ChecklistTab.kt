@@ -63,13 +63,21 @@ import com.example.personalassistant.feature.task.presentation.components.Checkl
 import com.example.personalassistant.feature.task.presentation.components.ChecklistBatchPrioritySheet
 import com.example.personalassistant.feature.task.presentation.components.ChecklistBatchTagSheet
 import com.example.personalassistant.feature.task.presentation.components.ChecklistItemCard
-import com.example.personalassistant.feature.task.presentation.components.CompletionStatsCard
 import com.example.personalassistant.feature.task.presentation.components.FilterEntryButton
 import com.example.personalassistant.feature.task.presentation.components.QuickInputChipRow
 import com.example.personalassistant.feature.task.presentation.list.ReorderableTaskListViewModel
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToInt
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import com.example.personalassistant.core.ui.components.SectionLabel
+import com.example.personalassistant.core.ui.theme.AppSpacing
+import com.example.personalassistant.core.ui.theme.LocalAppSurfaces
+import com.example.personalassistant.feature.task.domain.model.ChecklistFilter
 
 /**
  * 清单 Tab 内容（Phase 15 重做首屏）。
@@ -137,8 +145,13 @@ fun ChecklistTab(
     onSortChange: (ChecklistSort) -> Unit,
     onResetFilter: () -> Unit,
     modifier: Modifier = Modifier,
-    /** Phase 22.6：完成率统计（列表上方那张卡片）。 */
-    completionStats: CompletionStats = CompletionStats(),
+    /**
+     * Phase 26：筛选面板的开关**提到 TaskScreen**了 ——
+     * 筛选入口按钮（FilterEntryButton）跟着大标题搬到了右上角，
+     * 面板的开关状态跟着按钮一起走。
+     */
+    showFilterSheet: Boolean = false,
+    onDismissFilterSheet: () -> Unit = {},
     // ===== Phase 18.6：多选 + 批量操作 =====
     selectedIds: Set<Long> = emptySet(),
     onToggleSelect: (Long) -> Unit = {},
@@ -154,11 +167,9 @@ fun ChecklistTab(
     onSetPinned: (Long, Boolean) -> Unit = { _, _ -> },
 ) {
     var input by rememberSaveable { mutableStateOf("") }
-    var showFilterSheet by remember { mutableStateOf(false) }
     // ⚠️ 用 remember 而不是 rememberSaveable：ChecklistItemUi 不是 Parcelable/Serializable，
     // rememberSaveable 在存状态时会直接抛异常。
     var editingItem by remember { mutableStateOf<ChecklistItemUi?>(null) }
-    var creatingItem by remember { mutableStateOf(false) }
     var expandedIds by remember { mutableStateOf(emptySet<Long>()) }
 
     // Phase 18.6：批量操作面板的开关
@@ -305,13 +316,8 @@ fun ChecklistTab(
         dragOffsetY = 0f
     }
 
-    // 生效的筛选条件条数 —— 徽标上显示的数字
-    // 直接数四个布尔值，省掉每次重组都要新建的临时 List
-    val activeFilterCount =
-        (if (state.filter.category != null) 1 else 0) +
-            (if (state.filter.tagId != null) 1 else 0) +
-            (if (state.filter.group != ChecklistGroup.NONE) 1 else 0) +
-            (if (state.filter.sort != ChecklistSort.MANUAL) 1 else 0)
+    // 生效的筛选条件条数 —— 空态文案要区分「本来就没有」还是「筛完没有」
+    val activeFilterCount = state.filter.activeConditionCount()
 
     // Phase 10 修复（沿用）：把提交逻辑抽出来，IconButton 点击 + 软键盘「完成」共用同一条路径，
     // 保证两条入口行为一致（trim 校验、清空输入框、调 onAdd）。
@@ -342,7 +348,6 @@ fun ChecklistTab(
             onSaveItem(edit)
         }
         editingItem = null
-        creatingItem = false
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -359,55 +364,92 @@ fun ChecklistTab(
                 },
             )
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    placeholder = { Text(stringResource(R.string.checklist_input_hint)) },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    // Phase 10 修复：让软键盘右下角变成「完成」，按回车真的能提交。
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Done,
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { submit() },
-                    ),
-                )
-                Spacer(Modifier.width(4.dp))
-                IconButton(onClick = { creatingItem = true }) {
-                    Icon(
-                        imageVector = Icons.Rounded.AddCircle,
-                        contentDescription = stringResource(R.string.checklist_detail_add),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(
-                    // Phase 10 修复：保留 enabled 守卫避免提交空项，但 disabled 时显式
-                    // 给 Icon 一个 outline 灰色并加透明度，让「+ 不可点」这件事一眼可见。
-                    onClick = submit,
-                    enabled = canSubmit,
+            // 内联输入行：一条 1px 下边线 + 占位文字 + 一枚 44dp 的圆形「＋」。
+            //
+            // Phase 26：之前是 OutlinedTextField（自带一圈方框壳）+ 两个图标按钮
+            // （⊕ 详细添加 / ＋ 快速添加）。方框壳把页面切成上下两块，
+            // ⊕ 又跟 FAB 重复 —— 现在只留一条底线和一枚品牌蓝圆钮。
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = AppSpacing.lg,
+                            end = AppSpacing.lg,
+                            top = AppSpacing.xxs,
+                            bottom = AppSpacing.sm,
+                        ),
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = stringResource(R.string.action_add),
-                        tint = if (canSubmit) {
-                            LocalContentColor.current
-                        } else {
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+                    BasicTextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        // Phase 10 修复：让软键盘右下角变成「完成」，按回车真的能提交。
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { submit() },
+                        ),
+                        decorationBox = { innerTextField ->
+                            Box {
+                                if (input.isEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.checklist_input_hint),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                innerTextField()
+                            }
                         },
+                        modifier = Modifier.weight(1f),
                     )
+                    Spacer(Modifier.width(AppSpacing.xs))
+                    // 「＋」：44dp 触达区 + 内嵌 32dp 品牌蓝实心圆。
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clickable(enabled = canSubmit, onClick = submit),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(
+                                    color = if (canSubmit) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    shape = CircleShape,
+                                ),
+                        )
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.action_add),
+                            tint = if (canSubmit) {
+                                MaterialTheme.colorScheme.onPrimary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
-                FilterEntryButton(
-                    activeCount = activeFilterCount,
-                    contentDescription = stringResource(R.string.checklist_filter_button),
-                    onClick = { showFilterSheet = true },
+                // 内联输入自己的底线 —— 顶掉原来那条整宽的 HorizontalDivider
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(LocalAppSurfaces.current.divider)
+                        .align(Alignment.BottomCenter),
                 )
             }
         } else {
@@ -423,7 +465,8 @@ fun ChecklistTab(
             )
         }
 
-        HorizontalDivider()
+        // Phase 26：这里原来的 HorizontalDivider() 去掉了 —— 内联输入自己带底线，
+        // 两条线叠在一起会显得页面被切成了三块。
 
         // ===== 列表 =====
         when {
@@ -453,12 +496,9 @@ fun ChecklistTab(
 
             else -> {
                 LazyColumn(state = lazyState, modifier = Modifier.fillMaxSize()) {
-                    // Phase 22.6：完成率卡片（列表最上方）
-                    if (!completionStats.isEmpty) {
-                        item(key = "completion_stats") {
-                            CompletionStatsCard(stats = completionStats)
-                        }
-                    }
+                    // Phase 26：完成率卡（CompletionStatsCard）整卡删掉了 ——
+                    // 完成率改由大标题的副标题承载（「近 7 天完成率 N%」），
+                    // 那个卡是全页唯一带底色带圆角的块，比单条任务还重，层级倒挂。
                     if (canReorder) {
                         // 单组 + 手动排序：整段可以拖拽排序
                         items(displayItems, key = { "item-${it.id}" }) { item ->
@@ -504,9 +544,11 @@ fun ChecklistTab(
                             // 不分组时只有一个「全部」section，标题是废话 —— 不画。
                             if (state.filter.group != ChecklistGroup.NONE) {
                                 item(key = "section-${section.key}") {
-                                    ChecklistSectionHeader(
+                                    // Phase 26：分组头换成统一的 SectionLabel ——
+                                    // 14sp 品牌蓝 + 分隔线改成 13.5sp 粗体 + 条数，不画线。
+                                    SectionLabel(
                                         title = sectionTitle(section),
-                                        count = section.items.size,
+                                        count = "${section.items.size}",
                                     )
                                 }
                             }
@@ -565,7 +607,7 @@ fun ChecklistTab(
             onGroupChange = onGroupChange,
             onSortChange = onSortChange,
             onReset = onResetFilter,
-            onDismiss = { showFilterSheet = false },
+            onDismiss = onDismissFilterSheet,
         )
     }
 
@@ -669,26 +711,26 @@ fun ChecklistTab(
         )
     }
 
-    // ===== 编辑 / 新建弹窗 =====
+    // ===== 编辑弹窗 =====
+    // Phase 26：新建不再走这个 BottomSheet —— 「详细新建」交给 FAB 的完整表单页，
+    // 这里只留「编辑既有项」这一条路径。
     val currentEdit = editingItem
-    if (currentEdit != null || creatingItem) {
+    if (currentEdit != null) {
         ChecklistItemEditSheet(
             item = currentEdit,
             availableTags = state.availableTags,
             onDismiss = {
                 editingItem = null
-                creatingItem = false
             },
             onSave = saveItem,
-            onDelete = currentEdit?.let { target ->
+            onDelete = currentEdit.let { target ->
                 {
                     onDelete(target.toSubTask())
                     editingItem = null
-                    creatingItem = false
                 }
             },
-            onAttachTag = { tagId -> currentEdit?.let { onAttachTag(it.id, tagId) } },
-            onDetachTag = { tagId -> currentEdit?.let { onDetachTag(it.id, tagId) } },
+            onAttachTag = { tagId -> currentEdit.let { onAttachTag(it.id, tagId) } },
+            onDetachTag = { tagId -> currentEdit.let { onDetachTag(it.id, tagId) } },
         )
     }
 }
@@ -770,32 +812,6 @@ private fun sectionTitle(section: ChecklistSectionUi): String {
     return if (res != null) stringResource(res) else section.title
 }
 
-/** 分组标题行（标题 + 条数 + 分隔线）。 */
-@Composable
-private fun ChecklistSectionHeader(title: String, count: Int) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "$count",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.outline,
-            )
-        }
-        HorizontalDivider()
-    }
-}
-
 /** 加载中的骨架屏。 */
 @Composable
 private fun ChecklistListSkeleton() {
@@ -853,3 +869,20 @@ private fun findChecklistItem(items: List<ChecklistItemUi>, id: Long): Checklist
     }
     return null
 }
+
+/**
+ * 生效的筛选 / 视图条件条数 —— 筛选入口按钮的徽标数字。
+ *
+ * 分类 / 标签 / 命名过滤器决定看得见哪些项；分组 / 排序决定怎么排。
+ * 两者都会改变列表内容，所以都算「有条件生效着」。
+ * 默认值（NONE / MANUAL）不算 —— 否则徽标永远在。
+ *
+ * 这不是业务规则，是纯 UI 的计数，所以放 presentation 层，不进 domain。
+ */
+internal fun ChecklistFilter.activeConditionCount(): Int = listOf(
+    category != null,
+    tagId != null,
+    expression != null,
+    group != ChecklistGroup.NONE,
+    sort != ChecklistSort.MANUAL,
+).count { it }
