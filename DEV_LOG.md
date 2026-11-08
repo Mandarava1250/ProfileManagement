@@ -3182,8 +3182,48 @@ Box {                                        ← 底层：动作区（5 个彩�
 
 1. **真机无法目测** —— 本机 AVD 是 `aosp_atd` 镜像，全黑屏不可见。验收走 `docs/manual-verification/phase26-ui-checklist.md`（6 屏 × 浅色 / 深色两套，逐项可勾）
 2. **课表 modifier 顺序的回归测试只覆盖到算式层**（`TimetableLayoutTest`）。Modifier 链本身的顺序要 instrumented test 才量得到真实尺寸 —— 清单第 3.1 条得在真机上看一眼
-3. **课表副标题的「⌄」是静态字符**，还没做成真下拉；学期切换仍走下方那行 `SemesterSelector`
-4. **日历的日程流按选中日聚合**，不是整周滚动。组件本身支持多天（`AgendaStream(days = List<AgendaDay>)`），接上区间观察流即可扩
-5. **月 / 周 / 日三种网格是标签页，不是独立路由** —— 功能没丢，但没做成「二级页」
+3. ~~**课表副标题的「⌄」是静态字符**~~ —— **已做成真下拉**（见下方「Phase 26 收尾」）
+4. ~~**日历的日程流只支持选中日**~~ —— **日日程保持单天**，另外加了工作日 / 休息日两种区间聚合（见下方「Phase 26 收尾」）
+5. ~~**月 / 周 / 日三种网格是标签页**~~ —— **已拆成独立路由**（见下方「Phase 26 收尾」）
 6. **~~`docs/ui-mockups/plan-d.html` 原型与实现有出入~~** —— 已同步（见下方「原型同步」条目）。
 7. **中间 commit 未逐个编译验证** —— 8 个阶段是一次性改完再统一验证的，只有最终 HEAD 是确认全绿的。单独 revert 某个阶段后建议先跑一次编译
+
+### Phase 26 收尾 —— 五项补齐（2026-11-08）
+
+伙伴提了五件事，这一轮全做完，拆成两个 commit。
+
+#### `feat: 日历六视图拆独立路由 + 日程流区间聚合 + 视图切换器`
+
+| 需求 | 做法 |
+|---|---|
+| **月 / 周 / 日拆成独立路由** | 新增 `Screen.CalendarMonth` / `CalendarWeek` / `CalendarDay` / `CalendarWorkday` / `CalendarRestday`，都**不进** `BOTTOM_BAR_ROUTES` —— 是二级页，底栏不显示，`BottomBarRoutesTest` 那句「恰好 6 条」也不受影响。`CalendarScreen` 加 `mode: CalendarScreenMode` 参数，路由决定这一屏长什么样 |
+| **日程流按选中日聚合** | 新增 `AgendaScope`（日 / 工作日 / 休息日）+ 纯函数 `agendaDates(anchor, scope)`。**「日日程」只有一天**，不展开成整周；工作日 = 所在那周的周一~周五，休息日 = 周六~周日 |
+| **导航栏第二个（从右往左）能切视图** | 右侧操作区从左到右排成 `显示设置 / 选择月份 / **视图切换器** / 下一个` —— 视图切换器落在**倒数第二位**，从右往左数第二个就是它。点开是六项菜单，当前视图打勾 |
+
+配套改动：
+
+- `CalendarViewModel` 加 `agendaScope` / `navUnit` / `agendaDays`；`applyMode(mode)` 是「路由 → 视图」的映射收口
+- 翻页单位改看 `navUnit` 而不是 `viewType` —— 「工作日日程」聚合的是整周，翻一次得翻一周
+- `AgendaDay` 加 `detail` 字段：点某一行时要拿回 Event / Task / Course 本体（事件编辑要完整对象，光有 id 不够）
+- `BigTitleHeader` 加 `subtitleContent` 槽 —— 副标题要能交互，纯字符串做不到
+- 「回到今天」挪到左侧导航组（跟「上一个」一组），把右侧倒数第二位让给视图切换器
+
+#### `feat: 课表副标题动态下拉 + 周数边界钳制`
+
+- **副标题的「⌄」变成活的**：收起 `⌄` / 展开 `⌃`，点了真能开学期菜单。**只有一个学期时不画箭头** —— 摆个点不动的箭头骗人。菜单本体抽成 `SemesterDropdownMenu`，`SemesterSelector` 也复用它，两处不会漂移
+- **周数钳到 `[0, totalWeeks]`**：新增 `semesterTotalWeeks(semester)`（学期跨天数 ÷ 7 + 1）+ `clampWeekNumber(week, totalWeeks)`。`selectWeek` 与状态派生两处都过一遍钳制
+
+  为什么必须钳：翻周入口是「第 N 周 - 1」，在第 1 周继续往前翻会得到 0，再翻就是 -1。负周号让 `Course.appliesToWeek(-1)` 全部落空 —— **界面看着正常，课程却一门都不显示**，极难排查
+
+#### 验证
+
+- `gradlew :app:assembleDebug :app:testDebugUnitTest` —— **BUILD SUCCESSFUL**，**1174 个 JVM 单测全绿，0 失败**（上一轮 1161 个，新增 13 个）
+- 新增单测：`SemesterWeeksTest`（7）+ `AgendaRangeTest`（6）
+  - `SemesterWeeksTest` —— 总周数算得对、负周号钳到 0、超上界钳到 `totalWeeks`、没有学期时钳到 0
+  - `AgendaRangeTest` —— **「日日程」只有一天**、工作日是周一~周五、休息日是周六日、锚在周日也算同一周
+
+#### 本轮补充的已知边界
+
+8. **本轮两个 commit 是同一份代码拆开提交的** —— 一起编译、一起跑单测（`BUILD SUCCESSFUL` / 1174 全绿）。单独 revert 其中一个后需要重跑一次编译
+9. **日历的六条路由还只进了 NavHost，没进 `navigateToTab`** —— 视图切换器走的是 `navigate` + `popUpTo`，底栏选中态在这些二级页上不跟随。需要的话下一轮可以把日历的二级页也纳入 tab 选中判定
+
