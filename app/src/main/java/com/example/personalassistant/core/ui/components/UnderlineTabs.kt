@@ -14,6 +14,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
@@ -47,11 +48,17 @@ fun UnderlineTabs(
                 val selected = index == selectedIndex
                 Column(
                     modifier = Modifier
+                        // 等宽铺满：每个标签占 1/N。
+                        // 不用 fillMaxWidth 的下划线槽 —— 那样第一个标签会把
+                        // Row 的剩余空间全吃掉，后面的标签被挤出屏幕；
+                        // 也不能用 IntrinsicSize.Min —— 跟 fillMaxWidth 撞上会无限测量。
+                        .weight(1f)
                         .selectable(
                             selected = selected,
                             onClick = { onSelect(index) },
                             role = Role.Tab,
                         ),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
                         text = title,
