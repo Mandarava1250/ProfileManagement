@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.personalassistant.core.di.IoDispatcher
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.timetable.domain.model.Course
+import com.example.personalassistant.feature.timetable.domain.model.CourseConflict
 import com.example.personalassistant.feature.timetable.domain.model.TimeSlotSchedule
 import com.example.personalassistant.feature.timetable.domain.util.clampWeekNumber
 import com.example.personalassistant.feature.timetable.domain.util.semesterTotalWeeks
@@ -13,7 +14,6 @@ import com.example.personalassistant.feature.timetable.domain.usecase.CourseConf
 import com.example.personalassistant.feature.timetable.domain.usecase.CreateSemesterUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.DeleteCourseUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.ObserveCurrentSemesterUseCase
-import com.example.personalassistant.feature.timetable.domain.usecase.ObserveCoursesBySemesterUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.ObserveTimeSlotScheduleUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.ResetTimeSlotScheduleUseCase
 import com.example.personalassistant.feature.timetable.domain.usecase.SaveTimeSlotScheduleUseCase
@@ -50,7 +50,6 @@ import javax.inject.Inject
 class TimetableViewModel @Inject constructor(
     private val repository: TimetableRepository,
     private val observeCurrentSemester: ObserveCurrentSemesterUseCase,
-    private val observeCoursesBySemester: ObserveCoursesBySemesterUseCase,
     private val upsertCourseUseCase: UpsertCourseUseCase,
     private val deleteCourseUseCase: DeleteCourseUseCase,
     private val switchSemesterUseCase: SwitchSemesterUseCase,
@@ -71,7 +70,14 @@ class TimetableViewModel @Inject constructor(
     private val _manualSemesterName = MutableStateFlow<String?>(null)
 
     private val _errorMessage = MutableStateFlow<String?>(null)
-    private val _pendingConflict = MutableStateFlow<Course?>(null)
+    /**
+     * 待确认的课程冲突（Phase 28）
+     *
+     * 存整个 [CourseConflict]：同门课两个课时互相重叠这种冲突
+     * **只存在于** [CourseConflict.internalOverlaps] 里，
+     * 只留 `newCourse` 的话这层信息在 UI 上就丢了。
+     */
+    private val _pendingConflict = MutableStateFlow<CourseConflict?>(null)
     private val _showDeleteConfirmId = MutableStateFlow<Long?>(null)
 
     val uiState: StateFlow<TimetableUiState> = combine(
@@ -94,7 +100,10 @@ class TimetableViewModel @Inject constructor(
                 flowOf(initial)
             } else {
                 combine(
-                    observeCoursesBySemester(selectedName),
+                    // Phase 28：课程流改走「课程 + 全部课时」。
+                    // observeCoursesWithSessions 返回的每门课都带上了自己的课时列表
+                    // （没有课时记录的老数据用主时段镜像兜底出一个），下面摊平成课时块。
+                    repository.observeCoursesWithSessions(selectedName),
                     _manualWeekNumber,
                 ) { allCourses, manualWeek ->
                     val effectiveSemester = allSemesters.firstOrNull { it.name == selectedName }
@@ -107,16 +116,15 @@ class TimetableViewModel @Inject constructor(
                     // 周数钳在 [0, totalWeeks]。
                     // 负周号会让 Course.appliesToWeek 全部落空 —— 界面看着正常，课程一门都不显示。
                     val weekNumber = clampWeekNumber(rawWeek, totalWeeks)
-                    val activeCourses = allCourses
-                        .filter { it.appliesToWeek(weekNumber) }
-                        .sortedWith(compareBy({ it.dayOfWeek }, { it.startTime }))
+                    // 一个课时 = 一个块：先按周次过滤课程，再把每门课摊平成它的各个课时。
+                    val activeSlots = allCourses.toCourseSlots(weekNumber)
                     initial.copy(
                         currentSemester = effectiveSemester,
                         currentWeekNumber = weekNumber,
                         totalWeeks = totalWeeks,
                         // manualWeek 为 null = 没手动翻过周 = 跟着真实本周走。
                         isCurrentWeek = manualWeek == null,
-                        courses = activeCourses,
+                        slots = activeSlots,
                     )
                 }
             }
@@ -188,7 +196,8 @@ class TimetableViewModel @Inject constructor(
                 upsertCourseUseCase(course, force = force)
                 _pendingConflict.value = null
             } catch (e: CourseConflictException) {
-                _pendingConflict.value = e.conflict.newCourse
+                // 整个冲突对象带上去：跨课程冲突（哪个课时撞了谁）+ 同课程内部课时重叠
+                _pendingConflict.value = e.conflict
             } catch (e: Exception) {
                 _errorMessage.value = e.message
             }
@@ -198,7 +207,8 @@ class TimetableViewModel @Inject constructor(
     /** 用户已确认冲突，确认强制保存 */
     fun confirmSaveWithConflict() {
         val pending = _pendingConflict.value ?: return
-        saveCourse(pending, force = true)
+        // 强制保存的是「冲突里那份课程」—— 它带着用户刚编辑的课时列表
+        saveCourse(pending.newCourse, force = true)
     }
 
     /** 取消冲突对话框 */

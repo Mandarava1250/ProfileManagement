@@ -50,7 +50,7 @@ import com.example.personalassistant.core.ui.components.SectionLabel
 import com.example.personalassistant.core.ui.components.UnderlineTabs
 import com.example.personalassistant.core.ui.theme.AppPageSubtitle
 import com.example.personalassistant.core.ui.theme.AppSpacing
-import com.example.personalassistant.feature.timetable.domain.model.Course
+import com.example.personalassistant.feature.timetable.presentation.CourseSlot
 import com.example.personalassistant.feature.timetable.presentation.TimetableViewModel
 import com.example.personalassistant.feature.timetable.presentation.TimetableViewType
 import com.example.personalassistant.feature.timetable.presentation.components.DayHeaderRow
@@ -117,8 +117,8 @@ fun TimetableScreen(
     val subtitle = buildString {
         state.currentSemester?.name?.let { append(it).append(" · ") }
         append("第 ${state.currentWeekNumber} 周")
-        if (state.activeCoursesCount > 0) {
-            append(" · 本周 ${state.activeCoursesCount} 节")
+        if (state.activeSlotCount > 0) {
+            append(" · 本周 ${state.activeSlotCount} 节")
         }
     }
 
@@ -259,11 +259,12 @@ fun TimetableScreen(
                 onJumpToCurrent = { viewModel.jumpToCurrentWeek() },
             )
 
-            // 按 dayOfWeek 分组：课程列表没变时分组结果也不会变，缓存住，
+            // 按课时所在的星期分组（Phase 28：一个课时一块）：
+            // 课时列表没变时分组结果也不会变，缓存住，
             // 免得每次重组都重建 7 组 filter + 7 个新 List
-            val coursesByDay: Map<Int, List<Course>> = remember(state.courses) {
+            val slotsByDay: Map<Int, List<CourseSlot>> = remember(state.slots) {
                 (1..7).associateWith { day ->
-                    state.courses.filter { it.dayOfWeek == day }
+                    state.slots.filter { it.session.dayOfWeek == day }
                 }
             }
 
@@ -277,7 +278,7 @@ fun TimetableScreen(
             when (viewType) {
                 TimetableViewType.TIMELINE -> {
                     TimetableTimelineView(
-                        coursesByDay = coursesByDay,
+                        slotsByDay = slotsByDay,
                         selectedDay = selectedDay,
                         onSelectDay = { viewModel.selectDay(it) },
                         onCourseClick = { course ->
@@ -302,7 +303,7 @@ fun TimetableScreen(
                     HorizontalDivider(thickness = 0.5.dp)
 
                     TimetableGrid(
-                        coursesByDay = coursesByDay,
+                        slotsByDay = slotsByDay,
                         onCourseClick = { course ->
                             navController.navigate(Screen.EditCourse.build(course.id))
                         },
@@ -315,7 +316,7 @@ fun TimetableScreen(
                     // 网格看的是分布，「今天几点在哪上课」还得靠竖排列表读
                     SectionLabel(title = "今日课程")
                     TimetableTimelineView(
-                        coursesByDay = coursesByDay,
+                        slotsByDay = slotsByDay,
                         selectedDay = todayDayOfWeek,
                         onSelectDay = { },
                         onCourseClick = { course ->

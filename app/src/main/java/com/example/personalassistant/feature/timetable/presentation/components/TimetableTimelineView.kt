@@ -35,6 +35,9 @@ import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.core.ui.theme.LocalAppSurfaces
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.timetable.domain.model.Course
+// Phase 28：时间线上画的也是「课时块」（一门课的一个课时）。
+// 别名导入的原因同 TimetableGrid：本包里已有一个同名的 `CourseSlot`（布局结果类）。
+import com.example.personalassistant.feature.timetable.presentation.CourseSlot as Slot
 import java.time.LocalDate
 
 /**
@@ -60,7 +63,7 @@ import java.time.LocalDate
  */
 @Composable
 fun TimetableTimelineView(
-    coursesByDay: Map<Int, List<Course>>,
+    slotsByDay: Map<Int, List<Slot>>,
     selectedDay: Int,
     onSelectDay: (Int) -> Unit,
     onCourseClick: (Course) -> Unit,
@@ -79,7 +82,8 @@ fun TimetableTimelineView(
     val nowInk = LocalAppColors.current.nowInk
     val nowMinute = remember { DateUtils.currentMinuteOfDay() }
 
-    val courses = coursesByDay[selectedDay].orEmpty()
+    // Phase 28：一天的几行 = 一天的几个课时（同一门课两个课时就是两行）
+    val slots = slotsByDay[selectedDay].orEmpty()
 
     Column(modifier = modifier.fillMaxWidth()) {
         // ===== 日期条：7 天，今天高亮 =====
@@ -138,7 +142,7 @@ fun TimetableTimelineView(
             color = surfaces.divider,
         )
 
-        if (courses.isEmpty()) {
+        if (slots.isEmpty()) {
             Text(
                 text = "这一天没有课",
                 style = MaterialTheme.typography.bodyMedium,
@@ -148,40 +152,48 @@ fun TimetableTimelineView(
             return@Column
         }
 
-        // ===== 课程时间线 =====
+        // ===== 课时时间线 =====
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
         ) {
             // 「现在」标记插在「下一节课」之前 —— 今天的课才插。
+            // ⚠️ 按**课时**的开始时间比：一门课同一天的第二个课时才是真正的「下一节」。
             val nowIndex = if (selectedDay == todayDayOfWeek) {
-                courses.indexOfFirst { it.startTime > nowMinute }
-                    .let { if (it < 0) courses.size else it }
+                slots.indexOfFirst { it.session.startTime > nowMinute }
+                    .let { if (it < 0) slots.size else it }
             } else {
                 -1
             }
 
-            itemsIndexed(courses) { index, course ->
+            itemsIndexed(slots) { index, slot ->
                 if (index == nowIndex) {
                     NowMarker(nowInk = nowInk, nowMinute = nowMinute)
                 }
                 TimelineCourseRow(
-                    course = course,
-                    onClick = { onCourseClick(course) },
+                    slot = slot,
+                    onClick = { onCourseClick(slot.course) },
                 )
             }
-            if (nowIndex == courses.size) {
+            if (nowIndex == slots.size) {
                 item { NowMarker(nowInk = nowInk, nowMinute = nowMinute) }
             }
         }
     }
 }
 
-/** 一行课程：44dp 时刻列 + 3dp 竖条 + 课程名 + 地点 / 教师 */
+/**
+ * 一行课时：44dp 时刻列 + 3dp 竖条 + 课程名 + 地点 / 教师
+ *
+ * 时刻取的是**课时**的起止时间（不是课程的主时段镜像）——
+ * 同一门课同一天的两个课时在时间线上是两行，时刻各不相同。
+ */
 @Composable
 private fun TimelineCourseRow(
-    course: Course,
+    slot: Slot,
     onClick: () -> Unit,
 ) {
+    val course = slot.course
+    val session = slot.session
     val courseColor = Color(course.color)
     Row(
         modifier = Modifier
@@ -195,14 +207,14 @@ private fun TimelineCourseRow(
             modifier = Modifier.width(44.dp),
         ) {
             Text(
-                text = DateUtils.formatMinutesOfDay(course.startTime),
+                text = DateUtils.formatMinutesOfDay(session.startTime),
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
             )
             Text(
-                text = DateUtils.formatMinutesOfDay(course.endTime),
+                text = DateUtils.formatMinutesOfDay(session.endTime),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

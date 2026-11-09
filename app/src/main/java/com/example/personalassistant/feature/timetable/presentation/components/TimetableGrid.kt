@@ -38,11 +38,21 @@ import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.feature.timetable.domain.model.TimeSlotSchedule
+// Phase 28：课表上画的是「课时块」（一门课的一个课时）。
+// 这里用别名导入，是因为本包里已经有一个同名的 `CourseSlot` —— 那是
+// TimetableLayout 里算「块画在哪、多高」用的布局结果类，两者不是一回事。
+import com.example.personalassistant.feature.timetable.presentation.CourseSlot as Slot
 
 /**
  * 周视图网格（纵向滚动 + 横向滑动）
  *
  * 视觉：左侧一列整点时间轴 + 右侧 7 列课程方格
+ *
+ * ## Phase 28：一个课时 = 一个块
+ *
+ * 以前一门课画一个块；现在**每个课时各画一块**（同一门课的多个块同色）。
+ * 块的位置与高度**只跟课时的起止时间有关**（[courseSlot]），
+ * 不再读课程身上的「主时段镜像」—— 一门课最后一个课时可能比另一门课晚得多。
  *
  * ## 尺寸基准（Phase 26）
  *
@@ -89,7 +99,7 @@ val TIMETABLE_GRID_VIEWPORT_HEIGHT = 312.dp
  */
 @Composable
 fun TimetableGrid(
-    coursesByDay: Map<Int, List<Course>>,
+    slotsByDay: Map<Int, List<Slot>>,
     onCourseClick: (Course) -> Unit,
     timeSlotSchedule: TimeSlotSchedule,
     modifier: Modifier = Modifier,
@@ -104,8 +114,20 @@ fun TimetableGrid(
     hScrollState: ScrollState = rememberScrollState(),
 ) {
     val days = (1..7).toList()
-    val firstStart = timeSlotSchedule.firstStart
-    val lastEnd = timeSlotSchedule.lastEnd
+    // Phase 28：纵向范围 = 课时表范围 ∪ 所有**课时**的范围。
+    //
+    // 为什么不能只看课程：一门课最后一个课时可能比另一门课晚得多
+    // （主时段在周一、最后一个课时在周五晚上）。只按主时段算，
+    // 那个晚课时会落到网格内容高度之外 → 直接被裁掉看不见。
+    val allSlots = slotsByDay.values.flatten()
+    val firstStart = minOf(
+        timeSlotSchedule.firstStart,
+        allSlots.minOfOrNull { it.session.startTime } ?: timeSlotSchedule.firstStart,
+    )
+    val lastEnd = maxOf(
+        timeSlotSchedule.lastEnd,
+        allSlots.maxOfOrNull { it.session.endTime } ?: timeSlotSchedule.lastEnd,
+    )
     val totalMinutes = (lastEnd - firstStart).coerceAtLeast(60)
     val contentHeight = (totalMinutes * MINUTE_HEIGHT_DP).dp
 
@@ -141,7 +163,7 @@ fun TimetableGrid(
                     days.forEach { day ->
                         DayColumn(
                             day = day,
-                            courses = coursesByDay[day].orEmpty(),
+                            slots = slotsByDay[day].orEmpty(),
                             firstStart = firstStart,
                             lastEnd = lastEnd,
                             onCourseClick = onCourseClick,
@@ -196,15 +218,16 @@ private fun HourAxis(
 }
 
 /**
- * 单日列：Box 绝对定位容器 + 课程按分钟绝对位置
+ * 单日列：Box 绝对定位容器 + 课时按分钟绝对位置
  *
- * - 每门课 = 一个 Box，top = (startMinutes - firstStart) × MINUTE_HEIGHT_DP
- * - 跨节 / 跨午休的课，按 startTime/endTime 实际位置渲染
+ * - **一个课时 = 一个 Box**，top = (startMinutes - firstStart) × MINUTE_HEIGHT_DP
+ * - 跨节 / 跨午休的课，按课时的 startTime/endTime 实际位置渲染
+ * - 同一门课的多个块用**同一个课程色**（取 [Slot.course] 的颜色）
  */
 @Composable
 private fun DayColumn(
     day: Int,
-    courses: List<Course>,
+    slots: List<Slot>,
     firstStart: Int,
     lastEnd: Int,
     onCourseClick: (Course) -> Unit,
@@ -214,11 +237,15 @@ private fun DayColumn(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
-        courses.forEach { course ->
-            // 算式走 courseSlot()，跟 JVM 单测用的是同一份实现
-            val slot = courseSlot(course.startTime, course.endTime, firstStart, MINUTE_HEIGHT_DP)
-            val topDp = slot.topDp.dp
-            val heightDp = slot.heightDp.dp
+        slots.forEach { slot ->
+            val course = slot.course
+            val session = slot.session
+            // 算式走 courseSlot()，跟 JVM 单测用的是同一份实现。
+            // ⚠️ 用的是**课时**的起止时间，不是课程的主时段镜像 ——
+            // 一门课同一天的第二个课时可能跟第一门课完全不在一个时段。
+            val layout = courseSlot(session.startTime, session.endTime, firstStart, MINUTE_HEIGHT_DP)
+            val topDp = layout.topDp.dp
+            val heightDp = layout.heightDp.dp
             val courseColor = Color(course.color)
             Box(
                 modifier = Modifier
