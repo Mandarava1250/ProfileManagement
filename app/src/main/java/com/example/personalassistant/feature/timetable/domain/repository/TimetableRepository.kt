@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.timetable.domain.repository
 
 import com.example.personalassistant.feature.timetable.domain.model.Course
+import com.example.personalassistant.feature.timetable.domain.model.CourseSession
 import com.example.personalassistant.feature.timetable.domain.model.Semester
 import kotlinx.coroutines.flow.Flow
 
@@ -40,6 +41,52 @@ interface TimetableRepository {
 
     /** 新增或更新课程；返回新 id 或已存在 id */
     suspend fun upsertCourse(course: Course): Long
+
+    // ===== Phase 28：一门课多课时 =====
+
+    /**
+     * 观察课程（含**全部课时**）
+     *
+     * @param semester 学期名；**null = 全部学期**（与「未归学期的课撞所有学期」的口径一致）
+     *
+     * 返回的每个 [Course] 的 [Course.sessions] 至少有一个元素 ——
+     * 课程在课时表里没有记录时，用 `courses` 表的三列镜像兜底出一个单课时。
+     */
+    fun observeCoursesWithSessions(semester: String?): Flow<List<Course>>
+
+    /** 按 id 取单门课（含全部课时）；课程不存在返回 null */
+    suspend fun getCourseWithSessions(courseId: Long): Course?
+
+    /**
+     * 整门课一次性保存（**事务**）
+     *
+     * 事务内做四件事：
+     * 1. upsert `courses` 行 → 拿到 courseId
+     * 2. 删掉这门课原有的全部课时
+     * 3. 插入新的全部课时
+     * 4. 回写 `courses` 表的三列镜像 = 第一个课时的 dayOfWeek / startTime / endTime
+     *
+     * @return 课程 id
+     */
+    suspend fun upsertCourseWithSessions(course: Course): Long
+
+    /**
+     * 找出与给定课时冲突的其它课程（逐课时检测）
+     *
+     * @param semester 学期名；**null = 跨全部学期**
+     *   （未归学期的课，撞了任何学期的课都要报 —— 这是既有 [findConflicts] 的口径，不能丢）
+     * @param session 要检测的课时
+     * @param excludeCourseId 要排除的课程 id（通常是被编辑的课程自己）
+     *
+     * ⚠️ 排除整门课意味着「同一门课的两个课时互相重叠」**查不出来** ——
+     * 那类冲突要在 [com.example.personalassistant.feature.timetable.domain.usecase.UpsertCourseUseCase]
+     * 里单独检查。
+     */
+    suspend fun findSessionConflicts(
+        semester: String?,
+        session: CourseSession,
+        excludeCourseId: Long,
+    ): List<Course>
 
     /** 删除课程 */
     suspend fun deleteCourse(id: Long)

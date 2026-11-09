@@ -51,6 +51,34 @@ fun Course.toEntity(): CourseEntity = CourseEntity(
 )
 
 /**
+ * 把「课程行 + 它的课时行」合成一个领域 [Course]（Phase 28 P4）
+ *
+ * [CourseEntity.toDomain] 只映射 `courses` 表自身的字段（课时不在那张表里），
+ * 合并逻辑放在这里 —— Repository 读路径统一走这个函数。
+ *
+ * ## ⚠️ 空课时的兜底
+ *
+ * 课程在 `course_sessions` 里没有记录时（老数据没播种 / 导入的旧备份），
+ * 用 `courses` 表的三列镜像**兜底出一个单课时** ——
+ * 保证渲染层永远至少看到一个课时，一门课不会从课表上凭空消失。
+ */
+fun CourseEntity.toDomainWithSessions(sessions: List<CourseSessionEntity>): Course {
+    val domainSessions = sessions.map { it.toDomain() }
+    val effective = domainSessions.ifEmpty {
+        listOf(
+            CourseSession(
+                courseId = id,
+                dayOfWeek = dayOfWeek,
+                startTime = startTime,
+                endTime = endTime,
+                sortOrder = 0,
+            ),
+        )
+    }
+    return toDomain().copy(sessions = effective)
+}
+
+/**
  * 课时 Entity ↔ Domain 互转（Phase 28 P1）
  *
  * 与课程同款：顶层扩展函数，方便用
