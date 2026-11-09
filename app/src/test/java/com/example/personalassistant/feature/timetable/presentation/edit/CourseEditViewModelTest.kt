@@ -1,0 +1,467 @@
+package com.example.personalassistant.feature.timetable.presentation.edit
+
+import com.example.personalassistant.feature.timetable.data.repository.FakeTimetableRepository
+import com.example.personalassistant.feature.timetable.domain.model.Course
+import com.example.personalassistant.feature.timetable.domain.model.CourseSession
+import com.example.personalassistant.feature.timetable.domain.model.Period
+import com.example.personalassistant.feature.timetable.domain.model.Semester
+import com.example.personalassistant.feature.timetable.domain.model.TimeSlotSchedule
+import com.example.personalassistant.feature.timetable.domain.repository.TimeSlotRepository
+import com.example.personalassistant.feature.timetable.domain.usecase.ObserveTimeSlotScheduleUseCase
+import com.example.personalassistant.feature.timetable.domain.usecase.UpsertCourseUseCase
+import com.example.personalassistant.service.reminder.CourseReminderRescheduler
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+/**
+ * 课程编辑页 ViewModel 测试（Phase 28 P8：一门课多课时）
+ *
+ * 覆盖：
+ * - 课时的增 / 删 / 改
+ * - 不能删到最后一条课时
+ * - mode 反推（开始时刻命中任一 period 的 startMinutes → PERIOD）
+ * - 保存整门课**一次性**提交
+ * - 冲突定位到具体课时（错误回写到那一行）
+ * - 保存成功后重排课程提醒闹钟
+ *
+ * 不引入 mockk：仓储用现成的 [FakeTimetableRepository]，其余手写 fake。
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class CourseEditViewModelTest {
+
+    private val testDispatcher = StandardTestDispatcher()
+
+    /** 只用来「记录有没有被调用」的假提醒重排器 */
+    private class FakeCourseReminderRescheduler : CourseReminderRescheduler {
+        var callCount: Int = 0
+            private set
+
+        override suspend fun rescheduleAll() {
+            callCount++
+        }
+    }
+
+    /** 固定一张课时表的假课时表仓储 */
+    private class FakeTimeSlotRepository(
+        private val schedule: TimeSlotSchedule,
+    ) : TimeSlotRepository {
+        override fun observeSchedule(): Flow<TimeSlotSchedule> = flowOf(schedule)
+        override suspend fun saveSchedule(schedule: TimeSlotSchedule) = Unit
+        override suspend fun resetToDefault() = Unit
+    }
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    // ===== 测试脚手架 =====
+
+    /** 3 节课的课时表：08:00-08:45 / 09:00-09:45 / 10:00-10:45 */
+    private val schedule = TimeSlotSchedule(
+        listOf(
+            Period(1, 8 * 60, 8 * 60 + 45),
+            Period(2, 9 * 60, 9 * 60 + 45),
+            Period(3, 10 * 60, 10 * 60 + 45),
+        ),
+    )
+
+    private val semester = Semester(
+        name = "2024-2025-1",
+        startDate = 0L,
+        endDate = 100L,
+        isCurrent = true,
+    )
+
+    private fun course(
+        id: Long = 0L,
+        name: String = "高数",
+        dayOfWeek: Int = 1,
+        startTime: Int = 8 * 60,
+        endTime: Int = 8 * 60 + 45,
+        semesterName: String? = "2024-2025-1",
+    ) = Course(
+        id = id,
+        name = name,
+        dayOfWeek = dayOfWeek,
+        startTime = startTime,
+        endTime = endTime,
+        color = 0xFFE57373.toInt(),
+        semester = semesterName,
+    )
+
+    private suspend fun newRepository(): FakeTimetableRepository =
+        FakeTimetableRepository().also { it.seedSemester(semester) }
+
+    private fun viewModel(
+        repository: FakeTimetableRepository,
+        rescheduler: FakeCourseReminderRescheduler = FakeCourseReminderRescheduler(),
+    ) = CourseEditViewModel(
+        repository = repository,
+        upsertCourseUseCase = UpsertCourseUseCase(repository),
+        observeTimeSlotSchedule = ObserveTimeSlotScheduleUseCase(FakeTimeSlotRepository(schedule)),
+        reminderRescheduler = rescheduler,
+    )
+
+    // ===== 课时增删改 =====
+
+    @Test
+    fun `新建课程默认带一个周一第1节的课时`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        val sessions = vm.uiState.value.sessions
+        assertEquals(1, sessions.size)
+        val first = sessions[0]
+        assertEquals(1, first.dayOfWeek)
+        assertEquals(TimeMode.PERIOD, first.mode)
+        assertEquals(1, first.startPeriodIndex)
+        assertEquals(8 * 60, first.startMinutes)
+        assertEquals(9 * 60 + 45, first.endMinutes)
+    }
+
+    @Test
+    fun `添加课时追加一条并自动展开`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        vm.addSession()
+        advanceUntilIdle()
+
+        val sessions = vm.uiState.value.sessions
+        assertEquals(2, sessions.size)
+        assertTrue("新加的课时应该自动展开", sessions[1].expanded)
+        assertEquals(1, sessions[1].dayOfWeek)
+    }
+
+    @Test
+    fun `改课时只影响那一行`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.addSession()
+        advanceUntilIdle()
+
+        vm.updateSessionDay(1, 3)
+        vm.updateSessionStartMinutes(1, 10 * 60)
+        vm.updateSessionEndMinutes(1, 10 * 60 + 45)
+        advanceUntilIdle()
+
+        val sessions = vm.uiState.value.sessions
+        // 第一行没被动过
+        assertEquals(1, sessions[0].dayOfWeek)
+        assertEquals(8 * 60, sessions[0].startMinutes)
+        // 第二行改了
+        assertEquals(3, sessions[1].dayOfWeek)
+        assertEquals(10 * 60, sessions[1].startMinutes)
+        assertEquals(10 * 60 + 45, sessions[1].endMinutes)
+    }
+
+    @Test
+    fun `选第N节会把分钟数同步写回`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        vm.updateSessionStartPeriod(0, 3)
+        vm.updateSessionEndPeriod(0, 3)
+        advanceUntilIdle()
+
+        val session = vm.uiState.value.sessions[0]
+        assertEquals(TimeMode.PERIOD, session.mode)
+        assertEquals(3, session.startPeriodIndex)
+        assertEquals(3, session.endPeriodIndex)
+        assertEquals(10 * 60, session.startMinutes)
+        assertEquals(10 * 60 + 45, session.endMinutes)
+    }
+
+    @Test
+    fun `结束时间早于开始时间时行内报错`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        vm.updateSessionEndMinutes(0, 8 * 60)
+        advanceUntilIdle()
+
+        val session = vm.uiState.value.sessions[0]
+        assertNotNull(session.errorMessage)
+        assertTrue(session.errorMessage!!.contains("结束时间"))
+        assertTrue("非法时间时整门课不能保存", !vm.uiState.value.isValid)
+    }
+
+    @Test
+    fun `删除课时`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.addSession()
+        advanceUntilIdle()
+
+        vm.removeSession(1)
+        advanceUntilIdle()
+
+        assertEquals(1, vm.uiState.value.sessions.size)
+    }
+
+    @Test
+    fun `不能删到最后一条课时`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        vm.removeSession(0)
+        advanceUntilIdle()
+
+        assertEquals("最后一条课时不能被删掉", 1, vm.uiState.value.sessions.size)
+    }
+
+    // ===== mode 反推 =====
+
+    @Test
+    fun `开始时刻命中某一节就用 PERIOD 模式`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        repo.seedCourse(course(id = 10L, dayOfWeek = 1, startTime = 8 * 60, endTime = 8 * 60 + 45))
+        repo.seedSessions(
+            10L,
+            listOf(CourseSession(courseId = 10L, dayOfWeek = 1, startTime = 8 * 60, endTime = 8 * 60 + 45)),
+        )
+        val vm = viewModel(repo)
+
+        vm.initialize(10L)
+        advanceUntilIdle()
+
+        val session = vm.uiState.value.sessions[0]
+        assertEquals(TimeMode.PERIOD, session.mode)
+        assertEquals(1, session.startPeriodIndex)
+        assertEquals(1, session.endPeriodIndex)
+    }
+
+    @Test
+    fun `开始时刻没命中任何一节就用 CLOCK 模式`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        repo.seedCourse(course(id = 10L, dayOfWeek = 2, startTime = 8 * 60 + 10, endTime = 9 * 60))
+        repo.seedSessions(
+            10L,
+            listOf(CourseSession(courseId = 10L, dayOfWeek = 2, startTime = 8 * 60 + 10, endTime = 9 * 60)),
+        )
+        val vm = viewModel(repo)
+
+        vm.initialize(10L)
+        advanceUntilIdle()
+
+        assertEquals(TimeMode.CLOCK, vm.uiState.value.sessions[0].mode)
+    }
+
+    @Test
+    fun `开始命中但结束没命中的课时也判为 PERIOD 且分钟数原样保留`() = runTest(testDispatcher) {
+        // 08:00 命中第 1 节的开始；10:00 不落在任何一节的结束点上
+        val repo = newRepository()
+        repo.seedCourse(course(id = 10L, dayOfWeek = 3, startTime = 8 * 60, endTime = 10 * 60))
+        repo.seedSessions(
+            10L,
+            listOf(CourseSession(courseId = 10L, dayOfWeek = 3, startTime = 8 * 60, endTime = 10 * 60)),
+        )
+        val vm = viewModel(repo)
+
+        vm.initialize(10L)
+        advanceUntilIdle()
+
+        val session = vm.uiState.value.sessions[0]
+        assertEquals(TimeMode.PERIOD, session.mode)
+        // 分钟数不被节表改写（否则保存时结束时间会被悄悄改掉）
+        assertEquals(8 * 60, session.startMinutes)
+        assertEquals(10 * 60, session.endMinutes)
+    }
+
+    @Test
+    fun `每个课时单独记自己的模式`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        repo.seedCourse(course(id = 10L, dayOfWeek = 1, startTime = 8 * 60, endTime = 8 * 60 + 45))
+        repo.seedSessions(
+            10L,
+            listOf(
+                CourseSession(courseId = 10L, dayOfWeek = 1, startTime = 8 * 60, endTime = 8 * 60 + 45),
+                CourseSession(courseId = 10L, dayOfWeek = 2, startTime = 8 * 60 + 10, endTime = 9 * 60),
+            ),
+        )
+        val vm = viewModel(repo)
+
+        vm.initialize(10L)
+        advanceUntilIdle()
+
+        val sessions = vm.uiState.value.sessions
+        assertEquals(2, sessions.size)
+        assertEquals(TimeMode.PERIOD, sessions[0].mode)
+        assertEquals(TimeMode.CLOCK, sessions[1].mode)
+    }
+
+    // ===== 保存 =====
+
+    @Test
+    fun `保存时整门课一次性提交`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val rescheduler = FakeCourseReminderRescheduler()
+        val vm = viewModel(repo, rescheduler)
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        vm.updateName("高数")
+        vm.addSession()
+        advanceUntilIdle()
+        vm.updateSessionDay(1, 3)
+        vm.updateSessionStartMinutes(1, 10 * 60)
+        vm.updateSessionEndMinutes(1, 10 * 60 + 45)
+        advanceUntilIdle()
+
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals("整门课只提交一次", 1, repo.upsertCount)
+        val saved = repo.lastUpserted
+        assertNotNull(saved)
+        assertEquals(2, saved!!.sessions.size)
+        assertEquals(1, saved!!.sessions[0].dayOfWeek)
+        assertEquals(3, saved!!.sessions[1].dayOfWeek)
+        assertEquals(10 * 60, saved!!.sessions[1].startTime)
+        assertEquals(10 * 60 + 45, saved!!.sessions[1].endTime)
+        assertEquals("高数", saved!!.name)
+        // 三列镜像 = 第一个课时
+        assertEquals(1, saved!!.dayOfWeek)
+        assertEquals(8 * 60, saved!!.startTime)
+        assertTrue(vm.saved.value)
+    }
+
+    @Test
+    fun `保存成功后重排课程提醒`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val rescheduler = FakeCourseReminderRescheduler()
+        val vm = viewModel(repo, rescheduler)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.updateName("高数")
+        advanceUntilIdle()
+
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals(1, rescheduler.callCount)
+    }
+
+    @Test
+    fun `删课时后保存只提交剩下的课时`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.updateName("高数")
+        vm.addSession()
+        advanceUntilIdle()
+        vm.removeSession(1)
+        advanceUntilIdle()
+
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals(1, repo.upsertCount)
+        assertEquals(1, repo.lastUpserted!!.sessions.size)
+    }
+
+    // ===== 冲突定位 =====
+
+    @Test
+    fun `冲突回写到具体课时`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        // 已有一门「线性代数」：周三 09:00-10:00
+        repo.seedCourse(course(id = 10L, name = "线性代数", dayOfWeek = 3, startTime = 9 * 60, endTime = 10 * 60))
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        vm.updateName("高数")
+        vm.addSession()
+        advanceUntilIdle()
+        // 第二个课时挪到周三 09:00-10:00 → 撞上「线性代数」
+        vm.updateSessionDay(1, 3)
+        vm.updateSessionStartMinutes(1, 9 * 60)
+        vm.updateSessionEndMinutes(1, 10 * 60)
+        advanceUntilIdle()
+
+        vm.save()
+        advanceUntilIdle()
+
+        val sessions = vm.uiState.value.sessions
+        assertEquals("冲突的课时要带上错误", "与《线性代数》时间冲突", sessions[1].errorMessage)
+        assertNull("没冲突的课时不该有错误", sessions[0].errorMessage)
+        assertNotNull("页面底部给一条汇总", vm.uiState.value.errorMessage)
+        assertTrue("冲突时不能算保存成功", !vm.saved.value)
+        assertEquals("冲突时不能写库", 0, repo.upsertCount)
+    }
+
+    @Test
+    fun `同一门课内部课时重叠也回写到具体课时`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        vm.updateName("高数")
+        vm.addSession()
+        advanceUntilIdle()
+        // 第二个课时跟第一个完全重合
+        vm.updateSessionDay(1, 1)
+        vm.updateSessionStartMinutes(1, 8 * 60)
+        vm.updateSessionEndMinutes(1, 9 * 60 + 45)
+        advanceUntilIdle()
+
+        vm.save()
+        advanceUntilIdle()
+
+        val sessions = vm.uiState.value.sessions
+        assertNotNull(sessions[0].errorMessage)
+        assertNotNull(sessions[1].errorMessage)
+        assertTrue(sessions[0].errorMessage!!.contains("重叠"))
+        assertEquals(0, repo.upsertCount)
+    }
+
+    @Test
+    fun `课程不存在时报错`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+
+        vm.initialize(999L)
+        advanceUntilIdle()
+
+        assertEquals("课程不存在", vm.uiState.value.errorMessage)
+        assertTrue(vm.uiState.value.sessions.isEmpty())
+    }
+}

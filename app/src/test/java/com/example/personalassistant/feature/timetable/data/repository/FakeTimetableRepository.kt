@@ -28,7 +28,14 @@ class FakeTimetableRepository : TimetableRepository {
     /** courseId → 课时列表（按 sortOrder 排序） */
     private val sessionsState = MutableStateFlow<Map<Long, List<CourseSession>>>(emptyMap())
 
+    /** 学期列表（Phase 28 P7：编辑页新建课程时要选学期） */
+    private val semestersState = MutableStateFlow<List<Semester>>(emptyList())
+
     var upsertCount: Int = 0
+        private set
+
+    /** 最近一次写入的课程（测试断言「整门课一次性提交」用） */
+    var lastUpserted: Course? = null
         private set
 
     // ===== Course =====
@@ -96,6 +103,7 @@ class FakeTimetableRepository : TimetableRepository {
 
     override suspend fun upsertCourseWithSessions(course: Course): Long {
         upsertCount++
+        lastUpserted = course
         val resolved = if (course.id > 0L) course else course.copy(id = (coursesState.value.size + 1).toLong())
         val sessions = course.sessions.sortedBy { it.sortOrder }
         val first = sessions.firstOrNull()
@@ -126,11 +134,17 @@ class FakeTimetableRepository : TimetableRepository {
 
     // ===== Semester =====
 
-    override fun observeAllSemesters(): Flow<List<Semester>> = MutableStateFlow(emptyList())
-    override fun observeCurrentSemester(): Flow<Semester?> = MutableStateFlow(null)
-    override suspend fun getSemesterByName(name: String): Semester? = null
-    override suspend fun upsertSemester(semester: Semester) = Unit
-    override suspend fun deleteSemester(name: String) = Unit
+    override fun observeAllSemesters(): Flow<List<Semester>> = semestersState
+    override fun observeCurrentSemester(): Flow<Semester?> =
+        semestersState.map { list -> list.firstOrNull { it.isCurrent } }
+    override suspend fun getSemesterByName(name: String): Semester? =
+        semestersState.value.firstOrNull { it.name == name }
+    override suspend fun upsertSemester(semester: Semester) {
+        semestersState.value = semestersState.value.filterNot { it.name == semester.name } + semester
+    }
+    override suspend fun deleteSemester(name: String) {
+        semestersState.value = semestersState.value.filterNot { it.name == name }
+    }
 
     // ===== Phase 8 Sub-step 3 全局搜索 =====
 
@@ -163,6 +177,11 @@ class FakeTimetableRepository : TimetableRepository {
                 s.copy(id = index + 1L, courseId = courseId, sortOrder = index)
             }
             )
+    }
+
+    /** 塞一个学期（Phase 28 P7：编辑页新建课程时需要学期） */
+    suspend fun seedSemester(semester: Semester) {
+        upsertSemester(semester)
     }
 
     /** 当前某门课的课时（未设置时返回空列表） */

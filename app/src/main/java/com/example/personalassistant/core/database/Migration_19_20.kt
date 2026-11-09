@@ -101,7 +101,7 @@ internal fun createCourseSessionsTableSql(): String = """
 /**
  * 播种：把 `courses` 每行的主时段搬成一条课时（sortOrder = 0）。
  *
- * 存量课程迁移后变成「只有��个课时的课」—— 行为与改造前完全一致。
+ * 存量课程迁移后变成「只有一个课时的课」—— 行为与改造前完全一致。
  *
  * ⚠️ 这里刻意**不写反引号**：SQLite 两种写法等价，但不带反引号的字面量
  * 便于 JVM 单测直接 `contains("INSERT INTO course_sessions")` 断言。

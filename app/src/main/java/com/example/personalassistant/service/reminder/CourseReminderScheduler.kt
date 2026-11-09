@@ -10,6 +10,7 @@ import com.example.personalassistant.core.holiday.usecase.IsHolidayUseCase
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.feature.timetable.domain.model.CourseSession
 import com.example.personalassistant.navigation.DeepLinks
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.runBlocking
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -43,7 +44,7 @@ import javax.inject.Inject
  * 三处都带上课时序号，同门课同一天的几个课时才不会互相顶。
  */
 class CourseReminderScheduler @Inject constructor(
-    private val context: Context,
+    @ApplicationContext private val context: Context,
     private val alarmManager: AlarmManager,
     private val isHolidayUseCase: IsHolidayUseCase,
 ) {
