@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Done
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -74,6 +75,7 @@ import com.example.personalassistant.feature.timetable.domain.model.TimeSlotSche
  *   - 折叠态：`● 周一 08:00-09:40 第1节 🗑`（左边一条 3dp 课程色竖条）
  *   - 展开态：星期 chip + 时段模式切换 + 起止输入 + 该行自己的错误
  * - 错误**就近显示**：名称的错误在名称下面，课时的错误在那一行里
+ * - **时间冲突**另外弹确认框（「取消」/「仍然保存」）—— 见 [CourseTimeConflict]
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -307,6 +309,41 @@ fun CourseEditScreen(
             }
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    // ====== 时间冲突：「仍然保存」确认框 ======
+    //
+    // 只有**时间冲突**才弹这个框；普通校验错误（名称为空、课时时间非法）
+    // 仍然是就近显示的行内错误，不打扰用户。
+    state.conflict?.let { conflict ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissConflict() },
+            title = { Text("时间冲突") },
+            text = {
+                Column {
+                    Text(
+                        text = conflict.summary,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "仍然保存会把冲突的课程一起写进课表。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.save(force = true) }) {
+                    Text("仍然保存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissConflict() }) {
+                    Text("取消")
+                }
+            },
+        )
     }
 }
 

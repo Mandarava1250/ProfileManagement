@@ -464,4 +464,169 @@ class CourseEditViewModelTest {
         assertEquals("课程不存在", vm.uiState.value.errorMessage)
         assertTrue(vm.uiState.value.sessions.isEmpty())
     }
+
+    // ===== 时间冲突 → 「仍然保存」 =====
+
+    /** 造一个「撞上「线性代数」」的编辑态：第二个课时挪到周三 09:00-10:00 */
+    private suspend fun kotlinx.coroutines.test.TestScope.conflictingViewModel(
+        repo: FakeTimetableRepository,
+    ): CourseEditViewModel {
+        // 已有一门「线性代数」：周三 09:00-10:00
+        repo.seedCourse(
+            course(id = 10L, name = "线性代数", dayOfWeek = 3, startTime = 9 * 60, endTime = 10 * 60),
+        )
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.updateName("高数")
+        vm.addSession()
+        advanceUntilIdle()
+        // 第二个课时挪到周三 09:00-10:00 → 撞上「线性代数」
+        vm.updateSessionDay(1, 3)
+        vm.updateSessionStartMinutes(1, 9 * 60)
+        vm.updateSessionEndMinutes(1, 10 * 60)
+        advanceUntilIdle()
+        return vm
+    }
+
+    @Test
+    fun `冲突时不 force 保存失败并给出冲突信息`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = conflictingViewModel(repo)
+
+        vm.save()
+        advanceUntilIdle()
+
+        // 没写库
+        assertEquals("冲突时不能写库", 0, repo.upsertCount)
+        assertTrue("冲突时不能算保存成功", !vm.saved.value)
+        // 冲突信息要交给 UI 弹「仍然保存」框
+        val conflict = vm.uiState.value.conflict
+        assertNotNull("冲突时要给出冲突信息", conflict)
+        assertEquals(listOf("线性代数"), conflict!!.conflictingCourseNames)
+        assertEquals(0, conflict.internalOverlapCount)
+        assertTrue(conflict.summary.contains("线性代数"))
+    }
+
+    @Test
+    fun `force 保存时忽略冲突并写入`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = conflictingViewModel(repo)
+
+        // 先撞一次（拿到冲突信息）
+        vm.save()
+        advanceUntilIdle()
+        assertNotNull(vm.uiState.value.conflict)
+        assertEquals(0, repo.upsertCount)
+
+        // 点「仍然保存」→ save(force = true)
+        vm.save(force = true)
+        advanceUntilIdle()
+
+        assertEquals("force 时要写库", 1, repo.upsertCount)
+        assertTrue("force 时算保存成功", vm.saved.value)
+        assertNull("force 时对话框要收起", vm.uiState.value.conflict)
+        assertEquals(2, repo.lastUpserted!!.sessions.size)
+    }
+
+    @Test
+    fun `取消冲突对话框只收起对话框保留行内错误`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = conflictingViewModel(repo)
+
+        vm.save()
+        advanceUntilIdle()
+        assertNotNull(vm.uiState.value.conflict)
+
+        vm.dismissConflict()
+        advanceUntilIdle()
+
+        assertNull("对话框要收起", vm.uiState.value.conflict)
+        assertEquals(
+            "行内错误要留着（那才是「哪一行撞了」的指引）",
+            "与《线性代数》时间冲突",
+            vm.uiState.value.sessions[1].errorMessage,
+        )
+        assertEquals("取消不等于保存", 0, repo.upsertCount)
+    }
+
+    @Test
+    fun `改了排课之后旧的冲突信息作废`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = conflictingViewModel(repo)
+
+        vm.save()
+        advanceUntilIdle()
+        assertNotNull(vm.uiState.value.conflict)
+
+        // 把第二个课时挪走 → 之前的「撞了线性代数」结论不再成立
+        vm.updateSessionDay(1, 4)
+        advanceUntilIdle()
+
+        assertNull("排课变了就不要再拿旧结论问用户", vm.uiState.value.conflict)
+    }
+
+    @Test
+    fun `普通校验错误不弹冲突对话框`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        // 名称为空 → isValid = false → save 直接返回，不写库也不给冲突
+        vm.save()
+        advanceUntilIdle()
+
+        assertNull("普通校验错误不该有冲突信息", vm.uiState.value.conflict)
+        assertEquals(0, repo.upsertCount)
+    }
+
+    @Test
+    fun `课时时间非法只走行内错误不弹冲突对话框`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.updateName("高数")
+        advanceUntilIdle()
+
+        // 结束早于开始 → 行内错误
+        vm.updateSessionEndMinutes(0, 8 * 60)
+        advanceUntilIdle()
+
+        assertNotNull(vm.uiState.value.sessions[0].errorMessage)
+        assertNull("时间非法不是冲突，不该弹框", vm.uiState.value.conflict)
+        assertTrue("时间非法时整门课不能保存", !vm.uiState.value.isValid)
+    }
+
+    @Test
+    fun `本课程内部课时重叠也算冲突并能强制保存`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.updateName("高数")
+        vm.addSession()
+        advanceUntilIdle()
+        // 第二个课时跟第一个完全重合
+        vm.updateSessionDay(1, 1)
+        vm.updateSessionStartMinutes(1, 8 * 60)
+        vm.updateSessionEndMinutes(1, 9 * 60 + 45)
+        advanceUntilIdle()
+
+        vm.save()
+        advanceUntilIdle()
+
+        val conflict = vm.uiState.value.conflict
+        assertNotNull("内部重叠也要走冲突流程", conflict)
+        assertEquals(0, conflict!!.conflictingCourseNames.size)
+        assertEquals(1, conflict.internalOverlapCount)
+        assertEquals(0, repo.upsertCount)
+
+        vm.save(force = true)
+        advanceUntilIdle()
+
+        assertEquals("force 时要写库", 1, repo.upsertCount)
+        assertTrue(vm.saved.value)
+    }
 }

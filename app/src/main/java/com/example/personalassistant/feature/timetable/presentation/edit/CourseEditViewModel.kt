@@ -153,7 +153,12 @@ class CourseEditViewModel @Inject constructor(
     fun addSession() {
         _uiState.update { state ->
             val session = defaultSession(state.availableTimeSlots, expanded = true)
-            state.copy(sessions = state.sessions + session, errorMessage = null)
+            state.copy(
+                sessions = state.sessions + session,
+                errorMessage = null,
+                // 排课变了 → 上一次冲突的结论作废
+                conflict = null,
+            )
         }
     }
 
@@ -170,6 +175,8 @@ class CourseEditViewModel @Inject constructor(
             state.copy(
                 sessions = state.sessions.toMutableList().also { it.removeAt(index) },
                 errorMessage = null,
+                // 排课变了 → 上一次冲突的结论作废
+                conflict = null,
             )
         }
     }
@@ -266,8 +273,11 @@ class CourseEditViewModel @Inject constructor(
      * 保存整门课（一次性提交）
      *
      * - 走 [UpsertCourseUseCase] → `upsertCourseWithSessions`（一个事务：课程 + 全部课时）
-     * - 冲突时把错误**回写到具体课时**的 `errorMessage`（就近显示在行内）
+     * - 冲突时把错误**回写到具体课时**的 `errorMessage`（就近显示在行内），
+     *   同时把冲突摘要放进 [CourseEditUiState.conflict] —— UI 据此弹「仍然保存」确认框
      * - 存成功后重排课程提醒闹钟（此前 `rescheduleAll` 全项目没有调用方，提醒从没排上）
+     *
+     * @param force true = 忽略冲突硬写（用户点了「仍然保存」）
      */
     fun save(force: Boolean = false) {
         val state = _uiState.value
@@ -276,6 +286,8 @@ class CourseEditViewModel @Inject constructor(
             it.copy(
                 isSaving = true,
                 errorMessage = null,
+                // 清掉上一次的冲突 → 「仍然保存」时对话框自动收起
+                conflict = null,
                 sessions = it.sessions.map { s -> s.copy(errorMessage = null) },
             )
         }
@@ -291,6 +303,7 @@ class CourseEditViewModel @Inject constructor(
                     current.copy(
                         isSaving = false,
                         errorMessage = conflictSummary(e.conflict),
+                        conflict = e.conflict.toTimeConflict(),
                         sessions = markConflictingSessions(current.sessions, e.conflict),
                     )
                 }
@@ -299,6 +312,14 @@ class CourseEditViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * 关掉「仍然保存」确认框（用户点「取消」）
+     *
+     * ⚠️ 只清对话框 —— 课时的行内错误**保留**：那才是「哪一行撞了」的指引，
+     * 顺手删掉的话用户就不知道该去改哪儿了。
+     */
+    fun dismissConflict() = _uiState.update { it.copy(conflict = null) }
 
     /** 删除整门课（连带它的全部课时） */
     fun delete() {
@@ -317,7 +338,12 @@ class CourseEditViewModel @Inject constructor(
 
     // ===== 内部 =====
 
-    /** 改第 [index] 个课时（下标越界时什么都不做） */
+    /**
+     * 改第 [index] 个课时（下标越界时什么都不做）
+     *
+     * 顺带把 [CourseEditUiState.conflict] 清掉 —— 排课一旦变了，
+     * 上一次「撞了谁」的结论就不再成立，对话框不该继续拿旧结论问用户。
+     */
     private fun mutateSession(
         index: Int,
         transform: (SessionEditState, TimeSlotSchedule) -> SessionEditState,
@@ -328,7 +354,7 @@ class CourseEditViewModel @Inject constructor(
             if (updated == current) return@update state
             val list = state.sessions.toMutableList()
             list[index] = updated
-            state.copy(sessions = list)
+            state.copy(sessions = list, conflict = null)
         }
     }
 
@@ -391,6 +417,16 @@ class CourseEditViewModel @Inject constructor(
             append("，本课程内部有 ${conflict.internalOverlaps.size} 处课时重叠")
         }
     }
+
+    /**
+     * 领域层冲突 → UI 层的冲突摘要（供「仍然保存」对话框用）
+     *
+     * 课程名去重 —— 两门课同名时列一次就够，用户看的是「撞了谁」不是「撞了几门」。
+     */
+    private fun CourseConflict.toTimeConflict(): CourseTimeConflict = CourseTimeConflict(
+        conflictingCourseNames = conflicts.map { it.name }.distinct(),
+        internalOverlapCount = internalOverlaps.size,
+    )
 
     /**
      * 把冲突**定位到具体课时**

@@ -22,6 +22,13 @@ import com.example.personalassistant.feature.timetable.domain.model.TimeSlotSche
  * | 课程名称为空 | [nameError]（名称输入框下方） |
  * | 某个课时的冲突 / 时间非法 | [SessionEditState.errorMessage]（该课时行内） |
  * | 保存失败等页面级错误 | [errorMessage] |
+ *
+ * ## 时间冲突 ≠ 普通校验错误
+ *
+ * 普通校验错误（名称为空、课时时间非法）**就地显示**，不弹框。
+ * 时间冲突（撞了别的课 / 本课程内部课时重叠）多一个选择：
+ * 用户可以选择「仍然保存」硬写进去 —— 所以它单独走 [conflict] 这个字段，
+ * 而不是塞进 [errorMessage] 里靠字符串去认。
  */
 data class CourseEditUiState(
     val isLoading: Boolean = false,
@@ -31,6 +38,12 @@ data class CourseEditUiState(
     val errorMessage: String? = null,
     /** 课程名称下方的行内错误 */
     val nameError: String? = null,
+    /**
+     * 保存时检测到的**时间冲突**；非 null 时 UI 弹「仍然保存」确认框
+     *
+     * null = 没有冲突（或者用户已经关掉了对话框）。
+     */
+    val conflict: CourseTimeConflict? = null,
 
     // ===== 课程本体 =====
     val id: Long = 0L,
@@ -118,6 +131,39 @@ data class CourseEditUiState(
             sessions = domainSessions,
         )
     }
+}
+
+/**
+ * 保存时检测到的**时间冲突**
+ *
+ * 与「普通校验错误」的区别：普通校验错误（名称为空、时间非法）**就地显示**在输入处，
+ * 改对了就行；时间冲突是「数据本身合法，但和别的课撞了」——
+ * 用户有时确实想硬写进去（比如临时调课、老师改点了），所以给它一个「仍然保存」的出口。
+ *
+ * @param conflictingCourseNames 撞上的**已有课程名**（去重，按检测顺序）
+ * @param internalOverlapCount 本课程**内部**课时重叠的对数
+ */
+data class CourseTimeConflict(
+    val conflictingCourseNames: List<String> = emptyList(),
+    val internalOverlapCount: Int = 0,
+) {
+    /**
+     * 冲突摘要（一行话）
+     *
+     * 例：`与已有课程《线性代数》《大学物理》时间冲突；本课程内部有 1 处课时重叠`
+     */
+    val summary: String
+        get() = buildString {
+            if (conflictingCourseNames.isNotEmpty()) {
+                append("与已有课程")
+                append(conflictingCourseNames.joinToString("、") { "《$it》" })
+                append("时间冲突")
+            }
+            if (internalOverlapCount > 0) {
+                if (isNotEmpty()) append("；")
+                append("本课程内部有 $internalOverlapCount 处课时重叠")
+            }
+        }
 }
 
 /**
