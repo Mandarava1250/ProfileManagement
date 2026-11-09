@@ -22,6 +22,7 @@ import com.example.personalassistant.feature.task.data.local.TaskDao
 import com.example.personalassistant.feature.task.data.local.TaskListDao
 import com.example.personalassistant.feature.task.data.local.TaskTagDao
 import com.example.personalassistant.feature.timetable.data.local.CourseDao
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionDao
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
 import dagger.Module
 import dagger.Provides
@@ -102,6 +103,12 @@ object CoreModule {
 
     @Provides
     fun provideCourseDao(db: AppDatabase): CourseDao = db.courseDao()
+
+    /**
+     * Phase 28 P1：课时 DAO 绑定（一门课的多个上课时段，与其它 DAO 同款 @Provides）。
+     */
+    @Provides
+    fun provideCourseSessionDao(db: AppDatabase): CourseSessionDao = db.courseSessionDao()
 
     @Provides
     fun provideSemesterDao(db: AppDatabase): SemesterDao = db.semesterDao()

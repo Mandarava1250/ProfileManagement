@@ -34,6 +34,8 @@ import com.example.personalassistant.feature.task.data.local.TaskTagDao
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseDao
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionDao
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 
@@ -49,12 +51,12 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
  *
  * ⚠️ 升版时必须同步：本常量 + 新 Migration + `BackupFormatVersion.DB_VERSION`。
  */
-const val APP_DATABASE_VERSION = 19
+const val APP_DATABASE_VERSION = 20
 
 /**
  * App 主数据库
  *
- * 19 张表：
+ * 20 张表：
  * 1. courses          - 课程
  * 2. semesters        - 学期
  * 3. tasks            - 任务（Phase 16：加清单归属 / 父任务 / 金额 / 时间段 / 完成时间 / 置顶 7 列）
@@ -74,6 +76,7 @@ const val APP_DATABASE_VERSION = 19
  * 17. habit_checkins  - 习惯打卡记录（Phase 23 新增：习惯 + 日期 + 次数 + 备注）
  * 18. coin_pools      - 零钱池（批次 C：账户零用钱余额，可负；accountId 唯一 + 外键 → user_profiles）
  * 19. coin_pool_settlements - 零钱池日切结算流水（批次 D：每天一行；accountId+date 唯一 + 外键 → user_profiles）
+ * 20. course_sessions - 课时（Phase 28 P1：一门课的多个上课时段；courseId 外键 → courses，删课连带删）
  *
  * ⚠️ schema 变更必须按以下流程：
  *   1. 修改对应 Entity
@@ -86,6 +89,8 @@ const val APP_DATABASE_VERSION = 19
         // 课表
         CourseEntity::class,
         SemesterEntity::class,
+        // 课表 · 课时（Phase 28 P1：一门课多课时）
+        CourseSessionEntity::class,
         // 任务（Phase 16：sub_tasks 已并入 tasks）
         TaskEntity::class,
         TaskListEntity::class,
@@ -126,11 +131,14 @@ const val APP_DATABASE_VERSION = 19
     // v18（批次 C 零钱池）：新建 coin_pools（账户零用钱余额，可负；accountId 唯一 + 外键 → user_profiles）。
     // v19（批次 D 零钱池日切结算）：coin_pools 加 lastSettledDate（水位线）
     // + 新建 coin_pool_settlements（每日结算流水，accountId+date 唯一）。
+    // v20（Phase 28 P1 课表一课多课时）：新建 course_sessions（课时表，courseId 外键 → courses）。
+    // courses 表**结构不动** —— 它的 dayOfWeek/startTime/endTime 变成「主时段镜像」。
     version = APP_DATABASE_VERSION,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao
+    abstract fun courseSessionDao(): CourseSessionDao
     abstract fun semesterDao(): SemesterDao
     abstract fun taskDao(): TaskDao
     abstract fun taskListDao(): TaskListDao
@@ -174,6 +182,7 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_16_17,
                 MIGRATION_17_18,
                 MIGRATION_18_19,
+                MIGRATION_19_20,
             )
     }
 }

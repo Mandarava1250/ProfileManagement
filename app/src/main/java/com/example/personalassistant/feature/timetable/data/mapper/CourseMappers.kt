@@ -1,8 +1,10 @@
 package com.example.personalassistant.feature.timetable.data.mapper
 
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 import com.example.personalassistant.feature.timetable.domain.model.Course
+import com.example.personalassistant.feature.timetable.domain.model.CourseSession
 import com.example.personalassistant.feature.timetable.domain.model.Semester
 
 /**
@@ -46,6 +48,30 @@ fun Course.toEntity(): CourseEntity = CourseEntity(
     gradePoint = gradePoint,
     createdAt = createdAt,
     updatedAt = updatedAt,
+)
+
+/**
+ * 课时 Entity ↔ Domain 互转（Phase 28 P1）
+ *
+ * 与课程同款：顶层扩展函数，方便用
+ * `import com.example.personalassistant.feature.timetable.data.mapper.toDomain`
+ */
+fun CourseSessionEntity.toDomain(): CourseSession = CourseSession(
+    id = id,
+    courseId = courseId,
+    dayOfWeek = dayOfWeek,
+    startTime = startTime,
+    endTime = endTime,
+    sortOrder = sortOrder,
+)
+
+fun CourseSession.toEntity(): CourseSessionEntity = CourseSessionEntity(
+    id = id,
+    courseId = courseId,
+    dayOfWeek = dayOfWeek,
+    startTime = startTime,
+    endTime = endTime,
+    sortOrder = sortOrder,
 )
 
 fun SemesterEntity.toDomain(): Semester = Semester(
