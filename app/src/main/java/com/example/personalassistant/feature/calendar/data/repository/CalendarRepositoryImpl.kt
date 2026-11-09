@@ -2,6 +2,8 @@ package com.example.personalassistant.feature.calendar.data.repository
 
 import com.example.personalassistant.core.di.IoDispatcher
 import com.example.personalassistant.feature.calendar.data.local.EventDao
+import com.example.personalassistant.feature.calendar.data.mapper.buildCoursesByDay
+import com.example.personalassistant.feature.calendar.data.mapper.buildDayCourses
 import com.example.personalassistant.feature.calendar.data.mapper.toDomain
 import com.example.personalassistant.feature.calendar.data.mapper.toEntity
 import com.example.personalassistant.feature.calendar.domain.model.CalendarHabitItem
@@ -24,7 +26,6 @@ import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.timetable.data.local.CourseDao
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
-import com.example.personalassistant.feature.timetable.data.mapper.toDomain
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -147,17 +148,25 @@ class CalendarRepositoryImpl @Inject constructor(
 
         val semesterFlow = semesterDao.observeCurrent()
 
-        // courses 依赖 dayOfWeek + weekNumber，需要 semester 数据
+        // courses 依赖「这一天的课时」+ weekNumber，需要 semester 数据
+        //
+        // Phase 28 P6：改 JOIN `course_sessions` ——
+        // 之前只查 `courses.dayOfWeek`（主时段镜像），主时段在周一的课，
+        // **周三的日历上看不到**（漏课）。现在按课时查，那天的课都在。
+        //
+        // 两路数据合并：
+        // - JOIN：这一天有课时的课程（带真实课时）
+        // - 镜像：没有课时记录的老课程兜底（用主时段镜像顶一个课时）
         val coursesFlow = combine(
+            courseDao.observeBySessionDay(dayOfWeek),
             courseDao.observeByDayOfWeek(dayOfWeek),
             semesterFlow,
-        ) { courses, semester ->
+        ) { joined, mirrored, semester ->
             val weekNumber = semester?.let { WeekCalculator.weekNumber(date, it.startDate, it.endDate) }
-            courses
+            buildDayCourses(joined, mirrored, dayOfWeek)
                 .filter { course ->
-                    weekNumber == null || course.toDomain().appliesToWeek(weekNumber)
+                    weekNumber == null || course.appliesToWeek(weekNumber)
                 }
-                .map { it.toDomain() }
         }
 
         // Phase 24B：习惯打卡 —— 当天所有（未归档）习惯的次数
@@ -249,7 +258,14 @@ class CalendarRepositoryImpl @Inject constructor(
         //   - 后续 Phase 8 可扩展为 Room @Query 返回 List<CourseWithDayCount>
 
         // 先简化为：读所有 dayOfWeek 的 courses（combine 7 个 Flow）
-        val coursesByDayFlow = courseDao.observeByDayOfWeekIn((1..7).toList()).map { list ->
+        //
+        // Phase 28 P6：改 JOIN `course_sessions` ——
+        // 之前按 `courses.dayOfWeek`（主时段镜像）分桶，主时段在周一的课
+        // 在周三那天不计数（漏课）。现在按课时分桶：课在哪些天有课时就占哪几天。
+        val coursesByDayFlow = combine(
+            courseDao.observeBySessionDays((1..7).toList()),
+            courseDao.observeByDayOfWeekIn((1..7).toList()),
+        ) { joined, mirrored ->
             // 性能优化：原来对 1..7 各 observe 一次（7 条独立 Room 查询），
             // 现在改成单条 `IN (1..7)` 查询 —— 查询次数 7 → 1。
             //
@@ -259,8 +275,7 @@ class CalendarRepositoryImpl @Inject constructor(
             // 从而给 summary 补出当月每一天的 entry（哪怕那天没课）——
             // 若这里漏掉空 dow，那些日期就不会进 summary，
             // 「今天」的 isToday 标记也会跟着丢。补齐后结果与原来逐字相同。
-            val grouped = list.groupBy { it.dayOfWeek }
-            (1..7).associateWith { dow -> grouped[dow] ?: emptyList() }
+            buildCoursesByDay(joined, mirrored)
         }
 
         // Phase 24B：当月每天「有打卡记录的习惯数」
@@ -334,7 +349,7 @@ class CalendarRepositoryImpl @Inject constructor(
                     // Phase 20.3：关掉「课程」开关 → 课程数一律记 0，
                     // 但**仍然要建出这一天的 entry**（isToday 标记挂在 entry 上）。
                     val matchingCourses = if (prefs.showCourses) {
-                        courseList.filter { it.toDomain().appliesToWeek(weekNumber) }
+                        courseList.filter { it.appliesToWeek(weekNumber) }
                     } else {
                         emptyList()
                     }

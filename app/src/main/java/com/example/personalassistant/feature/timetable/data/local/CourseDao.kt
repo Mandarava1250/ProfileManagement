@@ -53,6 +53,68 @@ interface CourseDao {
     @Query("SELECT * FROM courses WHERE dayOfWeek = :dayOfWeek ORDER BY startTime")
     fun observeByDayOfWeek(dayOfWeek: Int): Flow<List<CourseEntity>>
 
+    // ===== Phase 28 P6：按天查课（JOIN 课时表）=====
+
+    /**
+     * 按天查课（含课时）—— JOIN `course_sessions`
+     *
+     * ## 为什么必须 JOIN
+     *
+     * `courses.dayOfWeek` 只是**主时段镜像**（= 第一个课时的星期几）。
+     * 一门课「周一 + 周三」两个课时时，按主时段查只能查到周一 ——
+     * **周三的日历上看不到这门课**（漏课）。
+     *
+     * ## 返回什么
+     *
+     * 一行 = 一门课的一个课时（同一门课在这一天有几个课时就几行）。
+     * 课程本体在 [CourseWithSessionRow.course]，课时信息在 `session*` 字段。
+     *
+     * ⚠️ 这里查不到「没有课时记录的老课程」—— 那种课由
+     * [observeByDayOfWeek]（主时段镜像）兜底，两边合并才是完整的当天课程。
+     *
+     * @param dayOfWeek 1=周一 … 7=周日
+     */
+    @Query(
+        """
+        SELECT c.id, c.name, c.teacher, c.location, c.dayOfWeek, c.startTime, c.endTime,
+               c.color, c.semester, c.weeks, c.reminderMinutes, c.note, c.credit, c.gradePoint,
+               c.createdAt, c.updatedAt,
+               s.id AS sessionId,
+               s.dayOfWeek AS sessionDayOfWeek,
+               s.startTime AS sessionStartTime,
+               s.endTime AS sessionEndTime,
+               s.sortOrder AS sessionSortOrder
+        FROM courses c
+        INNER JOIN course_sessions s ON s.courseId = c.id
+        WHERE s.dayOfWeek = :dayOfWeek
+        ORDER BY s.startTime, c.id, s.sortOrder, s.id
+        """
+    )
+    fun observeBySessionDay(dayOfWeek: Int): Flow<List<CourseWithSessionRow>>
+
+    /**
+     * 一次拿多个 dayOfWeek 的「课程 × 课时」（月汇总用）
+     *
+     * 语义同 [observeBySessionDay]，只是把「某一天」换成「这若干天」。
+     */
+    @Query(
+        """
+        SELECT c.id, c.name, c.teacher, c.location, c.dayOfWeek, c.startTime, c.endTime,
+               c.color, c.semester, c.weeks, c.reminderMinutes, c.note, c.credit, c.gradePoint,
+               c.createdAt, c.updatedAt,
+               s.id AS sessionId,
+               s.dayOfWeek AS sessionDayOfWeek,
+               s.startTime AS sessionStartTime,
+               s.endTime AS sessionEndTime,
+               s.sortOrder AS sessionSortOrder
+        FROM courses c
+        INNER JOIN course_sessions s ON s.courseId = c.id
+        WHERE s.dayOfWeek IN (:days)
+        ORDER BY s.dayOfWeek, s.startTime, c.id, s.sortOrder, s.id
+        """
+    )
+    fun observeBySessionDays(days: List<Int>): Flow<List<CourseWithSessionRow>>
+
     /**
      * 检测同一学期、同一星期的时间冲突
      * 返回与给定时间段重叠的课程

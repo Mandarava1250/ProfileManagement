@@ -31,6 +31,7 @@ import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -180,6 +181,9 @@ class BackupPreviewViewModel @Inject constructor(
             userProfiles = bytes("user_profiles", ListSerializer(UserProfileEntity.serializer())),
             semesters = bytes("semesters", ListSerializer(SemesterEntity.serializer())),
             courses = bytes("courses", ListSerializer(CourseEntity.serializer())),
+            // Phase 28 P2/P6：课时表 —— 漏解这张表 = 预览里它恒为 0 行，
+            // 用户在预览屏上选策略也没用（payload 里根本没有数据）。
+            courseSessions = bytes("course_sessions", ListSerializer(CourseSessionEntity.serializer())),
             tags = bytes("tags", ListSerializer(TagEntity.serializer())),
             taskLists = bytes("task_lists", ListSerializer(TaskListEntity.serializer())),
             tasks = bytes("tasks", ListSerializer(TaskEntity.serializer())),
@@ -230,11 +234,25 @@ class BackupPreviewViewModel @Inject constructor(
     /**
      * 修改单表策略。
      * 不会触碰 `skippedByForeignKey = true` 的表（外键自动 SKIP 是锁定的）。
+     *
+     * ## Phase 28 P6：courses ↔ course_sessions 绑定联动
+     *
+     * 「课程」与「课程课时」是父子关系（`course_sessions.courseId → courses.id`），
+     * 只勾课程不勾课时的话，导入后这门课会退化成**只有主时段**（多课时对不上）。
+     *
+     * 所以这两张表的策略**绑在一起动**：改一个，另一个跟着改。
      */
     fun setStrategy(tableName: String, strategy: ImportStrategy) {
         val current = _state.value as? PreviewUiState.Ready ?: return
+        val linkedTable = when (tableName) {
+            TABLE_COURSES -> TABLE_COURSE_SESSIONS
+            TABLE_COURSE_SESSIONS -> TABLE_COURSES
+            else -> null
+        }
         val newPerTable = current.preview.perTable.map { diff ->
-            if (diff.tableName == tableName && !diff.skippedByForeignKey) {
+            val isTarget = diff.tableName == tableName
+            val isLinked = linkedTable != null && diff.tableName == linkedTable
+            if ((isTarget || isLinked) && !diff.skippedByForeignKey) {
                 @Suppress("UNCHECKED_CAST")
                 (diff as TableDiff<Any?>).copy(strategy = strategy)
             } else {
@@ -287,6 +305,14 @@ class BackupPreviewViewModel @Inject constructor(
     /** 用户取消 / 返回时调用，重置回 Idle */
     fun reset() {
         _state.update { PreviewUiState.Idle }
+    }
+
+    companion object {
+        /** 课程表名 */
+        const val TABLE_COURSES = "courses"
+
+        /** 课程课时表名（courses 的子表） */
+        const val TABLE_COURSE_SESSIONS = "course_sessions"
     }
 }
 

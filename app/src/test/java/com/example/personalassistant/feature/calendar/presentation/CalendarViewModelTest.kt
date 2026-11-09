@@ -157,6 +157,10 @@ class CalendarViewModelTest {
         override fun observeByDayOfWeek(dayOfWeek: Int): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
         // 性能优化：一次拿多个 dayOfWeek 的课程 —— 本测试不触发。
         override fun observeByDayOfWeekIn(days: List<Int>): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
+        // Phase 28 P6：按天查课（JOIN 课时表）—— 本测试不触发。
+        override fun observeBySessionDay(dayOfWeek: Int): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseWithSessionRow>> = kotlinx.coroutines.flow.flowOf(emptyList())
+        // Phase 28 P6：一次拿多天（JOIN 课时表）—— 本测试不触发。
+        override fun observeBySessionDays(days: List<Int>): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseWithSessionRow>> = kotlinx.coroutines.flow.flowOf(emptyList())
         override suspend fun countBySemester(semester: String): Int = 0
         override fun searchCourses(keyword: String): kotlinx.coroutines.flow.Flow<List<com.example.personalassistant.feature.timetable.data.local.CourseEntity>> = kotlinx.coroutines.flow.flowOf(emptyList())
         override suspend fun getAllCourses(): List<com.example.personalassistant.feature.timetable.data.local.CourseEntity> = emptyList()

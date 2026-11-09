@@ -2,6 +2,7 @@ package com.example.personalassistant.feature.timetable.data.mapper
 
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.CourseSessionEntity
+import com.example.personalassistant.feature.timetable.data.local.CourseWithSessionRow
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.feature.timetable.domain.model.CourseSession
@@ -91,6 +92,20 @@ fun CourseSessionEntity.toDomain(): CourseSession = CourseSession(
     startTime = startTime,
     endTime = endTime,
     sortOrder = sortOrder,
+)
+
+/**
+ * 把「课程 × 课时」的 JOIN 行拆成领域课时（Phase 28 P6）
+ *
+ * `courseId` 取课程本体的 id —— JOIN 条件就是 `s.courseId = c.id`，两者必然一致。
+ */
+fun CourseWithSessionRow.toDomainSession(): CourseSession = CourseSession(
+    id = sessionId,
+    courseId = course.id,
+    dayOfWeek = sessionDayOfWeek,
+    startTime = sessionStartTime,
+    endTime = sessionEndTime,
+    sortOrder = sessionSortOrder,
 )
 
 fun CourseSession.toEntity(): CourseSessionEntity = CourseSessionEntity(

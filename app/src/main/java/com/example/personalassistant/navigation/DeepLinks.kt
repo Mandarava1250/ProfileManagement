@@ -76,6 +76,63 @@ object DeepLinks {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
 
+    // ==================== 课程提醒闹钟的 Uri（Phase 28 P6）====================
+
+    /** 课程提醒闹钟 Uri 的前缀 */
+    const val COURSE_REMINDER_URI_PREFIX = "course://"
+
+    /**
+     * 构造课程提醒闹钟的 Uri
+     *
+     * 格式：`course://<courseId>/<epochDay>/<sessionIndex>`
+     *
+     * ⚠️ **必须带课时序号** —— Uri 是 PendingIntent 身份的一部分，
+     * 同门课同一天两个课时的 Uri 相同 = 同一个闹钟（后者顶掉前者）。
+     *
+     * @param epochDay 目标日期的 epoch day
+     * @param sessionIndex 当天第几个课时（0 起）
+     */
+    fun courseReminderUri(courseId: Long, epochDay: Long, sessionIndex: Int): String =
+        "$COURSE_REMINDER_URI_PREFIX$courseId/$epochDay/$sessionIndex"
+
+    /**
+     * 课程提醒闹钟 Uri 解析出来的目标
+     *
+     * @param courseId 课程 id
+     * @param epochDay 目标日期的 epoch day
+     * @param sessionIndex 当天第几个课时（0 起）
+     */
+    data class CourseReminderTarget(
+        val courseId: Long,
+        val epochDay: Long,
+        val sessionIndex: Int,
+    )
+
+    /**
+     * 解析课程提醒闹钟的 Uri
+     *
+     * 收 **String** 而不是 `android.net.Uri` —— 这样能直接写 JVM 单测
+     * （`Intent.data` 在 JVM 下是 native 调用，永远拿不到值）。
+     *
+     * @param uri Uri 字符串
+     * @return 不是课程提醒 Uri / 格式不对 → null
+     */
+    fun parseCourseReminderUri(uri: String?): CourseReminderTarget? {
+        if (uri == null) return null
+        if (!uri.startsWith(COURSE_REMINDER_URI_PREFIX)) return null
+        val parts = uri.removePrefix(COURSE_REMINDER_URI_PREFIX).split('/')
+        if (parts.size != 3) return null
+        val courseId = parts[0].toLongOrNull() ?: return null
+        val epochDay = parts[1].toLongOrNull() ?: return null
+        val sessionIndex = parts[2].toIntOrNull() ?: return null
+        if (courseId <= 0L || sessionIndex < 0) return null
+        return CourseReminderTarget(
+            courseId = courseId,
+            epochDay = epochDay,
+            sessionIndex = sessionIndex,
+        )
+    }
+
     // ==================== Intent 解析（MainActivity 用） ====================
 
     /**

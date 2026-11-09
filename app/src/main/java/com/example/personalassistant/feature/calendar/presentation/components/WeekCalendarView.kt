@@ -43,6 +43,7 @@ import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.util.CalendarTaskFilter
 import com.example.personalassistant.feature.calendar.domain.util.CalendarTimeRange
+import com.example.personalassistant.feature.calendar.domain.util.sessionsOn
 import com.example.personalassistant.feature.calendar.presentation.WeekDayColumn
 import com.example.personalassistant.feature.calendar.presentation.WeekTimeline
 import com.example.personalassistant.feature.task.domain.model.Task
@@ -563,14 +564,17 @@ private fun TimelineBlockChip(
 
 /** 一列里要画哪些块：课程 + 带时刻的事件 + 带时刻的清单项 */
 private fun WeekDayColumn.buildWeekBlocks(primary: Color): List<WeekBlock> {
-    val courseBlocks = courses.map { course ->
-        WeekBlock(
-            title = course.name,
-            startMinute = course.startTime,
-            endMinute = course.endTime,
-            color = Color(course.color),
-            task = null,
-        )
+    val courseBlocks = courses.flatMap { course ->
+        // Phase 28 P6：一个课时 = 一个块 —— 一门课在这一天有几个课时就画几个块
+        course.sessionsOn(course.dayOfWeek).map { session ->
+            WeekBlock(
+                title = course.name,
+                startMinute = session.startTime,
+                endMinute = session.endTime,
+                color = Color(course.color),
+                task = null,
+            )
+        }
     }
     val eventBlocks = events.mapNotNull { event ->
         if (event.isEffectivelyAllDay) return@mapNotNull null

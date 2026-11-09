@@ -27,6 +27,7 @@ import com.example.personalassistant.feature.calendar.domain.usecase.ScheduleEve
 import com.example.personalassistant.feature.calendar.domain.usecase.SetTaskTimeRangeUseCase
 import com.example.personalassistant.feature.calendar.domain.model.AgendaScope
 import com.example.personalassistant.feature.calendar.domain.util.agendaDates
+import com.example.personalassistant.feature.calendar.domain.util.projectToDay
 import com.example.personalassistant.feature.calendar.presentation.components.AgendaDay
 import com.example.personalassistant.feature.calendar.presentation.components.buildAgendaDay
 import com.example.personalassistant.feature.calendar.domain.usecase.UpdateEventUseCase
@@ -823,7 +824,8 @@ class CalendarViewModel @Inject constructor(
                             WeekDayColumn(
                                 date = dayDate,
                                 dayOfWeek = dayOfWeek,
-                                courses = visibleCourses.filter { it.dayOfWeek == dayOfWeek },
+                                // Phase 28 P6：按**课时**归位 —— 一门课在这一天有几个课时就在这一天的块里画几个
+                                courses = visibleCourses.projectToDay(dayOfWeek),
                                 events = dayDetail?.events.orEmpty(),
                                 tasks = dayDetail?.tasks.orEmpty(),
                                 // Phase 24B：习惯打卡跟着自己那天走（习惯没有时刻，进全天标签区）

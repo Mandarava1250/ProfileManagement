@@ -2,6 +2,7 @@ package com.example.personalassistant.feature.calendar.domain.usecase.fake
 
 import com.example.personalassistant.feature.timetable.data.local.CourseDao
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
+import com.example.personalassistant.feature.timetable.data.local.CourseWithSessionRow
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 import kotlinx.coroutines.flow.Flow
@@ -81,6 +82,29 @@ class FakeCourseDao : CourseDao {
 
     override fun observeByDayOfWeek(dayOfWeek: Int): Flow<List<CourseEntity>> =
         flowOf(store.values.filter { it.dayOfWeek == dayOfWeek })
+
+    /**
+     * Phase 28 P6：按天查课（JOIN 课时表）
+     *
+     * fake 里没有真实的课时表 —— 用**主时段镜像**顶一个课时，
+     * 语义上等价于「这门课只有主时段那一个课时」。
+     */
+    override fun observeBySessionDay(dayOfWeek: Int): Flow<List<CourseWithSessionRow>> =
+        flowOf(store.values.filter { it.dayOfWeek == dayOfWeek }.map { it.toSessionRow() })
+
+    /** Phase 28 P6：一次拿多天（语义同 [observeBySessionDay]） */
+    override fun observeBySessionDays(days: List<Int>): Flow<List<CourseWithSessionRow>> =
+        flowOf(store.values.filter { it.dayOfWeek in days }.map { it.toSessionRow() })
+
+    /** 把课程行包装成「课程 × 课时」行（课时 = 主时段镜像） */
+    private fun CourseEntity.toSessionRow(): CourseWithSessionRow = CourseWithSessionRow(
+        course = this,
+        sessionId = 0L,
+        sessionDayOfWeek = dayOfWeek,
+        sessionStartTime = startTime,
+        sessionEndTime = endTime,
+        sessionSortOrder = 0,
+    )
 
     /** 性能优化：一次拿多个 dayOfWeek 的课程（与真 DAO 的 IN 查询语义一致）。 */
     override fun observeByDayOfWeekIn(days: List<Int>): Flow<List<CourseEntity>> =

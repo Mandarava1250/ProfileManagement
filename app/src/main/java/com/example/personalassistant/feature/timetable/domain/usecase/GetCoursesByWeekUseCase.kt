@@ -10,13 +10,18 @@ import javax.inject.Inject
  *
  * 课程按 dayOfWeek、startTime 排序；
  * 仅返回在该周次实际开课的课程（依据 Course.appliesToWeek）。
+ *
+ * ## Phase 28：课程带全部课时
+ *
+ * 走 [TimetableRepository.observeCoursesWithSessions] —— 返回的每门课都带着自己的课时列表，
+ * 下游（日历周视图）要按课时画块，只给主时段镜像会漏掉「非第一个课时」那些时段。
  */
 class GetCoursesByWeekUseCase @Inject constructor(
     private val repository: TimetableRepository,
 ) {
     operator fun invoke(semester: String, weekNumber: Int): Flow<List<Course>> {
         return kotlinx.coroutines.flow.flow {
-            repository.observeCoursesBySemester(semester).collect { all ->
+            repository.observeCoursesWithSessions(semester).collect { all ->
                 emit(
                     all.filter { it.appliesToWeek(weekNumber) }
                         .sortedWith(compareBy({ it.dayOfWeek }, { it.startTime }))

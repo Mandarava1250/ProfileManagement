@@ -411,6 +411,16 @@ private fun TableSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            // Phase 28 P6：课程与课时表绑定联动 —— 给用户一句提示，
+            // 免得以为「课程」和「课程课时」是两张互不相干的表。
+            if (diff.tableName == "courses" || diff.tableName == "course_sessions") {
+                Spacer(modifier = Modifier.padding(top = 6.dp))
+                Text(
+                    text = "课程与课程课时绑定联动：改一边，另一边跟着改",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -422,6 +432,7 @@ private fun prettyTableName(tableName: String): String = when (tableName) {
     "user_profiles" -> "账户"
     "semesters" -> "学期"
     "courses" -> "课程"
+    "course_sessions" -> "课程课时"
     "tags" -> "标签"
     "tasks" -> "任务"
     "sub_tasks" -> "子任务"

@@ -186,6 +186,34 @@ class BackupPreviewViewModelTest {
     }
 
     // -----------------------------------------------------------------------
+    // 3b) Phase 28 P6：courses ↔ course_sessions 绑定联动
+    // -----------------------------------------------------------------------
+    @Test
+    fun `setStrategy on courses also switches course sessions`() = runTest(testDispatcher) {
+        validator.setSuccess()
+        val vm = newVm()
+        vm.load(uri = placeholderUri(), inputStreamProvider = fakeStreamProvider)
+        advanceUntilIdle()
+
+        vm.setStrategy("courses", ImportStrategy.SKIP)
+        advanceUntilIdle()
+
+        val ready = vm.state.value as BackupPreviewViewModel.PreviewUiState.Ready
+        val courses = ready.preview.perTable.first { it.tableName == "courses" }
+        val sessions = ready.preview.perTable.first { it.tableName == "course_sessions" }
+        assertEquals(
+            "课程表策略应改为 SKIP",
+            ImportStrategy.SKIP,
+            courses.strategy,
+        )
+        assertEquals(
+            "课时表要跟着课程一起切（只勾课程会让课时跟课程对不上）",
+            ImportStrategy.SKIP,
+            sessions.strategy,
+        )
+    }
+
+    // -----------------------------------------------------------------------
     // 4) setAllStrategy 全表改
     // -----------------------------------------------------------------------
     @Test

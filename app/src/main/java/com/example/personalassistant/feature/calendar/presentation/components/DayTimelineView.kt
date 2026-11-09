@@ -37,6 +37,7 @@ import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.util.CalendarTaskFilter
 import com.example.personalassistant.feature.calendar.domain.util.CalendarTimeRange
 import com.example.personalassistant.feature.calendar.domain.util.TimeBlockLayout
+import com.example.personalassistant.feature.calendar.domain.util.sessionsOn
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.timetable.domain.model.Course
@@ -215,16 +216,26 @@ internal fun buildTimelineBlocks(
     primaryColor: Color,
     dayStart: Long? = null,
 ): List<TimelineBlock> {
-    val courseBlocks = courses.map { course ->
-        TimelineBlock(
-            key = "course-${course.id}",
-            title = course.name,
-            subtitle = course.location.takeIf { it.isNotBlank() },
-            startMinute = course.startTime,
-            endMinute = course.endTime,
-            color = Color(course.color),
-            filled = true,
-        )
+    val courseBlocks = courses.flatMap { course ->
+        // Phase 28 P6：一个课时 = 一个块 —— 一门课同一天两个课时，轴上占两段
+        val sessions = course.sessionsOn(course.dayOfWeek)
+        sessions.map { session ->
+            TimelineBlock(
+                // 只有一段课时时保持原来的 key（course-<id>）；
+                // 多段时带上课时的序号 —— 两个块不能撞 key
+                key = if (sessions.size > 1) {
+                    "course-${course.id}-${session.sortOrder}"
+                } else {
+                    "course-${course.id}"
+                },
+                title = course.name,
+                subtitle = course.location.takeIf { it.isNotBlank() },
+                startMinute = session.startTime,
+                endMinute = session.endTime,
+                color = Color(course.color),
+                filled = true,
+            )
+        }
     }
     val eventBlocks = timedEvents.mapNotNull { event ->
         // Phase 15：Event.startTime / endTime 是 **epoch 毫秒时间戳**

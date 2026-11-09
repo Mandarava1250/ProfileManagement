@@ -46,8 +46,12 @@ object CalendarConflictDetector {
 
         for (task in timedTasks) {
             val segment = CalendarTaskFilter.segmentOn(task, dayStart) ?: continue
+            // Phase 28 P6：一门课可能有多个课时 —— 撞上**任何一个**课时就算冲突。
+            // （只比主时段镜像的话，第二个课时上的冲突会被漏掉）
             val hits = courses.filter { course ->
-                overlaps(segment.startMinute, segment.endMinute, course.startTime, course.endTime)
+                course.sessionsOn(course.dayOfWeek).any { session ->
+                    overlaps(segment.startMinute, segment.endMinute, session.startTime, session.endTime)
+                }
             }
             if (hits.isEmpty()) continue
             result += CalendarConflictEntry(
