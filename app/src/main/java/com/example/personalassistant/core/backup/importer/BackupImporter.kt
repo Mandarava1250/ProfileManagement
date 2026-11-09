@@ -39,6 +39,8 @@ import com.example.personalassistant.feature.task.data.local.TaskTagDao
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseDao
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionDao
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterDao
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 import com.example.personalassistant.feature.profile.data.CurrentAccountRepository
@@ -131,6 +133,11 @@ class BackupImporter @Inject constructor(
                 courses = decodeTable(
                     bundle.tableBytes["courses"],
                     ListSerializer(CourseEntity.serializer()),
+                ),
+                // Phase 28 P2：课时表（旧备份缺这个条目 → decodeTable 返回空列表）
+                courseSessions = decodeTable(
+                    bundle.tableBytes["course_sessions"],
+                    ListSerializer(CourseSessionEntity.serializer()),
                 ),
                 tags = decodeTable(
                     bundle.tableBytes["tags"],
@@ -239,6 +246,8 @@ class BackupImporter @Inject constructor(
                     val taskDao: TaskDao = database.taskDao()
                     val taskListDao: TaskListDao = database.taskListDao()
                     val courseDao: CourseDao = database.courseDao()
+                    // Phase 28 P2：课时表 DAO（course_sessions 是 courses 的子表）
+                    val courseSessionDao: CourseSessionDao = database.courseSessionDao()
                     val semesterDao: SemesterDao = database.semesterDao()
                     val tagDao: TagDao = database.tagDao()
                     val taskTagDao: TaskTagDao = database.taskTagDao()
@@ -304,6 +313,13 @@ class BackupImporter @Inject constructor(
                         clearTable { taskListDao.clearTaskLists() }
                     }
                     clearTable { tagDao.clearTags() }
+                    // Phase 28 P2：课时表是 courses 的子表 —— 必须**先**清课时再清课程。
+                    //
+                    // ⚠️ 这里**无条件清**（不像 habits / coin_pools 那样「备份没带就不清」）：
+                    // `courses` 在下面是无条件整表替换的，若留着旧课时表，
+                    // 残留的课时会指向已经不存在的课程（孤儿行），
+                    // 甚至挂到 id 相同但内容已换掉的新课程上 —— 那是「静默错数据」。
+                    clearTable { courseSessionDao.clearAll() }
                     clearTable { courseDao.clearAll() }
                     clearTable { semesterDao.clearAll() }
                     // 账户表只在备份里确实有内容时才清空（否则会把现有账户连默认账户一起删光）
@@ -325,6 +341,20 @@ class BackupImporter @Inject constructor(
                     if (payload.courses.isNotEmpty()) {
                         courseDao.insertAll(payload.courses)
                     }
+                    // Phase 28 P2：课时表 —— courseId → courses.id，父行已就位
+                    if (payload.courseSessions.isNotEmpty()) {
+                        courseSessionDao.insertAll(payload.courseSessions)
+                    }
+                    // Phase 28 P2：回写 courses 表的三列镜像 = 该课的**第一个**课时。
+                    //
+                    // 为什么要重算：备份里的 courses 行可能带着「课程本体改过、但主时段没同步」
+                    // 的三列（镜像与课时表不一致）。导入后以**课时表为准**重算镜像，
+                    // 保证「courses.dayOfWeek/startTime/endTime == 第一个课时的对应值」这条不变量。
+                    //
+                    // 旧备份（formatVersion ≤ 2）没有课时表 → payload.courseSessions 为空 →
+                    // 不做任何回写，courses 保持备份里带来的三列（那正是「唯一的上课时段」），
+                    // 渲染层用镜像兜底出单课时，行为与改造前完全一致。
+                    syncCourseMirrorColumns(courseDao, payload.courses, payload.courseSessions)
                     if (payload.tags.isNotEmpty()) {
                         tagDao.insertTags(payload.tags)
                     }
@@ -396,6 +426,43 @@ class BackupImporter @Inject constructor(
     private inline fun clearTable(block: () -> Unit) = block()
 
     /**
+     * Phase 28 P2：按导入的课时重算 `courses` 表的三列镜像
+     *
+     * `courses.dayOfWeek` / `startTime` / `endTime` 现在只是「主时段镜像（= 第一个课时）」。
+     * 备份里的 courses 行可能与课时表不一致（课程本体改过但镜像没同步），
+     * 导入后以**课时表为准**重算，保证这条不变量成立。
+     *
+     * - 没有课时的课程 → **不动**（保持备份带来的三列）
+     *   旧备份（formatVersion ≤ 2）就是这种情况：课时表为空，那三列存的仍是
+     *   「这门课唯一的上课时段」，渲染层用它兜底出单课时。
+     * - 镜像已经一致 → 不写（省一次 UPDATE）
+     */
+    private suspend fun syncCourseMirrorColumns(
+        courseDao: CourseDao,
+        courses: List<CourseEntity>,
+        sessions: List<CourseSessionEntity>,
+    ) {
+        if (sessions.isEmpty()) return
+        val firstSessionByCourseId = sessions
+            .groupBy { it.courseId }
+            .mapValues { (_, list) -> list.minWithOrNull(compareBy({ it.sortOrder }, { it.id })) }
+        courses.forEach { course ->
+            val first = firstSessionByCourseId[course.id] ?: return@forEach
+            val needsUpdate = course.dayOfWeek != first.dayOfWeek ||
+                course.startTime != first.startTime ||
+                course.endTime != first.endTime
+            if (!needsUpdate) return@forEach
+            courseDao.update(
+                course.copy(
+                    dayOfWeek = first.dayOfWeek,
+                    startTime = first.startTime,
+                    endTime = first.endTime,
+                ),
+            )
+        }
+    }
+
+    /**
      * Phase 3：导入后校准「当前账户」偏好。
      *
      * DataStore 里的 currentAccountId 不在恢复出的账户清单时（典型场景：
@@ -460,6 +527,8 @@ class BackupImporter @Inject constructor(
                     val taskDao: TaskDao = database.taskDao()
                     val taskListDao: TaskListDao = database.taskListDao()
                     val courseDao: CourseDao = database.courseDao()
+                    // Phase 28 P2：课时表 DAO（course_sessions 是 courses 的子表）
+                    val courseSessionDao: CourseSessionDao = database.courseSessionDao()
                     val semesterDao: SemesterDao = database.semesterDao()
                     val tagDao: TagDao = database.tagDao()
                     val taskTagDao: TaskTagDao = database.taskTagDao()
@@ -492,6 +561,16 @@ class BackupImporter @Inject constructor(
                     strategyByTable["courses"]?.let { diff ->
                         if (shouldWrite(diff)) {
                             mergeCourses(courseDao, diff as TableDiff<CourseEntity>)
+                        }
+                    }
+
+                    // ===== course_sessions =====（Phase 28 P2：courses 的子表，必须排在 courses 后）
+                    strategyByTable["course_sessions"]?.let { diff ->
+                        if (shouldWrite(diff)) {
+                            mergeCourseSessions(
+                                courseSessionDao,
+                                diff as TableDiff<CourseSessionEntity>,
+                            )
                         }
                     }
 
@@ -668,6 +747,31 @@ class BackupImporter @Inject constructor(
             ImportStrategy.OVERWRITE -> {
                 dao.insertAll(diff.toAdd)
                 diff.toOverwrite.forEach { dao.update(it) }
+            }
+            ImportStrategy.SKIP -> Unit
+        }
+    }
+
+    /**
+     * Phase 28 P2：合并课时表
+     *
+     * `insertAll` 是 REPLACE 语义：
+     * - 主键 id 相同 → 原地覆盖（备份里 id 与库里一致时就是这个路径）
+     * - `(courseId, sortOrder)` 唯一索引冲突 → REPLACE 删掉冲突行再插新行
+     *   （用户在「删过一个课时又新增一个」之后会出现这种情况，结果仍是「一课一位置一行」✓）
+     *
+     * ⚠️ 合并模式**不清**课时表：这是「合并」而不是「替换」，
+     * 用户没勾选覆盖的行要原样留着。
+     */
+    private suspend fun mergeCourseSessions(
+        dao: CourseSessionDao,
+        diff: TableDiff<CourseSessionEntity>,
+    ) {
+        when (diff.strategy) {
+            ImportStrategy.ADD -> dao.insertAll(diff.toAdd)
+            ImportStrategy.OVERWRITE -> {
+                dao.insertAll(diff.toAdd)
+                dao.insertAll(diff.toOverwrite)
             }
             ImportStrategy.SKIP -> Unit
         }

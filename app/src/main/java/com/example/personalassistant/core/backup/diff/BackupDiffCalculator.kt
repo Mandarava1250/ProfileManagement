@@ -22,6 +22,7 @@ import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -106,6 +107,19 @@ class BackupDiffCalculator @Inject constructor() {
             tableName = "tags",
             backup = payload.tags,
             currentIds = current.tags.map { it.id }.toSet(),
+            idOf = { it.id },
+        )
+        // Phase 28 P2：课时表（courses 的子表）
+        //
+        // ⚠️ 按 **id** 判等，不按 (courseId, sortOrder) —— 与 `courses` 表同口径。
+        // `course_sessions` 的 id 在「导出 → 导入」往返中是稳定的（备份里写什么、
+        // 导入时 REPLACE 回去还是什么），而 (courseId, sortOrder) 在
+        // 「用户删过一个课时又新增一个」之后 id 会变、位置却会重复，
+        // 按它判等会让 diff 报告与实际写入对不上。
+        val courseSessionsDiff = diffById(
+            tableName = "course_sessions",
+            backup = payload.courseSessions,
+            currentIds = current.courseSessions.map { it.id }.toSet(),
             idOf = { it.id },
         )
         val taskListsDiff = diffById(
@@ -227,6 +241,7 @@ class BackupDiffCalculator @Inject constructor() {
             userProfilesDiff,
             semestersDiff,
             coursesDiff,
+            courseSessionsDiff,
             tagsDiff,
             taskListsDiff,
             tasksDiff,
@@ -421,6 +436,10 @@ class BackupDiffCalculator @Inject constructor() {
             "user_profiles" to emptySet(),                       // 根表，不依赖任何表
             "semesters" to emptySet(),                           // 学期不依赖账户
             "courses" to setOf("semesters"),                     // courses.semesterId → semesters
+            // Phase 28 P2：课时表 —— course_sessions.courseId → courses.id（CASCADE）
+            // courses 排在 course_sessions **之前**，所以 courses 被 SKIP 时
+            // 课时表会被级联标成 skippedByForeignKey（不会写进指向不存在课程的课时）。
+            "course_sessions" to setOf("courses"),
             "tags" to emptySet(),                                // 标签不依赖其他表
             "task_lists" to emptySet(),                          // 清单表自身无父表
             "tasks" to setOf("user_profiles", "task_lists"),     // tasks.accountId + tasks.listId → task_lists.id

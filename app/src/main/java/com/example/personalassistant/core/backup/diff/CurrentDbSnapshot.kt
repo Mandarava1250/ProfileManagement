@@ -19,6 +19,7 @@ import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 
 /**
@@ -43,6 +44,8 @@ data class CurrentDbSnapshot(
     val userProfiles: List<UserProfileEntity> = emptyList(),
     val semesters: List<SemesterEntity> = emptyList(),
     val courses: List<CourseEntity> = emptyList(),
+    // Phase 28 P2：课时表（courses 的子表）
+    val courseSessions: List<CourseSessionEntity> = emptyList(),
     val tags: List<TagEntity> = emptyList(),
     val taskLists: List<TaskListEntity> = emptyList(),
     val tasks: List<TaskEntity> = emptyList(),

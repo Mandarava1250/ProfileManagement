@@ -22,6 +22,7 @@ import com.example.personalassistant.core.database.APP_DATABASE_VERSION
  *     ├── user_profiles.json    ← Phase 3 新增（账户清单，记账数据归属根表）
  *     ├── semesters.json
  *     ├── courses.json
+ *     ├── course_sessions.json   ← Phase 28 P2 新增（课时，courseId → courses.id）
  *     ├── tags.json
  *     ├── task_lists.json       ← Phase 16 新增（清单表，tasks.listId 的父表）
  *     ├── tasks.json
@@ -77,9 +78,23 @@ object BackupFormatVersion {
      * 旧备份解出来是 0（= 从没结算过），语义与新装 App 一致，
      * 所以不升版 —— 与记账 4 表当年新增 `accountId` 字段的处理一致。
      *
-     * ⚠️ 什么时候才需要升 v3：删字段 / 改字段语义 / 改表集合的**既有**表结构时。
+     * Phase 28 P2：**升到 3**。理由与 Phase 16 一样 —— 动到了红线：
+     * `courses` 表的 `dayOfWeek` / `startTime` / `endTime` 三列**语义变了**
+     * （从「这门课唯一的上课时段」收窄为「主时段镜像 = 第一个课时」）。
+     *
+     * 按 [BackupManifest] 的增量规则「改字段语义：FORMAT_VERSION + 1」：
+     * 旧备份（formatVersion ≤ 2）里这三列存的还是「唯一的上课时段」，
+     * 导入端必须能识别出「这份备份来自一课一时段的年代」——
+     * 导入时课时表为空，课程用这三列兜底出一个单课时，行为与改造前完全一致。
+     *
+     * ⚠️ 向后兼容：`BackupValidator` 只拒绝 `formatVersion > FORMAT_VERSION`，
+     * 所以升到 3 之后 **formatVersion ≤ 3 的老备份依然能读**，
+     * 且旧备份解出来的 [BackupPayload.courseSessions] 是空列表
+     * （`= emptyList()` 默认值），导入端据此走「镜像兜底」分支。
+     *
+     * ⚠️ 什么时候才需要升 v4：删字段 / 改字段语义 / 改表集合的**既有**表结构时。
      */
-    const val FORMAT_VERSION: Int = 2
+    const val FORMAT_VERSION: Int = 3
 
     /**
      * App 数据库 schema version（备份时的 schema 版本）

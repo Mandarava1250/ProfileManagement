@@ -4,8 +4,11 @@ import com.example.personalassistant.core.backup.model.BackupError
 import com.example.personalassistant.core.backup.model.BackupManifest
 import com.example.personalassistant.core.backup.model.BackupPayload
 import com.example.personalassistant.core.backup.model.BackupResult
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionEntity
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -52,7 +55,7 @@ class BackupExporterTest {
     }
 
     @Test
-    fun `export 19 张表 JSON 都写入`() {
+    fun `export 20 张表 JSON 都写入`() {
         val exporter = BackupExporter(json())
         val outputStream = ByteArrayOutputStream()
         val result = exporter.export(BackupPayload(), outputStream)
@@ -69,13 +72,15 @@ class BackupExporterTest {
             }
         }
 
-        // 验证 19 张表的 JSON 都存在
+        // 验证 20 张表的 JSON 都存在
         // （Phase 16：-sub_tasks +task_lists +event_categories +student_profile；
         //   Phase 23：+habits +habit_checkins；
         //   批次 C：+coin_pools；
-        //   批次 D：+coin_pool_settlements）
+        //   批次 D：+coin_pool_settlements；
+        //   Phase 28 P2：+course_sessions）
         val expectedTables = listOf(
-            "user_profiles", "semesters", "courses", "tags", "task_lists", "tasks",
+            "user_profiles", "semesters", "courses", "course_sessions", "tags",
+            "task_lists", "tasks",
             "task_tag_cross_ref", "events", "event_categories", "categories",
             "monthly_budgets", "daily_pools", "transactions", "holidays",
             "student_profile", "habits", "habit_checkins", "coin_pools",
@@ -92,6 +97,50 @@ class BackupExporterTest {
             BackupManifest.DEFAULT_TABLES.size,
             entries.keys.count { it.startsWith("data/") },
         )
+    }
+
+    /**
+     * Phase 28 P2：课时表必须**进出都在**备份里
+     *
+     * 漏了课时表 = 导出的备份恢复后课程变成「没有课时」，
+     * 用户的一门课三个时段会退化成一个。
+     */
+    @Test
+    fun `export 写出的 course_sessions 内容与输入一致`() {
+        val exporter = BackupExporter(json())
+        val session = CourseSessionEntity(
+            id = 7L,
+            courseId = 1L,
+            sortOrder = 1,
+            dayOfWeek = 3,
+            startTime = 600,
+            endTime = 690,
+        )
+        val outputStream = ByteArrayOutputStream()
+        val result = exporter.export(
+            BackupPayload(courseSessions = listOf(session)),
+            outputStream,
+        )
+        assertTrue(result is BackupResult.Success)
+
+        var jsonBytes: ByteArray? = null
+        ZipInputStream(ByteArrayInputStream(outputStream.toByteArray())).use { zipIn ->
+            var entry = zipIn.nextEntry
+            while (entry != null) {
+                if (entry.name == "data/course_sessions.json") {
+                    jsonBytes = zipIn.readBytes()
+                }
+                entry = zipIn.nextEntry
+            }
+        }
+        assertNotNull("必须写出 data/course_sessions.json", jsonBytes)
+
+        val decoded = json().decodeFromString(
+            ListSerializer(CourseSessionEntity.serializer()),
+            jsonBytes!!.toString(Charsets.UTF_8),
+        )
+        assertEquals(1, decoded.size)
+        assertEquals(session, decoded[0])
     }
 
     @Test

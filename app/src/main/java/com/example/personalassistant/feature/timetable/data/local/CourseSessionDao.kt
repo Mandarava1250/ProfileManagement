@@ -64,4 +64,26 @@ interface CourseSessionDao {
     /** 全表扫（备份导出快照用；P2 接入备份时用得上） */
     @Query("SELECT * FROM course_sessions")
     suspend fun getAll(): List<CourseSessionEntity>
+
+    /**
+     * 观察全表课时（响应式）。
+     *
+     * Repository 的「课程 + 课时」合并流用它：课表里课程数量是几十级别，
+     * 一次全量拿回来在内存里按 courseId 分组，比「先查课程再按 id 查课时」
+     * 少一次往返，也不用 flatMapLatest 串两层流。
+     */
+    @Query("SELECT * FROM course_sessions ORDER BY courseId, sortOrder, id")
+    fun observeAll(): Flow<List<CourseSessionEntity>>
+
+    /**
+     * 清空课时表（备份导入用）。
+     *
+     * ⚠️ 与其它「备份没带就不清」的表不同，这里**无条件清**：
+     * `course_sessions` 是 `courses` 的子表（courseId → courses.id，CASCADE），
+     * 而导入流程里 `courses` 是**整表替换**的。
+     * 若不清课时表，旧备份导入后残留的课时会指向已经不存在的课程（孤儿行），
+     * 甚至挂到 id 相同但内容已不同的新课程上 —— 那是「静默错数据」，比清空更糟。
+     */
+    @Query("DELETE FROM course_sessions")
+    suspend fun clearAll(): Int
 }

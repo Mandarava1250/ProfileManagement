@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * 课时实体 —— 「一门课」下面的**一个上课时段**
@@ -35,8 +36,8 @@ import androidx.room.PrimaryKey
  * - startTime / endTime: 当天分钟数（0-1439），与日期无关，避免时区干扰
  * - sortOrder: 课程内的显示顺序（0 起），配合 (courseId, sortOrder) 唯一索引
  *
- * ⚠️ 本实体**故意不加** `@Serializable` —— 备份模块接入是下一步（P2）的事，
- * 加之前先把序列化格式定下来，避免备份格式版本被半途改动。
+ * ⚠️ 本实体加了 `@Serializable`（Phase 28 P2 起）—— 备份必须带上课时表，
+ * 否则导出的备份不含课时，导入后课程会变成「没有课时」。
  */
 @Entity(
     tableName = "course_sessions",
@@ -54,6 +55,7 @@ import androidx.room.PrimaryKey
         )
     ]
 )
+@Serializable
 data class CourseSessionEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,

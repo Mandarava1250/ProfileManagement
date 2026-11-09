@@ -47,6 +47,10 @@ data class BackupManifest(
          * - 加 `coin_pool_settlements`：零钱池日切结算流水（`accountId` → `user_profiles.id`，**真外键** CASCADE；
          *   UNIQUE(accountId, date)）
          *
+         * Phase 28 P2：**20 张表**（+ `course_sessions`）
+         * - 加 `course_sessions`：课时（一门课的多个上课时段，`courseId` → `courses.id`，CASCADE）
+         * - 排在 `courses` **后面** —— 它是 `courses` 的子表，导入时父行必须先落库
+         *
          * 排序规则：**父表在前、子表在后** —— 本顺序同时决定三件事：
          * ① **导出顺序** —— [com.example.personalassistant.core.backup.exporter.BackupExporter]
          *    按本顺序逐张写 ZIP，父表先写，读回来时顺序才对得上；
@@ -59,6 +63,7 @@ data class BackupManifest(
          * - `task_lists` 排在 `tasks` 前 —— `tasks.listId` → `task_lists.id`（CASCADE）
          * - `task_tag_cross_ref` 排在 `tasks` / `tags` 后 —— (taskId, tagId) 联合外键
          * - `habits` 排在 `habit_checkins` 前 —— `habit_checkins.habitId` → `habits.id`（CASCADE）
+         * - `course_sessions` 排在 `courses` 后 —— `course_sessions.courseId` → `courses.id`（CASCADE）
          * - `student_profile` / `habits` / `habit_checkins` / `coin_pools` / `coin_pool_settlements` 都是叶子表，排在最后
          */
         val DEFAULT_TABLES: List<String> = listOf(
@@ -66,6 +71,9 @@ data class BackupManifest(
             "user_profiles",
             "semesters",
             "courses",
+            // Phase 28 P2：课时表 —— courseId → courses.id（真外键 CASCADE），
+            // 必须排在 courses 之后（导入时父行先落库）。
+            "course_sessions",
             "tags",
             // Phase 16：清单表 —— tasks.listId 指向它，必须排在 tasks 前
             "task_lists",

@@ -17,6 +17,7 @@ import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import kotlinx.serialization.Serializable
@@ -60,6 +61,10 @@ data class BackupPayload(
     val userProfiles: List<UserProfileEntity> = emptyList(),
     val semesters: List<SemesterEntity> = emptyList(),
     val courses: List<CourseEntity> = emptyList(),
+    // Phase 28 P2：课时表（一门课的多个上课时段，courseId → courses.id）
+    // 默认 emptyList()：旧备份（formatVersion ≤ 2）里根本没有这个条目 → 解出空列表 →
+    // 导入端据此判断「备份没带课时表」→ 课程用 courses 表的三列镜像兜底出单课时。
+    val courseSessions: List<CourseSessionEntity> = emptyList(),
     val tags: List<TagEntity> = emptyList(),
     // Phase 16：清单表（tasks.listId 的父表，必须排在 tasks 前）
     val taskLists: List<TaskListEntity> = emptyList(),
@@ -93,7 +98,8 @@ data class BackupPayload(
      * 总记录数（用于 manifest 报告 / 调试 / UI 展示）
      */
     val totalRecordCount: Int
-        get() = userProfiles.size + semesters.size + courses.size + tags.size +
+        get() = userProfiles.size + semesters.size + courses.size + courseSessions.size +
+                tags.size +
                 taskLists.size + tasks.size + taskTagCrossRefs.size +
                 events.size + eventCategories.size + categories.size + monthlyBudgets.size +
                 dailyPools.size + transactions.size + holidays.size + studentProfile.size +

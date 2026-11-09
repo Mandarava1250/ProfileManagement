@@ -57,6 +57,8 @@ class BackupSerializer @Inject constructor(
             userProfiles = userProfileDao.getAll(),
             semesters = semesterDao.getAll(),
             courses = courseDao.getAllCourses(),
+            // Phase 28 P2：课时表 —— 备份不带它，导入后课程就变成「没有课时」
+            courseSessions = database.courseSessionDao().getAll(),
             tags = tagDao.getAllTags(),
             // Phase 16：清单表 —— tasks.listId 的父表
             taskLists = database.taskListDao().getAllTaskLists(),

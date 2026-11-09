@@ -32,11 +32,14 @@ class BackupFormatVersionTest {
     }
 
     @Test
-    fun `FORMAT_VERSION 应为 2`() {
+    fun `FORMAT_VERSION 应为 3`() {
         // Phase 16（v15）：备份格式升 v2 —— 表集合变了（新增 task_lists、
         // 废弃 sub_tasks / sub_task_tag_cross_ref），旧备份需要区分处理。
-        // 未来如果升 v3，本测试提醒修改。
-        assertEquals(2, BackupFormatVersion.FORMAT_VERSION)
+        // Phase 28 P2：**升到 v3** —— courses 表的 dayOfWeek/startTime/endTime
+        // 三列**语义变了**（从「唯一的上课时段」收窄为「主时段镜像 = 第一个课时」），
+        // 旧备份里这三列存的还是老语义，导入端必须能识别。
+        // 未来如果升 v4，本测试提醒修改。
+        assertEquals(3, BackupFormatVersion.FORMAT_VERSION)
     }
 
     @Test

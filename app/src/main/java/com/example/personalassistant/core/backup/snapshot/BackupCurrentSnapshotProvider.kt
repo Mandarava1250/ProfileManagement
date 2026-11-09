@@ -72,6 +72,10 @@ open class BackupCurrentSnapshotProvider @Inject constructor(
             userProfiles = runCatching { userProfileDao.getAll() }.getOrDefault(emptyList()),
             semesters = runCatching { semesterDao.getAll() }.getOrDefault(emptyList()),
             courses = runCatching { courseDao.getAllCourses() }.getOrDefault(emptyList()),
+            // Phase 28 P2：课时表（courses 的子表）
+            courseSessions = runCatching {
+                database.courseSessionDao().getAll()
+            }.getOrDefault(emptyList()),
             tags = runCatching { tagDao.getAllTags() }.getOrDefault(emptyList()),
             taskLists = runCatching { database.taskListDao().getAllTaskLists() }.getOrDefault(emptyList()),
             tasks = runCatching { taskDao.getAllTasks() }.getOrDefault(emptyList()),

@@ -24,6 +24,7 @@ import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 import kotlinx.serialization.builtins.ListSerializer
@@ -61,6 +62,8 @@ class BackupExporter @Inject constructor(
                 writeUserProfiles(zipOut, payload.userProfiles, checksums)
                 writeSemesters(zipOut, payload.semesters, checksums)
                 writeCourses(zipOut, payload.courses, checksums)
+                // Phase 28 P2：课时表 —— courseId → courses.id，必须在 courses 之后写
+                writeCourseSessions(zipOut, payload.courseSessions, checksums)
                 writeTags(zipOut, payload.tags, checksums)
                 // Phase 16：清单表 —— tasks.listId 指向它，必须先写
                 writeTaskLists(zipOut, payload.taskLists, checksums)
@@ -131,6 +134,21 @@ class BackupExporter @Inject constructor(
     private fun writeTags(zipOut: ZipOutputStream, data: List<TagEntity>, checksums: MutableMap<String, String>) =
         writeBytes(zipOut, "tags",
             json.encodeToString(ListSerializer(TagEntity.serializer()), data).toByteArray(Charsets.UTF_8),
+            checksums)
+
+    /**
+     * Phase 28 P2：课时表（一门课的多个上课时段）
+     *
+     * 写出去的顺序必须与 [com.example.personalassistant.core.backup.model.BackupManifest.DEFAULT_TABLES]
+     * 一致 —— `course_sessions` 排在 `courses` 之后（父表先写）。
+     */
+    private fun writeCourseSessions(
+        zipOut: ZipOutputStream,
+        data: List<CourseSessionEntity>,
+        checksums: MutableMap<String, String>,
+    ) =
+        writeBytes(zipOut, "course_sessions",
+            json.encodeToString(ListSerializer(CourseSessionEntity.serializer()), data).toByteArray(Charsets.UTF_8),
             checksums)
 
     /** Phase 16：清单表（tasks.listId 的父表） */
