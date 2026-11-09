@@ -11,6 +11,7 @@
 > **本轮追加（Phase 9 9b B1）**：2026-09-16 13:30（用户批准「走真做路径」+ 4 项前置核查完成 → 9b B1 `AttachmentCleanupScheduler` 接线 ✅ @`dd30409`；详见文末「🚀 2026-09-16 13:30 Phase 9 9b B1」段）
 > **本轮追加（Phase 9 9b B2）**：2026-09-16 14:10（用户批准「继续推 9b B2」→ `AccountSwitcher` 快捷入口完整交付 ✅ @`3328574`：State/Action/reducer + VM + Composable + 记账页接线 + JVM 23/23 + instrumented 8/8 真跑；详见文末「🚀 2026-09-16 14:10 Phase 9 9b B2」段）
 > **本轮追加（Phase 9 9c + 9b D1/D2）**：2026-09-16 15:45（用户批准「先侦查 D1/D2 再据实重估」→ 侦查发现 plan §0.2 误判；随后 D1 转账 UI 测试 + D2 预算执行条 + C1/C2 验证 + E1~E5 收口全部完成；**Phase 9 正式关闭** @merge `2087a2b`；详见文末「🏁 2026-09-16 15:45 Phase 9 正式关闭」段）
+> **本轮追加（Phase 28 补修 · 既有 instrumented 失败归零）**：账户切换条补回 `selectable` 选中语义（**改产品不改编测试**）+ SAF happy path 因「授权只能由系统 picker 授予」降级为 **skipped** + 补人工验收清单 VL-10x；`pm_ui36` 上 instrumented **87 例 / 0 失败 / 1 跳过**，JVM 1288 例全绿；**SAF happy path 至今从未真跑通过，不标 ✅**；详见文末「📌 Phase 28 补修 —— 既有 instrumented 失败归零」段
 
 ---
 
@@ -3603,3 +3604,93 @@ SELECT id, 0, dayOfWeek, startTime, endTime FROM courses;   -- 播种：存量�
 |---|---|---|---|
 | 1 | 本 commit | feat(timetable) | 课程编辑页改为整门课多课时列表，课时可独立增删改（P7） |
 | 2 | 本 commit | docs(dev_log) | 台账补课表一课多课时改造（P8） |
+
+---
+
+## 📌 Phase 28 补修 —— 既有 instrumented 失败归零（账户切换条补回选中语义 + SAF happy path 降级为 skip）
+
+> 分支：`feature/phase-28-course-sessions`（本轮**未改版本号**、**未动多课时相关模块**）
+> 目标：把 `:app:connectedDebugAndroidTest` 里那 3 条**既有**失败（P8 收尾时用 stash 基线复跑已确认与多课时改造无关）修掉 —— **failures 归零**。
+
+### 一、结论先行
+
+| 项 | 结论 |
+|---|---|
+| `AccountSwitcherBarTest` 2 条红 | **改产品、不改测试**：`AccountLabel` 的 `clickable` → `selectable`，补回 `SemanticsProperties.Selected` |
+| `DailyAutoBackupWorkerTest` 1 条红 | **降级为 skip**：SAF tree URI 的访问授权只能由系统 picker 授予，AVD 上满足不了前置条件 → JUnit assumption 记 skipped |
+| SAF happy path 本身 | **至今从未真跑通过**；真实写文件路径由人工清单「VL-10x」承接 —— **状态 🟨，不标 ✅** |
+| instrumented | AVD `pm_ui36`：**87 例 / 0 失败 / 0 错误 / 1 跳过** |
+| JVM | **1288 例 / 129 套件 / 0 失败 / 0 错误 / 0 跳过** |
+
+### 二、账户切换条：为什么是「改产品」而不是「改测试」
+
+Phase 26 把组件从 material3 `FilterChip` 改成文字行（3dp 竖条 + 账户名加粗）。
+但 `FilterChip` 内部本来就是 `selectable` —— 换成手写 `Row` + `clickable` 之后，
+`SemanticsProperties.Selected` 就**丢了**：TalkBack 念不出「当前账户是哪个」。
+
+`AccountSwitcherBarTest.current_account_is_marked_selected` 断言的正是**原生语义**，
+它红说明**产品确实丢了能力**，不是测试写错了。所以改产品：
+
+```kotlin
+// 之前
+Modifier.clickable(enabled = enabled, onClick = onClick)
+// 之后
+Modifier.selectable(selected = selected, enabled = enabled, onClick = onClick)
+```
+
+- `selectable` 与 `clickable` 都走 `LocalIndication` → **视觉零变化**，外观不必重测；
+- `role` 保持现状（不引入），少一层要解释的语义声明；
+- **测试一行没改**，现有断言一条没删。
+
+### 三、SAF happy path：为什么只能降级为 skip
+
+原用例的前提是「AVD 上拼一个 DownloadsProvider 的 tree URI 就能用」—— **这个前提是错的**：
+
+- SAF tree URI 的**访问授权只能由系统 picker（`ACTION_OPEN_DOCUMENT_TREE`）授予**；
+- 调用方无法自行合成一个「已授权」的 tree URI：URI 字符串拼得出来，
+  但 DocumentsProvider 侧没有对应授权记录 → 写入必然被拒；
+- instrumented 环境没法自己拉起系统 picker 替用户点选。
+
+也就是说 AVD 上这条用例**无法自行满足前置条件**。两条路：让整条用例继续红着（读作「代码坏了」），
+或者记 skipped（读作「本环境不适用」）。选后者 —— 红着只会淹没真正的回归信号。
+
+实现（`DailyAutoBackupWorkerTest`）：
+
+- `DocumentFile.fromTreeUri()` / `createDirectory()` 返回 null → 抛 JUnit assumption → 该例记 **skipped**；
+- 原来的两处 `?: error(...)` 连同**写错的事实注释**（「无需权限无需 picker」）一并订正；
+- **断言一条没删**：真跑起来时仍校验 `Result.success()` + 时间戳落在 `[before, after]` +
+  子目录里有 `cyrene-backup-*.zip` + 文件大小 > 0；
+- skip 分支用「判空 → assumption → return」写法，**不留空引用**（`testFolder` 为 null 时不会 NPE）。
+
+> 小坑（值得记）：JUnit 4.13.2 的 `Assume.assumeNotNull(Object...)` **只有 varargs 签名**
+> ——「说明文字」会被当成**被检查对象之一**，根本不会进 skip 原因，等于白写一句。
+> 所以用 `Assume.assumeTrue(message, …)`，让 skip 原因能出现在测试报告里。
+
+### 四、真实路径由人工清单承接（VL-10x）
+
+`docs/manual-verification/phase10-visual-checklist.md`：
+
+- 新增「**6. VL-10x — 自动备份写文件真机路径**」：开自动备份开关 → 用系统 picker 选目录 →
+  触发立即备份 → 确认目标目录出现 `cyrene-backup-*.zip` 且**大小 > 0** → 用这份 zip 能**恢复**；
+- 同文件第 3 节过期的「AccountSwitcher **Chip** 视觉」标题一并订正（Phase 26 起已改成**文字行**），
+  正文里的「Chip 间距 / Chip 背景色 / Chip elevation」也一并改成文字行口径；
+- 总览表、汇总表、清单状态说明同步更新，并明确写了「VL-10x 跑通前不要把自动备份标 ✅」。
+
+### 五、验证结果
+
+| 项 | 值 |
+|---|---|
+| JVM 回归 | `gradlew.bat :app:assembleDebug :app:testDebugUnitTest --console=plain --no-daemon` → **BUILD SUCCESSFUL**（3m 7s），**1288 个 JVM 单测 / 129 套件 / 0 失败 / 0 错误 / 0 跳过** |
+| instrumented | `gradlew.bat :app:connectedDebugAndroidTest --console=plain --no-daemon` @ AVD `pm_ui36`（API 36）→ **BUILD SUCCESSFUL**（6m 38s），**87 例 / 0 失败 / 0 错误 / 1 跳过** |
+| 改绿的两条 | `AccountSwitcherBarTest.current_account_is_marked_selected` / `non_current_account_is_not_selected` → PASSED |
+| 跳过的那一条 | `DailyAutoBackupWorkerTest.safHappyPathWritesZipAndUpdatesTimestamp` → `<skipped />`（报告里可见）|
+| 未动 | 版本号（`0.3.0` / versionCode 3）、多课时相关模块、任何现有断言 |
+
+### 六、遗留（诚实记录）
+
+- **SAF happy path 至今从未真跑通过**：本轮只是把它从「假红」改成「诚实的跳过」，
+  链路本身（写 ZIP → 落到用户目录 → 能恢复）**仍未经任何自动化或人工验证** —— 状态是 🟨，不是 ✅。
+- 人工清单 VL-10x 需要**真机**（AVD 上没有系统 picker 交互这条路）。
+- 模拟器：`pm_ui36`（`pm_ui37` 的 surfaceflinger 会崩）。headless 启动时用
+  `adb shell settings put global hide_error_dialogs 1` 挡掉 SystemUI 弹的 ANR 对话框。
+

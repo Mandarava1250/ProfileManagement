@@ -1,7 +1,7 @@
 # Phase 10 真人目测清单（Manual Verification Checklist）
 
 > **使用说明**：
-> - 这是 Phase 10 留下的待真人手动验证清单（5 项），对应 DEV_LOG.md 顶部速览段列出的「Phase 10：真人目测」条目
+> - 这是 Phase 10 留下的待真人手动验证清单（6 项），对应 DEV_LOG.md 顶部速览段列出的「Phase 10：真人目测」条目
 > - 每节含「场景 / 前置条件 / 步骤 / 预期 / 截图位置 / 结果记录」六段；伙伴跑完填写最后一段（✅/❌ + 备注）
 > - 截图存在 `docs/manual-verification/screenshots/<phase>-<item>.png`；本目录已 gitignore 截图二进制（仅本 .md 入库）
 > - **本清单状态图例**：✅ = 已通过；❌ = 未通过（请描述现象）；🟨 = 部分通过
@@ -11,6 +11,9 @@
 > - 生成者：昔涟（Cyrene）自动生成
 > - 对应计划：`.cyrene/docs/plan-20260916-175218.md` §4.4
 > - 测试基线：合并到 Develop 后，所有 Phase 8/9 已验证功能在真机 / 真实数据下的视觉与交互验收
+> - 2026-11-xx 追加：VL-10x（自动备份写文件真机路径）—— instrumented 侧 SAF happy path
+>   **至今从未真跑通过**（AVD 上拿不到已授权的 SAF tree URI，该用例已降级为 skipped），
+>   真实写文件路径由本节承接
 
 ---
 
@@ -20,9 +23,10 @@
 |---|---|---|---|---|
 | 1 | VL-8a | 通知 deeplink 真机点击 | 🟨 高（功能核心）| Phase 8a + Phase 9 9c C1（已自动验证 4/4 UI tree 命中）|
 | 2 | VL-8b | 任务矩阵视图双布局真机截图 | 🟨 高（视觉核心）| Phase 8b'' + Phase 9 9c C2（已自动验证 Compose UI 渲染）|
-| 3 | VL-9b-B2 | AccountSwitcher Chip 视觉与切换交互 | 🟡 中（UX 核心）| Phase 9 9b B2（已 JVM 23 + instrumented 8/8，缺真人目测视觉）|
+| 3 | VL-9b-B2 | AccountSwitcher 文字行视觉与切换交互 | 🟡 中（UX 核心）| Phase 9 9b B2（已 JVM 23 + instrumented 8/8，缺真人目测视觉）；**Phase 26 起组件已从 Chip 改为文字行** |
 | 4 | VL-9c-sw600 | 平板屏宽 sw600dp+ 布局 | 🟡 中（平板覆盖）| Phase 9 9c（AVD 仅跑默认屏宽，未单独验证 sw600+）|
 | 5 | VL-9b-D1D2 | 转账 Sheet + 预算执行条视觉 | 🟡 中（记账核心）| Phase 9 9b D1 + D2（已 JVM + instrumented 覆盖逻辑，缺视觉验收）|
+| 6 | VL-10x | 自动备份写文件真机路径 | 🟨 高（数据安全）| Phase 10 SAF-1（instrumented happy path 在 AVD 上无法满足前置条件，已降级为 skipped）|
 
 ---
 
@@ -98,9 +102,13 @@
 
 ---
 
-## 3. VL-9b-B2 — AccountSwitcher Chip 视觉与切换交互
+## 3. VL-9b-B2 — AccountSwitcher 文字行视觉与切换交互
 
-**场景**：记账页（FinanceScreen）顶部 AccountSwitcher Chip 横条，验证 Chip 间距、长账户名截断、点击切换流畅性。
+> ⚠️ **口径订正（Phase 26 起）**：本组件**已从 `FilterChip` 改成文字行**（选中态只画一根 3dp 竖条，
+> 不再铺 `primaryContainer` 色块）。下面凡是写「Chip」的地方，一律按**文字行**验收；
+> 「Chip 间距 / Chip 背景色 / Chip elevation」这些说法已过期。
+
+**场景**：记账页（FinanceScreen）顶部 AccountSwitcher 文字行横条，验证行间距、长账户名截断、点击切换流畅性。
 
 **前置条件**：
 - 真机
@@ -110,18 +118,20 @@
 **步骤**：
 1. 启动应用，进入记账页
 2. 顶部 AccountSwitcher Bar 截图（默认账户应在视觉上区分「选中」状态）
-3. 点击非选中账户的 Chip → 观察：当前账户高亮切换 + 下方交易列表刷新
-4. 长账户名的 Chip 是否截断（省略号 / fade）
-5. 账户数 ≥ 5 时 Chip 横条是否可水平滑动（应能滑到尽头看到全部）
-6. 单账户 / 加载中状态下 Chip Bar 是否隐藏
+3. 点击非选中账户的文字行 → 观察：当前账户高亮切换 + 下方交易列表刷新
+4. 长账户名的文字行是否截断（省略号 / fade）
+5. 账户数 ≥ 5 时横条是否可水平滑动（应能滑到尽头看到全部）
+6. 单账户 / 加载中状态下整个 Bar 是否隐藏
 7. 切换失败时是否有 Snackbar 提示（手动构造：把数据库文件锁住再切换，看 Snackbar）
 
 **预期**：
-- 选中账户 Chip 有明显视觉差异（背景色 / 边框 / elevation）
+- 选中账户有明确视觉差异（**3dp 竖条 + 账户名加粗**；未选中账户留同样的竖条空位，账户名不左右跳）
 - 长账户名截断合理（不撑爆 Bar、不换行）
 - 切换响应 < 500ms（不卡顿、不闪退）
 - 单账户状态 Bar 完全隐藏（不留空白条）
 - 切换失败有红色 Snackbar 提示，且 5s 自动消失
+- （无障碍）TalkBack 聚焦到某个账户时，能念出「已选中 / 未选中」——这依赖 `selectable` 语义，
+  视觉上看不出来，但必须成立
 
 **截图位置**：
 - `docs/manual-verification/screenshots/VL-9b-B2-bar-default.png`
@@ -131,11 +141,12 @@
 - `docs/manual-verification/screenshots/VL-9b-B2-snackbar-error.png`
 
 **结果记录**（伙伴填）：
-- Chip 选中状态视觉：✅ / ❌ 备注：___
+- 文字行选中状态视觉：✅ / ❌ 备注：___
 - 切换流畅：✅ / ❌ 备注：___
 - 长账户名截断：✅ / ❌ 备注：___
 - 单账户隐藏：✅ / ❌ 备注：___
 - 错误 Snackbar：✅ / ❌ 备注：___
+- TalkBack 选中语义：✅ / ❌ 备注：___
 
 ---
 
@@ -224,6 +235,56 @@
 
 ---
 
+## 6. VL-10x — 自动备份写文件真机路径
+
+**场景**：打开「自动备份」开关 → 用系统 picker 选一个目录 → 触发一次立即备份 →
+确认目标目录里真的出现 `cyrene-backup-*.zip`、大小 > 0，且这份备份能被恢复。
+
+> ⚠️ **为什么这一节必须人工做**：SAF tree URI 的访问授权**只能由系统 picker**
+> （`ACTION_OPEN_DOCUMENT_TREE`）授予，调用方无法自行合成一个「已授权」的 tree URI ——
+> 所以 instrumented 侧根本造不出这个前置条件
+> （`DailyAutoBackupWorkerTest.safHappyPathWritesZipAndUpdatesTimestamp` 已降级为 **skipped**）。
+> **SAF happy path 至今从未真跑通过**，本节是它唯一的验收口。
+
+**前置条件**：
+- 真机（**AVD 上不行**：没有系统 picker 交互，DownloadsProvider 的授权路径也和真机不同）
+- 应用已有数据：至少 1 个账户 / 1 条交易 / 1 个任务 / 1 门课程（备份内容非空才看得出 zip 大小 > 0）
+- 目标目录选一个**空目录**（例如先新建 `CyreneBackupTest/`），方便确认里面只有备份文件
+
+**步骤**：
+1. 启动应用 → 设置页 → 找到「备份与恢复 / 自动备份」
+2. 打开**自动备份开关** → 应用应拉起系统目录选择器（`ACTION_OPEN_DOCUMENT_TREE`）
+3. 在系统 picker 里选一个目录（例如「下载 / CyreneBackupTest」新建目录），确认授权
+4. 回到应用，确认界面显示的是刚选的目录名
+5. 触发**立即备份**（手动跑一次备份）
+6. 用系统文件管理器打开刚才选的目标目录（或 `adb pull` 下来看）
+7. 确认目录里出现 `cyrene-backup-<时间戳>.zip`
+8. 确认该文件**大小 > 0**（不是 0 字节的空壳）
+9. 回到应用「备份与恢复」，用这份 zip 执行一次**恢复**，确认导入成功、数据没丢
+10. 关闭自动备份开关，再观察目标目录：不应再产生新的备份文件
+
+**预期**：
+- picker 授权后目录名显示正确；**App 重启后仍是同一个目录**（`backupFolderUri` 持久化成功）
+- 「立即备份」结束后目标目录里出现 `cyrene-backup-*.zip`，**大小 > 0**
+- 恢复这份 zip 成功：任务 / 交易 / 课程等数据条数与备份前一致，不崩溃、不重复导入
+- 关闭开关后不再产生新的备份文件
+
+**截图位置**：
+- `docs/manual-verification/screenshots/VL-10x-picker.png`
+- `docs/manual-verification/screenshots/VL-10x-folder-selected.png`
+- `docs/manual-verification/screenshots/VL-10x-zip-in-folder.png`
+- `docs/manual-verification/screenshots/VL-10x-restore-result.png`
+
+**结果记录**（伙伴填）：
+- 开关能拉起系统 picker：✅ / ❌ 备注：___
+- 选完目录后目录名显示正确（重启后仍是同一个）：✅ / ❌ 备注：___
+- 目标目录出现 `cyrene-backup-*.zip`：✅ / ❌ 备注：___
+- zip 大小 > 0：✅ / ❌ 备注：___
+- 恢复成功、数据条数一致：✅ / ❌ 备注：___
+- 关掉开关后不再产生新文件：✅ / ❌ 备注：___
+
+---
+
 ## 📝 汇总记录
 
 跑完上述 5 项后，请把每节的「结果记录」汇总到下表（伙伴填）：
@@ -235,15 +296,16 @@
 | VL-9b-B2 | ___ | ___ |
 | VL-9c-sw600 | ___ | ___ |
 | VL-9b-D1D2 | ___ | ___ |
+| VL-10x | ___ | ___（SAF 写文件真机路径 —— instrumented 侧已 skip，本项是唯一验收口）|
 
 **全部跑完后**：
 1. 把截图放到 `docs/manual-verification/screenshots/` 目录
 2. 在汇总表填好结果
 3. 在 DEV_LOG.md 「Phase 10 10c 完成」段（新建）记：
    - 提交日期
-   - 5 项结果摘要
+   - 6 项结果摘要
    - 发现的问题（如果 ❌ 项）
-4. 通过 5 项的 sub-step → 升级状态 🟨 → ✅（合并到 Develop 后）
+4. 通过 6 项的 sub-step → 升级状态 🟨 → ✅（合并到 Develop 后）
 
 **回退 / 修复**：
 - 任一项 ❌ → 在 GitHub Issues / DEV_LOG 留 issue，关联到对应 Phase
@@ -253,3 +315,9 @@
 
 > **状态**：🟨（清单已生成，**待真人执行**）
 > **下一入口**：用户（伙伴）按节跑完后填结果 → DEV_LOG 更新 → Phase 10 10d 收口
+>
+> **⚠️ 口径备注（不要标 ✅）**：
+> - VL-10x 跑通之前，「自动备份写文件到用户指定目录」这条链路**没有任何自动化验收**：
+>   instrumented 侧的 SAF happy path 在 AVD 上满足不了前置条件，已降级为 **skipped**。
+> - 本清单状态为 🟨；在 VL-10x 真正跑过（真机 + 系统 picker + zip 大小 > 0 + 恢复成功）之前，
+>   **不要把自动备份写成 ✅ 已验证**。

@@ -25,6 +25,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -47,6 +48,9 @@ import java.io.File
  * 6. **SAF happy path**（Phase 10 SAF-1）：
  *    启用 + folderUri 指向真 AVD DownloadsProvider 下新建的子目录 → Worker 走完整真 SAF 流程 →
  *    期待 Result.success()，时间戳被更新，文件落在子目录下。
+ *    ⚠️ **本例在 AVD 上记为 skipped（不是 failed）**：SAF tree URI 的访问授权只能由系统 picker
+ *    （`ACTION_OPEN_DOCUMENT_TREE`）授予，调用方无法自行合成，AVD 上满足不了前置条件。
+ *    真实写文件路径改由人工验收清单承接 —— 见下方 [safHappyPathWritesZipAndUpdatesTimestamp] 的说明。
  *
  * ## 方法名命名
  * 一律 camelCase —— `androidTest` 要过 D8，DEX 035 不允许方法名含空格（见 Phase 3 踩坑 15）
@@ -231,73 +235,98 @@ class DailyAutoBackupWorkerTest {
      * - 把这个 tree URI 写到 settings → Worker 拿到非空有效 URI → 走真 SAF
      * - 用例尾部枚举子目录 children，找到 `cyrene-backup-*.zip` 并断言 size > 0
      *
-     * 失败信号（用例会失败时）：
+     * ## ⚠️ 为什么本例在 AVD 上是 skipped，而不是 failed
+     *
+     * **SAF tree URI 的访问授权只能由系统 picker（`ACTION_OPEN_DOCUMENT_TREE`）授予**：
+     * 调用方无法自行合成一个「已授权」的 tree URI —— URI 字符串是能拼出来的，
+     * 但 DocumentsProvider 侧没有对应的授权记录，写入必然被拒。
+     * 也就是说 AVD 上本用例**无法自行满足前置条件**（除非测试自己拉起系统 picker 替用户点选，
+     * instrumented 环境做不到）。
+     *
+     * 所以拿不到授权目录时用 JUnit assumption（`Assume.assumeTrue`）记为 **skipped**：
+     * 「本环境不适用」和「代码有 bug」是两件事，不该混成同一条红。
+     *
+     * **SAF happy path 至今从未真跑通过**；真实写文件路径（含恢复）改由人工验收清单承接：
+     * `docs/manual-verification/phase10-visual-checklist.md` →「VL-10x — 自动备份写文件真机路径」。
+     *
+     * 失败信号（用例真跑起来时）：
      * - Worker 报 retry → 说明 DocumentFile.fromTreeUri() 解析失败或 createFile 失败
      * - 子目录下没有 zip → 说明 exporter.export() 没真写进去
      * - 时间戳仍是 0 → 说明 SAF 成功但 settings 没写（应该不会发生）
      */
     @Test
-    fun safHappyPathWritesZipAndUpdatesTimestamp(): Unit = runTest {
+    fun safHappyPathWritesZipAndUpdatesTimestamp() {
         val ctx = context
         val resolver = ctx.contentResolver
 
         // ===== 1. 拿 AVD 上 Downloads 的 SAF tree URI =====
         // AVD 上 DownloadsProvider 必然可达，Downloads 的标准 SAF tree URI 形如：
         //   content://com.android.providers.downloads.documents/tree/primary:Download
-        // 这是公开的稳定路径（无需权限，无需 picker，因为 AVD 上应用 context 即 DownloadsProvider 客户端）。
+        // 但**光有 URI 字符串没用**：tree URI 的授权只能由系统 picker（ACTION_OPEN_DOCUMENT_TREE）
+        // 授予，调用方无法自行合成 —— 没有授权记录时下面这步拿不到可用的 DocumentFile。
         val downloadsTreeUri: Uri = Uri.parse(
             "content://com.android.providers.downloads.documents/tree/primary:Download"
         )
         val downloadsFolder = DocumentFile.fromTreeUri(ctx, downloadsTreeUri)
-            ?: error("DocumentFile.fromTreeUri(downloadsTreeUri=$downloadsTreeUri) 返回 null —— AVD 上 DownloadsProvider 不可达")
+        if (downloadsFolder == null) {
+            // 前置条件（已授权的 SAF 目录）拿不到 → 记为 skipped，不是 failure
+            Assume.assumeTrue(SAF_SKIP_REASON, false)
+            return
+        }
 
         // ===== 2. 在 Downloads 下真建隔离子目录 =====
         val testFolderName = "cyrene-test-${System.nanoTime()}"
         val testFolder = downloadsFolder.createDirectory(testFolderName)
-            ?: error("createDirectory($testFolderName) 失败 —— AVD DownloadsProvider 不可写或权限不足")
+        if (testFolder == null) {
+            // 同上：没有授权就建不出目录 → skipped
+            Assume.assumeTrue(SAF_SKIP_REASON, false)
+            return
+        }
         val testFolderUri = testFolder.uri
 
         try {
-            // ===== 3. 把这个 URI 写到 settings =====
-            settings.setAutoBackupEnabled(true)
-            settings.setBackupFolderUri(testFolderUri.toString())
-            assertTrue(
-                "AVD 上新建的子目录写入 settings 应成功",
-                settings.backupFolderUri.first().isNotBlank(),
-            )
+            runTest {
+                // ===== 3. 把这个 URI 写到 settings =====
+                settings.setAutoBackupEnabled(true)
+                settings.setBackupFolderUri(testFolderUri.toString())
+                assertTrue(
+                    "AVD 上新建的子目录写入 settings 应成功",
+                    settings.backupFolderUri.first().isNotBlank(),
+                )
 
-            // ===== 4. 跑 Worker =====
-            val before = System.currentTimeMillis()
-            val result = worker.startWork().get()
-            val after = System.currentTimeMillis()
+                // ===== 4. 跑 Worker =====
+                val before = System.currentTimeMillis()
+                val result = worker.startWork().get()
+                val after = System.currentTimeMillis()
 
-            // ===== 5. 断言 Result + 时间戳 =====
-            assertEquals(
-                "SAF 写文件 happy path 应返回 success",
-                ListenableWorker.Result.success(),
-                result,
-            )
-            val ts = settings.lastBackupAt.first()
-            assertTrue(
-                "happy path 应写时间戳到 [before, after] 区间内，实际=$ts, before=$before, after=$after",
-                ts in before..after,
-            )
+                // ===== 5. 断言 Result + 时间戳 =====
+                assertEquals(
+                    "SAF 写文件 happy path 应返回 success",
+                    ListenableWorker.Result.success(),
+                    result,
+                )
+                val ts = settings.lastBackupAt.first()
+                assertTrue(
+                    "happy path 应写时间戳到 [before, after] 区间内，实际=$ts, before=$before, after=$after",
+                    ts in before..after,
+                )
 
-            // ===== 6. 验证文件真落到子目录 =====
-            val children = testFolder.listFiles()
-            assertNotNull("testFolder.listFiles() 不应为 null", children)
-            val zips = children!!.filter {
-                val name = it.name ?: return@filter false
-                name.startsWith("cyrene-backup-") && name.endsWith(".zip")
+                // ===== 6. 验证文件真落到子目录 =====
+                val children = testFolder.listFiles()
+                assertNotNull("testFolder.listFiles() 不应为 null", children)
+                val zips = children!!.filter {
+                    val name = it.name ?: return@filter false
+                    name.startsWith("cyrene-backup-") && name.endsWith(".zip")
+                }
+                assertTrue(
+                    "SAF 子目录下应至少存在一个 cyrene-backup-*.zip，实际 children=${children.map { it.name }}",
+                    zips.isNotEmpty(),
+                )
+                assertTrue(
+                    "写出的 zip 大小应 > 0，实际大小=${zips.first().length()}",
+                    zips.first().length() > 0,
+                )
             }
-            assertTrue(
-                "SAF 子目录下应至少存在一个 cyrene-backup-*.zip，实际 children=${children.map { it.name }}",
-                zips.isNotEmpty(),
-            )
-            assertTrue(
-                "写出的 zip 大小应 > 0，实际大小=${zips.first().length()}",
-                zips.first().length() > 0,
-            )
         } finally {
             // ===== tearDown：删测试子目录（连同 zip）=====
             // DocumentFile.delete() 会递归删 children
@@ -306,6 +335,20 @@ class DailyAutoBackupWorkerTest {
         // 抑制 resolver 占位变量未用警告（保留它注释说明设计）
         @Suppress("UNUSED_VARIABLE")
         val unusedResolverRef = resolver
+    }
+
+    private companion object {
+        /**
+         * SAF happy path 用例被跳过时的原因（会出现在 instrumented 测试报告的 skipped 条目里）。
+         *
+         * 这里用 `Assume.assumeTrue(message, false)` 而不是 `Assume.assumeNotNull(...)`：
+         * JUnit 4.13.2 的 `Assume.assumeNotNull(Object...)` 只有 varargs 签名，
+         * 「说明文字」会被当成**被检查对象之一**，不会写进 skip 原因里 —— 等于白写一句。
+         */
+        const val SAF_SKIP_REASON =
+            "SAF tree URI 的访问授权只能由系统 picker（ACTION_OPEN_DOCUMENT_TREE）授予，" +
+                "调用方无法自行合成已授权的 tree URI；AVD 上本用例无法满足前置条件 → 跳过。" +
+                "真实写文件路径由人工验收清单 VL-10x 承接。"
     }
 
     // 显式 runBlocking 引用占位（避免 unused import 警告）

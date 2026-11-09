@@ -1,7 +1,6 @@
 package com.example.personalassistant.feature.profile.presentation.accountswitcher
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Person
@@ -44,6 +44,14 @@ import com.example.personalassistant.core.ui.components.ensureBarContrast
  * 典型场景下账户数是 1-3 个，一行平铺就能一眼看全，且点击目标大、无需二次展开；
  * Dropdown 每次切换多一跳、也看不出「一共几个账本」。account count 很大时
  * `horizontalScroll` 兜住，不会横向溢出。
+ *
+ * ## 为什么用 `selectable` 而不是 `clickable`
+ *
+ * 这一行是「单选组里的一项」，不是普通按钮。`selectable` 会写入
+ * `SemanticsProperties.Selected`，TalkBack 才能念出「当前账户是哪个」；
+ * `clickable` 只有点击语义 —— Phase 26 把组件从 FilterChip 换成文字行时，
+ * 选中语义就此丢失（FilterChip 内部本来就是 selectable）。
+ * 视觉上两者都用 `LocalIndication`，所以这是**纯语义修复**，外观零变化。
  *
  * ## 与 `AccountSettingsCard` 的关系
  *
@@ -86,7 +94,11 @@ private fun AccountLabel(
 ) {
     Row(
         modifier = Modifier
-            .clickable(enabled = enabled, onClick = onClick)
+            // `selectable` 而不是 `clickable`：这一行本质是「单选组里的一项」，
+            // `selectable` 会带上 `SemanticsProperties.Selected` —— TalkBack 才念得出
+            // 「当前账户是哪个」。Phase 26 从 FilterChip 换成文字行时把这个语义丢了。
+            // 视觉零变化（两者都用 LocalIndication），所以只补语义、不动外观。
+            .selectable(selected = selected, enabled = enabled, onClick = onClick)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
