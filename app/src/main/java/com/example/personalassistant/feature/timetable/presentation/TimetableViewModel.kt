@@ -6,6 +6,8 @@ import com.example.personalassistant.core.di.IoDispatcher
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.feature.timetable.domain.model.TimeSlotSchedule
+import com.example.personalassistant.feature.timetable.domain.util.clampWeekNumber
+import com.example.personalassistant.feature.timetable.domain.util.semesterTotalWeeks
 import com.example.personalassistant.feature.timetable.domain.repository.TimetableRepository
 import com.example.personalassistant.feature.timetable.domain.usecase.CourseConflictException
 import com.example.personalassistant.feature.timetable.domain.usecase.CreateSemesterUseCase
@@ -62,6 +64,9 @@ class TimetableViewModel @Inject constructor(
     /** 用户手动选择的周次；null 表示跟随 currentSemester 自动计算 */
     private val _manualWeekNumber = MutableStateFlow<Int?>(null)
 
+    /** 当前学期的总周数 —— 翻周时用来钳边界 */
+    private val _totalWeeks = MutableStateFlow(0)
+
     /** 用户手动选择的学期；null 表示跟随 currentSemester */
     private val _manualSemesterName = MutableStateFlow<String?>(null)
 
@@ -93,15 +98,24 @@ class TimetableViewModel @Inject constructor(
                     _manualWeekNumber,
                 ) { allCourses, manualWeek ->
                     val effectiveSemester = allSemesters.firstOrNull { it.name == selectedName }
-                    val weekNumber = manualWeek ?: effectiveSemester?.let {
+                    val totalWeeks = effectiveSemester?.let { semesterTotalWeeks(it) } ?: 0
+                    // 同步给 selectWeek 用（翻周钳边界）
+                    _totalWeeks.value = totalWeeks
+                    val rawWeek = manualWeek ?: effectiveSemester?.let {
                         DateUtils.currentWeekNumber(it.startDate)
-                    } ?: 1
+                    } ?: 0
+                    // 周数钳在 [0, totalWeeks]。
+                    // 负周号会让 Course.appliesToWeek 全部落空 —— 界面看着正常，课程一门都不显示。
+                    val weekNumber = clampWeekNumber(rawWeek, totalWeeks)
                     val activeCourses = allCourses
                         .filter { it.appliesToWeek(weekNumber) }
                         .sortedWith(compareBy({ it.dayOfWeek }, { it.startTime }))
                     initial.copy(
                         currentSemester = effectiveSemester,
                         currentWeekNumber = weekNumber,
+                        totalWeeks = totalWeeks,
+                        // manualWeek 为 null = 没手动翻过周 = 跟着真实本周走。
+                        isCurrentWeek = manualWeek == null,
                         courses = activeCourses,
                     )
                 }
@@ -129,12 +143,42 @@ class TimetableViewModel @Inject constructor(
 
     /** 切换显示的周次（手动模式） */
     fun selectWeek(weekNumber: Int) {
-        _manualWeekNumber.value = weekNumber
+        // 钳到 [0, 学期总周数]：连点「上一周」不会翻到负周号，
+        // 往后翻也不会翻出学期（那里根本没有课程）。
+        _manualWeekNumber.value = clampWeekNumber(weekNumber, _totalWeeks.value)
     }
 
     /** 回到当前周 */
     fun jumpToCurrentWeek() {
         _manualWeekNumber.value = null
+    }
+
+    // ==================== Phase 26：双视图 ====================
+
+    /**
+     * 当前视图（时间线 / 整周网格）。
+     *
+     * 走**独立** StateFlow 而不是塞进 `uiState`：那条 combine 里有 `flatMapLatest`，
+     * 往里塞新字段会牵动整个订阅链重建。视图类型是纯 UI 状态，
+     * 也不需要跟着数据库变化重算，单独一条成本最低。
+     */
+    private val _viewType = MutableStateFlow(TimetableViewType.TIMELINE)
+    val viewType: StateFlow<TimetableViewType> = _viewType.asStateFlow()
+
+    fun setViewType(type: TimetableViewType) {
+        _viewType.value = type
+    }
+
+    /**
+     * 时间线视图当前选中的星期（1..7）。
+     *
+     * 独立 StateFlow，同上。
+     */
+    private val _selectedDay = MutableStateFlow(1)
+    val selectedDay: StateFlow<Int> = _selectedDay.asStateFlow()
+
+    fun selectDay(day: Int) {
+        _selectedDay.value = day.coerceIn(1, 7)
     }
 
     /** 保存课程（含冲突处理：抛 CourseConflictException 时进入"是否强制"分支） */

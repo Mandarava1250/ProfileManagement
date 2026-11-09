@@ -89,9 +89,14 @@ fun PersonalAssistantTheme(
         }
     }
 
-    // 语义色（收入 / 支出 / 预算 / 优先级）走 CompositionLocal 注入，深浅各一套
+    // 语义色（收入 / 支出 / 预算 / 转账 / 当前时刻 / 优先级）走 CompositionLocal 注入，深浅各一套。
+    // 这组颜色**不参与** [applyAccent] —— 用户换主色时它们纹丝不动，
+    // 否则「收入」会跟着主题色一起变，同一个数字在不同页面读出不同颜色。
+    //
+    // 表面色（暖白卡片底 / 分隔线）是另一组，深浅各一套。
     CompositionLocalProvider(
         LocalAppColors provides if (darkTheme) DarkSemanticColors else LightSemanticColors,
+        LocalAppSurfaces provides if (darkTheme) DarkSurfaceColors else LightSurfaceColors,
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

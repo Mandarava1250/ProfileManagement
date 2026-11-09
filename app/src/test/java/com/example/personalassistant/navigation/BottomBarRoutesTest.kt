@@ -29,9 +29,11 @@ import org.junit.Test
 class BottomBarRoutesTest {
 
     @Test
-    fun `the six bottom bar routes all hit the whitelist`() {
+    fun `the eight bottom bar routes all hit the whitelist`() {
         val expected = listOf(
-            Screen.Calendar.route,
+            Screen.CalendarDay.route,
+            Screen.CalendarWeek.route,
+            Screen.CalendarMonth.route,
             Screen.Tasks.route,
             Screen.Timetable.route,
             Screen.Finance.route,
@@ -44,16 +46,18 @@ class BottomBarRoutesTest {
     }
 
     @Test
-    fun `whitelist contains exactly the six bottom bar routes`() {
+    fun `whitelist contains exactly the eight bottom bar routes`() {
         val expected = setOf(
-            Screen.Calendar.route,
+            Screen.CalendarDay.route,
+            Screen.CalendarWeek.route,
+            Screen.CalendarMonth.route,
             Screen.Tasks.route,
             Screen.Timetable.route,
             Screen.Finance.route,
             Screen.Me.route,
             Screen.Settings.route,
         )
-        assertEquals(6, BOTTOM_BAR_ROUTES.size)
+        assertEquals(8, BOTTOM_BAR_ROUTES.size)
         assertEquals(expected, BOTTOM_BAR_ROUTES)
     }
 
@@ -63,6 +67,25 @@ class BottomBarRoutesTest {
             assertTrue(
                 "Tab 必须是底栏 route：${tab.screen.route}",
                 isBottomBarRoute(tab.screen.route),
+            )
+        }
+    }
+
+    @Test
+    fun `日历 Tab 涵盖日周月三条路由`() {
+        val calendar = BottomTab.Calendar
+        // 站在周 / 月视图里，底栏的「日历」图标也得算选中
+        assertTrue(Screen.CalendarDay.route in calendar.routes)
+        assertTrue(Screen.CalendarWeek.route in calendar.routes)
+        assertTrue(Screen.CalendarMonth.route in calendar.routes)
+    }
+
+    @Test
+    fun `每个 Tab 至少认领自己的入口路由`() {
+        BottomTab.entries.forEach { tab ->
+            assertTrue(
+                "Tab 必须认领自己的入口路由：${tab.screen.route}",
+                tab.screen.route in tab.routes,
             )
         }
     }
@@ -88,8 +111,8 @@ class BottomBarRoutesTest {
             Screen.Appearance.route,
             Screen.FinanceCategory.route,
             Screen.FinanceBudget.route,
-            Screen.AddTransaction.route,
-            Screen.MonthlyBudget.route,
+            // Phase 16：`Screen.AddTransaction` / `Screen.MonthlyBudget` 已作为死声明删除
+            // （全项目零引用），故不再列入二级页清单。
         )
         secondary.forEach { route ->
             assertFalse("二级页面不应显示底栏：$route", isBottomBarRoute(route))
@@ -118,8 +141,8 @@ class BottomBarRoutesTest {
         )
         // 反过来：跳去记账后想用底栏点回「日历」，日历也得在白名单里
         assertTrue(
-            "用底栏回到日历时，日历必须在白名单里：${Screen.Calendar.route}",
-            isBottomBarRoute(Screen.Calendar.route),
+            "用底栏回到日历时，日历必须在白名单里：${Screen.CalendarDay.route}",
+            isBottomBarRoute(Screen.CalendarDay.route),
         )
         // 4 个 BottomTab 全是底栏 route 这件事，
         // 已由 `every bottom tab screen is a bottom bar route` 覆盖，这里不重复断言。

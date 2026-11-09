@@ -123,4 +123,17 @@ interface CalendarRepository {
      * - 区分大小写
      */
     fun searchEvents(keyword: String): Flow<List<Event>>
+
+    // ===== Phase 20.1：清单项时间段 =====
+
+    /**
+     * 给清单项设置 / 清除时间段（`tasks.startAt` / `tasks.endAt`）。
+     *
+     * - 两个都传 null = 清除时间段
+     * - id 不存在时静默 no-op
+     *
+     * ⚠️ 这是日历模块对 `tasks` 表的**唯一写入口**（联动聚合需要读清单项，
+     * 「写回去」也放在同一处，免得同一个表有两个写入口）。
+     */
+    suspend fun setTaskTimeRange(taskId: Long, startAt: Long?, endAt: Long?)
 }

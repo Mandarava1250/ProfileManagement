@@ -1,37 +1,44 @@
 package com.example.personalassistant.feature.task.domain.repository
 
 import com.example.personalassistant.feature.task.domain.model.ChecklistItem
-import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Task
+import com.example.personalassistant.feature.task.domain.model.TaskList
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Phase 15：清单（独立清单项）仓库
+ * Phase 15/16：清单（独立清单项）仓库
  *
  * ## 为什么单独一个接口，而不是往 [TaskRepository] 里塞
  *
  * 清单这一摊（标签挂载 / 嵌套子项 / 分类截止优先级金额）跟任务域的关注点差得挺远，
- * 而且 [TaskRepository] 已经被 8 个测试 Fake 实现了 —— 往里加方法就得同步改 8 个 Fake，
- * 还会跟做 UI 的同伴撞车（androidTest 里的 Fake 也在那个文件里）。
+ * 而且 [TaskRepository] 已经被 8 个测试 Fake 实现了 —— 往里加方法就得同步改 8 个 Fake。
  * 单独开一个接口，两边互不干扰。
  *
- * 清单项本体仍然落在 `sub_tasks` 表（跟任务子清单共用一张表），
- * 只是「清单视角」的读写走这个接口。
+ * ## Phase 16 的变化
+ *
+ * `sub_tasks` 表已并入 `tasks`，所以：
+ * - 清单项本体就是 [Task]（不再有独立的 `SubTask` 类型）
+ * - 「顶层清单项」= `parentTaskId IS NULL` 的任务
+ * - 嵌套子项 = `parentTaskId = 父项 id` 的任务
+ *
+ * 读取走 [observeChecklistItems]（仓库层组装「一项 + 标签 + 子项」的树），
+ * 写入直接落 `tasks` 表。
  */
 interface ChecklistRepository {
 
     /**
      * 观察清单（顶层项 + 各自的标签 + 各自的嵌套子清单）。
      *
-     * 顺序：顶层项按 `order` 升序（同序按创建时间升序）；子清单同理。
+     * 顺序：顶层项按 `manualOrder` 升序（同序按创建时间升序）；子清单同理。
      */
     fun observeChecklistItems(): Flow<List<ChecklistItem>>
 
     /** 按 id 取单个清单项（更新前的部分更新要用它拿当前值）。 */
-    suspend fun getItem(id: Long): SubTask?
+    suspend fun getItem(id: Long): Task?
 
     /**
-     * 新增一个**顶层**独立清单项。
+     * 新增一个**顶层**独立清单项（`parentTaskId = null`）。
      *
      * @param category 分类名（null = 未分类）
      * @param dueDate 截止时间（毫秒时间戳，null = 无截止）
@@ -45,6 +52,9 @@ interface ChecklistRepository {
         dueDate: Long? = null,
         priority: TaskPriority = TaskPriority.MEDIUM,
         amount: Double? = null,
+        listId: Long = TaskList.INBOX_ID,
+        /** Phase 22.5：提醒时间（绝对毫秒时间戳，null = 不提醒）。 */
+        reminderTime: Long? = null,
     ): Long
 
     /**
@@ -55,10 +65,20 @@ interface ChecklistRepository {
     suspend fun addNestedItem(parentSubTaskId: Long, title: String): Long
 
     /** 全字段覆盖式更新（调用方负责带上完整字段）。 */
-    suspend fun updateItem(item: SubTask)
+    suspend fun updateItem(item: Task)
+
+    /**
+     * Phase 18.7：撤销删除 —— 把清单项按**原 id** 放回去。
+     *
+     * 恢复后 id 不变，指向它的标签关联、流水弱引用都还对得上。
+     *
+     * ⚠️ 只恢复**这一项**本身：删父项时子项被 FK SET NULL 提升成顶层，
+     * 撤销不会把层级还原（那需要额外记一份子项快照）—— 18.8 单独提示这件事。
+     */
+    suspend fun restoreItem(item: Task): Long
 
     /** 删除清单项（它下面的嵌套子清单由 FK SET_NULL 自动提升为顶层项）。 */
-    suspend fun deleteItem(item: SubTask)
+    suspend fun deleteItem(item: Task)
 
     /** 勾选 / 取消勾选。 */
     suspend fun toggleComplete(id: Long, completed: Boolean)

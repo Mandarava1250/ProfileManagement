@@ -1,9 +1,8 @@
 package com.example.personalassistant.feature.me.presentation
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,16 +11,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,10 +25,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import com.example.personalassistant.R
-import com.example.personalassistant.core.ui.components.AppTopBar
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +37,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.personalassistant.core.ui.components.BigTitleHeader
+import com.example.personalassistant.core.ui.theme.LocalAppSurfaces
 import com.example.personalassistant.feature.me.domain.model.GpaRule
 import com.example.personalassistant.feature.me.domain.model.GradeMapping
 
@@ -51,8 +47,9 @@ import com.example.personalassistant.feature.me.domain.model.GradeMapping
  *
  * 字段：scaleMax / scaleMin / gradingScale（百分制→绩点）
  * 保存：调 [MeViewModel.updateGpaRule]
+ *
+ * Phase 26：顶栏换成大标题区；换算表的行从冷调 surfaceVariant 换成暖白 paper。
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GpaRuleEditScreen(
     onBack: () -> Unit,
@@ -64,15 +61,15 @@ fun GpaRuleEditScreen(
 
     Scaffold(
         topBar = {
-            AppTopBar(
-                title = { Text(stringResource(R.string.gpa_rule_title)) },
+            BigTitleHeader(
+                title = "GPA 规则",
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
                 actions = {
-                    Button(
+                    TextButton(
                         onClick = {
                             try {
                                 viewModel.updateGpaRule(draft)
@@ -85,13 +82,13 @@ fun GpaRuleEditScreen(
                     ) { Text("保存") }
                 },
             )
-        }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
+                .padding(horizontal = 20.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -180,33 +177,34 @@ private fun GradeMappingRow(
     onGradePointChange: (Double) -> Unit,
     onDelete: () -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = LocalAppSurfaces.current.paper,
+                shape = RoundedCornerShape(14.dp),
+            )
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedTextField(
-                value = mapping.minScore.toString(),
-                onValueChange = { it.toIntOrNull()?.let(onMinScoreChange) },
-                label = { Text("≥分数") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f).padding(end = 4.dp),
-            )
-            OutlinedTextField(
-                value = mapping.gradePoint.toString(),
-                onValueChange = { it.toDoubleOrNull()?.let(onGradePointChange) },
-                label = { Text("绩点") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f).padding(end = 4.dp),
-            )
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Rounded.Delete, contentDescription = "删除")
-            }
+        OutlinedTextField(
+            value = mapping.minScore.toString(),
+            onValueChange = { it.toIntOrNull()?.let(onMinScoreChange) },
+            label = { Text("≥分数") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.weight(1f).padding(end = 4.dp),
+        )
+        OutlinedTextField(
+            value = mapping.gradePoint.toString(),
+            onValueChange = { it.toDoubleOrNull()?.let(onGradePointChange) },
+            label = { Text("绩点") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.weight(1f).padding(end = 4.dp),
+        )
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Rounded.Delete, contentDescription = "删除")
         }
     }
 }

@@ -55,7 +55,9 @@ fun MonthDayCell(
 
     val textColor = when {
         cell.isToday -> MaterialTheme.colorScheme.onPrimaryContainer
-        !cell.isCurrentMonth -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+        // 非本月日期以前是 onSurfaceVariant @ 40% —— 在暖白底上只有约 2.3:1，
+        // 根本读不清。现在直接用完整色值，对比度 ≥ 4.5:1。
+        !cell.isCurrentMonth -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> MaterialTheme.colorScheme.onSurface
     }
 
@@ -101,6 +103,8 @@ fun MonthDayCell(
                     if (cell.hasEvents) BadgeDot(MaterialTheme.colorScheme.primary)
                     if (cell.hasTasks) BadgeDot(MaterialTheme.colorScheme.tertiary)
                     if (cell.hasCourses) BadgeDot(MaterialTheme.colorScheme.secondary)
+                    // Phase 24B：习惯用中性描边色，不跟日程 / 任务 / 课程抢色
+                    if (cell.hasHabits) BadgeDot(MaterialTheme.colorScheme.outline)
                 }
             }
         }
@@ -113,7 +117,7 @@ fun MonthDayCell(
                     .align(Alignment.BottomEnd)
                     .padding(end = 4.dp, bottom = 2.dp),
                 style = MaterialTheme.typography.labelSmall,
-                fontSize = 9.sp,
+                fontSize = 10.sp,
                 fontWeight = if (isLunarFestival) FontWeight.Medium else FontWeight.Normal,
                 color = when {
                     isLunarFestival -> MaterialTheme.colorScheme.tertiary

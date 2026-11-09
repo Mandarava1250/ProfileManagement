@@ -106,6 +106,18 @@ class AccountRepositoryImpl @Inject constructor(
         financeDao.deleteCategoriesByAccount(accountId)
         financeDao.deleteBudgetsByAccount(accountId)
         financeDao.deleteDailyPoolsByAccount(accountId)
+        // 批次 C：零钱池。coin_pools.accountId 上有指向 user_profiles 的真外键
+        // （ON DELETE CASCADE），删账户行时会自动清 —— 但**不依赖它**：
+        // 外键检查开关在导入/重置等路径上会被临时关掉，那条路径下 CASCADE 不触发，
+        // 零钱池就会变成孤儿行（accountId 指向已不存在的账户，UI 永远看不到也删不掉）。
+        // 这里显式删一次，与上面 4 张表的写法保持一致。
+        financeDao.deleteCoinPoolsByAccount(accountId)
+
+        // 批次 D：零钱池的结算流水同理 —— 它也是 accountId → user_profiles.id 的真外键，
+        // 删账户行时会自动清，但**不依赖它**：导入/重置路径会临时关掉外键检查，
+        // 那条路径下 CASCADE 不触发，结算流水就会变成孤儿行
+        // （accountId 指向已不存在的账户，UI 永远看不到也删不掉）。
+        financeDao.deleteCoinPoolSettlementsByAccount(accountId)
 
         // Phase 4：账户头像文件也要跟着清，否则删完账户会在 filesDir/avatars 里
         // 留下永久孤儿（没有任何行引用它，UI 也再看不到，无法通过任何入口删掉）。

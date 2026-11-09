@@ -1,6 +1,8 @@
 package com.example.personalassistant.feature.finance.di
 
+import com.example.personalassistant.feature.finance.data.preferences.FinanceDisplayRepositoryImpl
 import com.example.personalassistant.feature.finance.data.repository.FinanceRepositoryImpl
+import com.example.personalassistant.feature.finance.domain.repository.FinanceDisplayRepository
 import com.example.personalassistant.feature.finance.domain.repository.FinanceRepository
 import dagger.Binds
 import dagger.Module
@@ -22,4 +24,13 @@ abstract class FinanceModule {
     @Binds
     @Singleton
     abstract fun bindFinanceRepository(impl: FinanceRepositoryImpl): FinanceRepository
+
+    /**
+     * 批次 C：显示偏好仓库
+     *
+     * DataStore 实例由 `core/di/CoreModule.providePreferencesDataStore` 提供，全 App 共用一个。
+     */
+    @Binds
+    @Singleton
+    abstract fun bindFinanceDisplayRepository(impl: FinanceDisplayRepositoryImpl): FinanceDisplayRepository
 }

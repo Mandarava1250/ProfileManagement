@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.calendar.presentation.components
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -37,8 +38,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.personalassistant.core.ui.theme.AppSpacing
+import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.calendar.domain.util.CalendarTaskFilter
+import com.example.personalassistant.feature.calendar.domain.util.CalendarTimeRange
 import com.example.personalassistant.feature.calendar.presentation.WeekDayColumn
 import com.example.personalassistant.feature.calendar.presentation.WeekTimeline
 import com.example.personalassistant.feature.task.domain.model.Task
@@ -71,6 +75,14 @@ fun WeekCalendarView(
     onDateClick: (Long) -> Unit,
     onToggleTask: (Task, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
+    /**
+     * 时间轴的滚动条。
+     *
+     * 传 null = 时间轴自己滚（周视图独占一屏时用）；
+     * 传外层的 = 时间轴跟着整页一起滚 —— 周视图要跟下面的「整周清单」
+     * 共用一个滚动条时用，不然两个滚动区叠在一起，滚轮打架。
+     */
+    timeGridScrollState: ScrollState? = null,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -93,13 +105,19 @@ fun WeekCalendarView(
 
         // ===== 3. 时间轴 7 列 =====
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            modifier = if (timeGridScrollState != null) {
+                // 交给外层滚：这里不能再抢 weight，否则整页高度算不出来
+                Modifier.fillMaxWidth()
+            } else {
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            },
         ) {
             WeekTimeGrid(
                 days = timeline.days,
                 onToggleTask = onToggleTask,
+                externalScrollState = timeGridScrollState,
             )
         }
     }
@@ -264,10 +282,13 @@ private data class AllDayItem(
  * 任务带时刻的去时间轴，这里只放两种：
  * - 任务没填截止时刻（或者只填了日期）
  * - 全天日程
+ *
+ * Phase 20.2：**带时间段的清单项不进这里** —— 它在时间轴上（跨午夜的占两天）。
  */
 private fun WeekDayColumn.allDayItems(primary: Color): List<AllDayItem> {
     val result = mutableListOf<AllDayItem>()
     tasks.forEach { task ->
+        if (CalendarTaskFilter.isTimed(task)) return@forEach
         val minute = task.dueDate?.let { minuteOfDay(it) }
         if (minute == null) {
             result += AllDayItem(
@@ -281,6 +302,16 @@ private fun WeekDayColumn.allDayItems(primary: Color): List<AllDayItem> {
     events.filter { it.isEffectivelyAllDay }.forEach { event ->
         result += AllDayItem(text = event.title, color = Color(event.color), task = null)
     }
+    // Phase 24B：习惯没有时刻，也进「全天标签区」
+    // isMet 复用成「已达标」→ 走删除线 + 淡化的既有渲染
+    habits.forEach { habit ->
+        result += AllDayItem(
+            text = habit.name,
+            color = Color(habit.color),
+            task = null,
+            isCompleted = habit.isMet,
+        )
+    }
     return result
 }
 
@@ -292,10 +323,13 @@ private fun WeekDayColumn.allDayItems(primary: Color): List<AllDayItem> {
 private fun WeekTimeGrid(
     days: List<WeekDayColumn>,
     onToggleTask: (Task, Boolean) -> Unit,
+    externalScrollState: ScrollState? = null,
 ) {
-    val scrollState = rememberScrollState()
+    val ownScrollState = rememberScrollState()
+    // 外部传了就跟整页一起滚；没传就自己滚
+    val scrollState = externalScrollState ?: ownScrollState
     val density = LocalDensity.current
-    val nowMinute = remember { currentMinuteOfDay() }
+    val nowMinute = remember { DateUtils.currentMinuteOfDay() }
     val todayIndex = remember(days) { days.indexOfFirst { isToday(it.date) } }
     val primary = MaterialTheme.colorScheme.primary
 
@@ -310,9 +344,14 @@ private fun WeekTimeGrid(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(scrollState),
+        modifier = if (externalScrollState != null) {
+            // 外层已经在滚了，这里再加一个 verticalScroll 会打架
+            Modifier.fillMaxWidth()
+        } else {
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(ownScrollState)
+        },
     ) {
         Row(
             modifier = Modifier
@@ -412,13 +451,18 @@ private fun WeekDayColumnView(
             }
         }
 
-        // 「现在」红线：只画在今天那一列，左边带个小圆点
+        // 「现在」线：只画在今天那一列，左边带个小圆点。
+        //
+        // 用固定的 `now` 语义色（#B45309），不跟主题色走 ——
+        // 「现在」是时间事实，不是品牌偏好。之前用 colorScheme.error（红），
+        // 跟「冲突 / 逾期」撞色，看到一条红线会以为出错了。
+        val nowInk = LocalAppColors.current.nowInk
         if (showNowLine) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(2.dp)
-                    .background(MaterialTheme.colorScheme.error)
+                    .background(nowInk)
                     .align(Alignment.TopStart)
                     .offset(y = HourHeight * (nowMinute / 60f)),
             )
@@ -426,7 +470,7 @@ private fun WeekDayColumnView(
                 modifier = Modifier
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.error)
+                    .background(nowInk)
                     .align(Alignment.TopStart)
                     .offset(x = (-4).dp, y = HourHeight * (nowMinute / 60f) - 3.dp),
             )
@@ -503,10 +547,21 @@ private fun TimelineBlockChip(
             },
             modifier = Modifier.padding(start = 5.dp, top = 2.dp, end = 2.dp),
         )
+        // Phase 20.7：跨午夜的块标一下「跨天」
+        if (block.crossesMidnight) {
+            Text(
+                text = "跨天",
+                fontSize = 8.sp,
+                lineHeight = 9.sp,
+                maxLines = 1,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 5.dp),
+            )
+        }
     }
 }
 
-/** 一列里要画哪些块：课程 + 带时刻的事件 + 带时刻的任务 */
+/** 一列里要画哪些块：课程 + 带时刻的事件 + 带时刻的清单项 */
 private fun WeekDayColumn.buildWeekBlocks(primary: Color): List<WeekBlock> {
     val courseBlocks = courses.map { course ->
         WeekBlock(
@@ -521,20 +576,37 @@ private fun WeekDayColumn.buildWeekBlocks(primary: Color): List<WeekBlock> {
         if (event.isEffectivelyAllDay) return@mapNotNull null
         // Phase 15：startTime / endTime 是 epoch 毫秒时间戳（Event.kt:13），
         // 之前 `?.toInt()` 截断当分钟数用 → 事件在周视图上的位置全是错的。
-        // 统一走 minuteOfDay 转成当天分钟数（与日视图同一套）。
-        val start = event.startTime?.let { minuteOfDay(it) } ?: return@mapNotNull null
-        val rawEnd = event.endTime?.let { minuteOfDay(it) }
-        val end = if (rawEnd == null || rawEnd <= start) start + 60 else rawEnd
+        //
+        // Phase 20.7：统一走「跨天条」切段 —— 跨午夜的事件在第二天也能看到它的尾巴，
+        // 不再被截断成 1 小时。
+        val startMillis = event.startTime ?: return@mapNotNull null
+        val endMillis = event.endTime ?: startMillis
+        val segment = CalendarTimeRange.segmentOn(startMillis, endMillis, date)
+            ?: return@mapNotNull null
         WeekBlock(
             title = event.title,
-            startMinute = start,
-            // 没有结束时间（或结束时间落在次日）就按 1 小时算 —— 零高度的块在屏幕上等于不存在
-            endMinute = end,
+            startMinute = segment.startMinute,
+            endMinute = segment.endMinute,
             color = Color(event.color),
             task = null,
+            crossesMidnight = segment.crossesMidnight,
         )
     }
     val taskBlocks = tasks.mapNotNull { task ->
+        // Phase 20.2（过滤点 3）+ 20.4：带时间段的清单项按**真实时段**占位，
+        // 与课程、事件排在同一条轴上；没填时间段的才按截止时刻占 1 小时。
+        if (CalendarTaskFilter.isTimed(task)) {
+            val segment = CalendarTaskFilter.segmentOn(task, date) ?: return@mapNotNull null
+            return@mapNotNull WeekBlock(
+                title = task.title,
+                startMinute = segment.startMinute,
+                endMinute = segment.endMinute,
+                color = primary,
+                task = task,
+                isCompleted = task.isCompleted,
+                crossesMidnight = segment.crossesMidnight,
+            )
+        }
         val due = task.dueDate ?: return@mapNotNull null
         // 只填了日期没填时刻的任务不进时间轴，它待在全天标签区
         val minute = minuteOfDay(due) ?: return@mapNotNull null
@@ -587,6 +659,8 @@ private data class WeekBlock(
     val task: Task?,
     /** 已完成：划线 + 淡化 */
     val isCompleted: Boolean = false,
+    /** Phase 20.7：属于跨午夜的时段（这一截画到 24:00 / 从 00:00 开始） */
+    val crossesMidnight: Boolean = false,
 )
 
 // =====================================================================

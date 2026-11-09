@@ -35,6 +35,10 @@ import com.example.personalassistant.feature.task.domain.model.TaskViewMode
  * - displayPreferences：用户级别的别名 / 视图模式 / 选中象限（持久化到 DataStore）
  * - [activeQuadrants] 辅助函数告诉 UI 当前模式下该渲染哪些象限
  * - [activeTaskCount] 辅助函数：BY_QUADRANT 模式下展示该象限任务数，ALL 模式返回全量 active 数
+ *
+ * Phase 24 新增：
+ * - [allActiveIds]：**全部未完成顶层任务**的 id（按当前排序，**不按象限过滤**）——
+ *   拖拽排序时用它保住别的象限里那些项的位置，落库的 manualOrder 也是全局下标。
  */
 data class TaskUiState(
     val isLoading: Boolean = true,
@@ -48,6 +52,8 @@ data class TaskUiState(
     val selectedTagId: Long? = null,
     // ===== Phase 8b' =====
     val displayPreferences: TaskDisplayPreferences = TaskDisplayPreferences(),
+    // ===== Phase 24 =====
+    val allActiveIds: List<Long> = emptyList(),
 ) {
     /**
      * 当前模式下应当渲染的象限顺序（用于 TabRow 与列表渲染）：

@@ -1,11 +1,13 @@
 package com.example.personalassistant.feature.finance.data.mapper
 
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.domain.model.CategoryExpenseSum
+import com.example.personalassistant.feature.finance.domain.model.CoinPool
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.domain.model.DayExpenseSum
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
@@ -35,6 +37,8 @@ internal fun TransactionEntity.toDomain(): Transaction = Transaction(
     attachmentUri = attachmentUri,
     // Phase 5：转账对方账户。transferPairId **不**映射到领域模型（理由见 Transaction 注释）
     transferAccountId = transferAccountId,
+    // Phase 21：来源清单项（清单 ↔ 记账联动）
+    linkedTaskId = linkedTaskId,
 )
 
 internal fun Transaction.toEntity(): TransactionEntity = TransactionEntity(
@@ -47,6 +51,8 @@ internal fun Transaction.toEntity(): TransactionEntity = TransactionEntity(
     createdAt = createdAt,
     source = source,
     attachmentUri = attachmentUri,
+    // Phase 21：来源清单项
+    linkedTaskId = linkedTaskId,
 )
 
 // ===== Category =====
@@ -117,6 +123,28 @@ internal fun DailyPool.toEntity(): DailyPoolEntity = DailyPoolEntity(
     totalIncomeToday = totalIncomeToday,
     carryOver = carryOver,
     lastUpdated = lastUpdated,
+)
+
+// ===== CoinPool =====
+
+internal fun CoinPoolEntity.toDomain(): CoinPool = CoinPool(
+    id = id,
+    accountId = accountId,
+    balance = balance,
+    note = note,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+    lastSettledDate = lastSettledDate,
+)
+
+internal fun CoinPool.toEntity(): CoinPoolEntity = CoinPoolEntity(
+    id = id,
+    accountId = accountId,
+    balance = balance,
+    note = note,
+    createdAt = createdAt,
+    updatedAt = updatedAt,
+    lastSettledDate = lastSettledDate,
 )
 
 // ===== 统计投影 → domain =====

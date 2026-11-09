@@ -1,4 +1,4 @@
-﻿# 多功能个人助手 App（Personal Assistant）
+# 多功能个人助手 App（Personal Assistant）
 
 > 纯离线 Android 个人助手 App，集 **课表 / 任务 / 记账 / 日历** 四大模块于一体，
 > 外加 **多账户 + 账户头像 + 跨账户转账**、**全局搜索**、**备份恢复** 与 **主题系统**
@@ -21,11 +21,11 @@
 | 项目类型 | Android 课表 / 日历 / 任务 / 记账 应用（纯离线） |
 | 包名 / 命名空间 | `com.example.personalassistant` |
 | 版本 | `versionCode 1` / `versionName 0.1.0`（首个 release：`v0.1.0`） |
-| 开发分支 | `Develop`（`feature/phase-14-ui-refresh` 已回合；`main` 为 release 分支） |
-| 累计 commit | 176 |
-| Room 数据库 | **v14**（15 张表，schema 快照 `app/schemas/…/1.json ~ 14.json` 全量保留） |
+| 开发分支 | `Develop`（`feature/phase-16-checklist-rebuild` 进行中；`main` 为 release 分支） |
+| 累计 commit | 187 |
+| Room 数据库 | **v19**（19 张表，schema 快照 `app/schemas/…/1.json ~ 19.json` 全量保留） |
 | 性能优化 | 五批（索引补全 / 备份批量化 / 重组收敛 / 调度器归位 / WAL + baseline profile）—— 详见 [`DEV_LOG.md`](DEV_LOG.md) 末尾段 |
-| 测试 | **921 JVM 单测** 全绿（99 个测试类，0 失败 / 0 错误）+ **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ JVM 数字是 Phase 15 收尾实测（`app/build/test-results/testDebugUnitTest` 下全量 XML 求和）；instrumented 数字仍是上一轮实测 |
+| 测试 | **1152 JVM 单测** 全绿（116 个测试类，0 失败 / 0 错误）+ **6 instrumented**（AVD `pm_api34` 真跑 0 失败）<br>↑ JVM 数字是 Phase 25 收尾实测（`app/build/test-results/testDebugUnitTest` 下全量 XML 求和）；instrumented 数字仍是上一轮实测 |
 | 台账 | 见 [`DEV_LOG.md`](DEV_LOG.md) —— 全部 Phase 的完成项 / 验证结果 / 踩坑笔记 |
 
 > ⚠️ 阶段 Phase 5（跨账户转账 + 账户余额 + 预算汇总）当前是 **🟨 进行中**：代码已 push、JVM 全绿，
@@ -54,6 +54,7 @@
 - 筛选 / 排序 / 拖拽手动排序（`tasks.manualOrder`）/ 重复任务（repeatType + repeatDays）
 - 提醒调度：WorkManager 预排 + AlarmManager 精确触发，节假日感知策略（提前 / 当天 / 跳过）
 - **清单能力**（Phase 15）：分类 / 截止时间 / 优先级 / 金额 / 标签 / 分组筛选排序 / 子任务嵌套（最深 3 层），独立 `ChecklistRepository` + `ChecklistViewModel`
+- **清单模型合并 + 抽屉式清单页**（Phase 16–17）：两套模型合一（`tasks` 承载清单项，`task_lists` 承载归属地）；底栏「任务」改名「清单」，去掉双子 Tab 改**单页 + 左侧抽屉** —— 抽屉装**智能清单**（收集箱 / 今天 / 明天 / 最近 7 天 / 全部 / 已完成）与**用户清单**（自建归属地，带未完成数徽标，可新建 / 重命名 / 删除 / 归档）
 
 ### 记账（finance）
 - 流水 CRUD + 分类管理（含自定义图标）+ 月度预算 + 每日零钱池（跨天刷新）
@@ -95,12 +96,14 @@
 | 🟨 | 人工 UI 验收：「设期初 → 转账 → 两账本各多一行 → 删转账 → 总览卡数字」；头像圆角观感 | 阶段 Phase 4 / 5 |
 | 🔜 | 附件旧文件回收：`AttachmentStore.delete()` / `deleteAll()` 至今**零生产调用**，旧附件从未清理 | 模块 Phase 7b / 阶段 Phase 2 |
 | 🔜 | 备份 / CSV 导入对转账配对的往返验证（`transferImbalanced` 目前只提示、不阻止） | 阶段 Phase 5 |
-| 🔜 | **设置页与全局搜索在 UI 上没有任何入口**：`settings` / `globalsearch` 两条路由已在 `AppNavHost` 注册，但全仓 11 处 `navigate()` 调用（feature 层 5 处：课表 ×3 / 任务 ×2；`AppNavHost` 内 6 处：BottomBar ×1 + 搜索结果跳转 ×4 + 详情页编辑 ×1）**无一处指向这两页**。`Screen.Settings` 仅以 `BottomTab.SETTINGS` 常量形式存在，注释里说的「底部溢出菜单」并未实现。本轮 `Walk` 走查只能在 4 个 Tab 间循环，这两页**无法人工验收** | 本轮真机走查实测 |
+| ✅ | ~~设置页与全局搜索在 UI 上没有任何入口~~ —— **旧结论已作废**（Phase 26 核实：两者现在都有入口）。**设置页**：底栏第 5 位「更多」→ 设置（`AppNavHost.kt:389-390`、`:478`），以及「我的」页底部的设置入口（`MeScreen.kt:138`）。**全局搜索**：清单页顶栏 🔍（`TaskScreen.kt:226`）与「我的」页顶栏 🔍（`MeScreen.kt:118`） | Phase 26 核实 |
 | 🔜 | `Screen.EditEvent` / `AddTransaction` / `MonthlyBudget` 三条路由已声明但 `NavHost` 未注册。记账/日历靠各页就地弹层（`AddTransactionSheet` / `BudgetSheet` / `EditEventSheet`）完成闭环，所以**目前不崩**；但 `AppNavHost` 第 118 行会 navigate 到未注册的 `calendar/edit/{id}` —— 一旦全局搜索接入可达，点「事件」命中项将直接抛 `IllegalArgumentException`（潜伏缺陷，非现役崩溃） | 本轮导航核对 |
 | 🔜 | 记账页顶部**账户切换快捷入口**（当前只能进设置页换） | 阶段 Phase 3 |
 | 🔜 | 图片 EXIF 旋转处理（附件与头像均未做） | 阶段 Phase 2 |
 | 🔜 | **设置页「清除数据」入口**：旧 README 列为 Phase 6 计划项，本轮已落地（设置页底部红色 Card + 备份建议 + 长按 3 秒确认 + 完成反馈） | 阶段 Phase 6 ✅ |
 | ⏳ | `feature/phase-14-ui-refresh` → `Develop` 回合合并（Phase 14 UI 收口后） | Phase 14 |
+| 🟨 | **Phase 26 UI 改造（方案 D）人工验收** —— 6 屏 × 浅色 / 深色两套，逐项清单见 `docs/manual-verification/phase26-ui-checklist.md`。本机 AVD（`aosp_atd` 镜像）全黑屏，无法自动目测 | 阶段 Phase 26 |
+| 🟨 | 课表 / 日历的「现在」线、13% 淡底 + 3dp 左条、课表后排课程高度 —— 均已改，需真机确认一眼 | 阶段 Phase 26 |
 
 ---
 
@@ -293,24 +296,30 @@ ProfileManagement/
 
 ---
 
-## 🗃 数据库 Schema（Room v14，15 张表）
+## 🗃 数据库 Schema（Room v19，19 张表）
 
 | 表 | 说明 | 引入版本 |
 |----|------|---------|
 | `courses` | 课程（dayOfWeek、startTime/endTime 当天分钟数、weeks） | v1 |
 | `semesters` | 学期（name unique、startDate、endDate、isCurrent） | v1 |
-| `tasks` | 任务（priority、category、repeatType/repeatDays、reminderTime、manualOrder、holidayStrategy） | v1 → v6 |
-| `sub_tasks` | 子任务（parentTaskId、order、**category / dueDate / priority / amount / parentSubTaskId**） | v1 → **v13** |
-| `tags` / `task_tag_cross_ref` | 标签与任务↔标签关联 | v5（Phase 6c） |
-| `sub_task_tag_cross_ref` | 标签与清单项↔标签关联 | **v13**（Phase 15） |
+| `tasks` | 任务 = 清单项（**v15 起两套模型合并**）：priority、category、repeatType/repeatDays、reminderTime、manualOrder、holidayStrategy + **listId / parentTaskId / amount / startAt / endAt / completedAt / isPinned** | v1 → v6 → **v15** |
+| `task_lists` | 清单（nameNormalized、displayName、colorHex、iconKey、sortOrder、isSystem、isArchived）；内置「收集箱」id = 1 | **v15**（Phase 16） |
+| `tags` / `task_tag_cross_ref` | 标签与任务↔标签关联（v15 起清单项也走这张表） | v5（Phase 6c） |
 | `events` | 日历事件（date、startTime、isAllDay、reminder、categoryId、rrule） | v1 → v8 |
 | `event_categories` | 事件分类（name、color、iconKey、orderIndex） | v7（Phase 8 Sub-step 9） |
-| `transactions` | 记账流水（amount、type、categoryId、date、attachmentUri、accountId、**transferAccountId / transferPairId**） | v1 → **v10** |
+| `transactions` | 记账流水（amount、type、categoryId、date、attachmentUri、accountId、**transferAccountId / transferPairId**、**linkedTaskId** ← 清单项一键记账的弱引用，不加外键） | v1 → **v10** → **v16** |
 | `categories` | 记账分类（含内置「转账」分类 `type = 2`，不进选择器） | v1（v10 加内置行） |
 | `monthly_budgets` | 月预算（yearMonth unique、totalAmount、carryOverEnabled） | v1 |
 | `daily_pools` | 每日零钱池（date unique、remainingAmount、carryOver） | v1 |
 | `holidays` | 节假日（2025-2026 预置） | v6（Phase 8 Sub-step 7） |
 | `user_profiles` | 账户（name、avatarUri、**initialBalance**；当前账户标记走 DataStore，不在表里） | v9 → **v10** |
+| `habits` | 习惯（name、iconKey、color、targetType 每日N次·每周N次、targetCount、unit、sortOrder、isArchived） | **v17**（Phase 23） |
+| `habit_checkins` | 习惯打卡（habitId → habits、date、count、note；一天一条 + 次数累加，支持补卡） | **v17**（Phase 23） |
+| `coin_pools` | **零钱池**（accountId unique → user_profiles、`balance` **可负数**、note、lastSettledDate 水位线；一个账户一个池，与「今日剩余」的预算口径是两回事） | **v18**（Phase 24） |
+| `coin_pool_settlements` | **零钱池日切结算流水**（accountId + date 唯一、amount 可负、ym 账期；每日结算额落库冻结，重复结算靠它幂等） | **v19**（Phase 25） |
+
+> **v15 起 `sub_tasks` / `sub_task_tag_cross_ref` 已不存在** —— 清单项并入 `tasks`，
+> 层级改用 `tasks.parentTaskId` 自引用表达。
 
 ### 版本演进关键节点
 
@@ -328,6 +337,10 @@ ProfileManagement/
 | v12 | `student_profile` **重建表**：`gpaRuleJson` 由 NOT NULL 变 nullable + 带 DEFAULT（`ADD COLUMN` 改不了已有列的 NOT NULL / DEFAULT） |
 | v13 | `sub_tasks` 加 `category` / `dueDate` / `priority` / `amount` / `parentSubTaskId` + 新建 `sub_task_tag_cross_ref`（纯增量 ADD COLUMN / 建表 / 索引） |
 | v14 | 纯性能索引补全，**不动表结构 / 列 / 数据 / 外键**：`transactions` 加 `transferPairId` 与 `(accountId, categoryId)` 索引；`tasks` 加 `(isCompleted, priority, dueDate)` 索引；`sub_tasks` 加 `category` 索引 |
+| v15 | **清单模型合并**（Phase 16）：新建 `task_lists`（内置收集箱 id=1）+ `tasks` 加 7 列（`listId` / `parentTaskId` / `amount` / `startAt` / `endAt` / `completedAt` / `isPinned`）+ **`sub_tasks` 整表并入 `tasks`**（恒定 id 偏移搬迁）、`sub_task_tag_cross_ref` 并入 `task_tag_cross_ref` |
+| v16 | `transactions.linkedTaskId` 列 + 索引（Phase 21 清单 ↔ 记账联动，**弱引用不加外键** —— 清单项删了流水要留下） |
+| v17 | **习惯打卡**（Phase 23）：新建 `habits` + `habit_checkins` 两表（`habit_checkins.habitId` → `habits` ON DELETE CASCADE，一天一条 + 次数累加，支持补卡） |
+| v18 | **零钱池**（Phase 24）：新建 `coin_pools` 表（`accountId` unique + FK → `user_profiles` ON DELETE CASCADE，`balance` REAL 可负数；**只 CREATE TABLE，不动任何已有表**） |
 
 > ⚠️ `DEV_LOG.md` 早期段落里的部分字段名与快照有出入，**精确列名以 `app/schemas/` 为准**：
 > 快照显示 `tasks.priority` / `tasks.category` 在 **v1 就已存在**（日志写的是「v2→v3 新增」）；

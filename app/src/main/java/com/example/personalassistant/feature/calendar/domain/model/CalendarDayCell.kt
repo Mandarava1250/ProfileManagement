@@ -20,12 +20,17 @@ data class CalendarDayCell(
     val eventCount: Int = 0,
     val taskCount: Int = 0,
     val courseCount: Int = 0,
+    /**
+     * Phase 24B：当日有打卡记录的习惯数
+     */
+    val habitCount: Int = 0,
 ) {
     /** 该日是否有任意内容（用于决定是否画 dot） */
-    val hasAny: Boolean get() = eventCount > 0 || taskCount > 0 || courseCount > 0
+    val hasAny: Boolean
+        get() = eventCount > 0 || taskCount > 0 || courseCount > 0 || habitCount > 0
 
     /** 总计数（用于决定 badge 颜色优先级） */
-    val totalCount: Int get() = eventCount + taskCount + courseCount
+    val totalCount: Int get() = eventCount + taskCount + courseCount + habitCount
 
     /** 是否有事件（用于单独画 event dot） */
     val hasEvents: Boolean get() = eventCount > 0
@@ -35,4 +40,7 @@ data class CalendarDayCell(
 
     /** 是否有课程 */
     val hasCourses: Boolean get() = courseCount > 0
+
+    /** Phase 24B：当天有没有习惯打卡 */
+    val hasHabits: Boolean get() = habitCount > 0
 }

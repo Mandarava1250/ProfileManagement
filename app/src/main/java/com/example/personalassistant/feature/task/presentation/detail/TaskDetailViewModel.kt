@@ -118,7 +118,7 @@ open class TaskDetailViewModel @Inject constructor(
         viewModelScope.launch { toggleSubTaskCompleteUseCase(subTaskId, completed) }
     }
 
-    fun deleteSubTask(subTask: com.example.personalassistant.feature.task.domain.model.SubTask) {
+    fun deleteSubTask(subTask: com.example.personalassistant.feature.task.domain.model.Task) {
         viewModelScope.launch { deleteSubTaskUseCase(subTask) }
     }
 

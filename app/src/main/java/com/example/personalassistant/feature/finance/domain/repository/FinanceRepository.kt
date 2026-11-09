@@ -1,6 +1,8 @@
 package com.example.personalassistant.feature.finance.domain.repository
 
 import com.example.personalassistant.feature.finance.domain.model.Category
+import com.example.personalassistant.feature.finance.domain.model.CoinPool
+import com.example.personalassistant.feature.finance.domain.model.CoinPoolSettlement
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.domain.model.AccountBalanceSum
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
@@ -9,6 +11,7 @@ import com.example.personalassistant.feature.finance.domain.model.Transaction
 import com.example.personalassistant.feature.finance.domain.model.TransactionType
 import com.example.personalassistant.feature.finance.domain.model.GlobalMonthlySums
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
 
 /**
  * Phase 7a：记账模块领域仓库接口
@@ -50,6 +53,12 @@ interface FinanceRepository {
         note: String?,
         date: Long,
         attachmentUri: String? = null,
+        /**
+         * Phase 21：来源清单项 id（从清单一键记账时写入）。
+         *
+         * 默认 null = 手动记的流水（绝大多数）。非 null 时记账页能顺着它跳回清单项。
+         */
+        linkedTaskId: Long? = null,
     ): Long
 
     // ===== Phase 5：跨账户转账 =====
@@ -227,6 +236,25 @@ interface FinanceRepository {
      * @param today 任意时刻（用于计算当天 00:00 时间戳 + 当月 yearMonth）
      */
     suspend fun refreshDailyPool(today: Long)
+
+    // ===== 批次 D：零钱池 =====
+
+    /**
+     * 本账户的零钱池（null = 该账户还没建过）
+     *
+     * 与 [observeTodayPool] 是两回事 —— 那个是系统按预算每天发的额度快照，
+     * 这个是**历次日切结算累加**出来的余额。
+     */
+    fun observeCoinPool(): Flow<CoinPool?>
+
+    /**
+     * 批次 D：零钱池日切结算（补算 + 落结算流水 + 累加余额 + 推进水位线）
+     *
+     * @param settledDate 结算到哪一天（**含**）。通常是「昨天」——
+     *   00:01 触发时「今天」刚开始、还没过完，结算的应该是昨天。
+     * @return 本次结算的结果（结算了几天、累加了多少、结算后余额多少）
+     */
+    suspend fun settleCoinPool(settledDate: LocalDate): CoinPoolSettlement
 }
 
 /** 分类仍有交易引用，无法删除 */

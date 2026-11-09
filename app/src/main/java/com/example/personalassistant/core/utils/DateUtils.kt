@@ -162,4 +162,17 @@ object DateUtils {
             else -> formatDate(timestamp)
         }
     }
+
+    // ============== 当前时刻 ==============
+
+    /**
+     * 此刻是今天的第几分钟（0..1439）。
+     *
+     * Phase 26：从 `feature/calendar/.../DayTimelineView.kt` 搬到这里 ——
+     * 课表的「现在」线也要用它，课表不该反向依赖日历模块。
+     */
+    fun currentMinuteOfDay(): Int {
+        val now = LocalDateTime.now(ZoneId.systemDefault())
+        return now.hour * 60 + now.minute
+    }
 }

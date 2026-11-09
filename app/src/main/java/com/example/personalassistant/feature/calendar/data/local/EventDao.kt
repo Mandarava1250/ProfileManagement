@@ -39,6 +39,22 @@ interface EventDao {
     @Query("SELECT * FROM events WHERE date = :date ORDER BY isAllDay DESC, startTime ASC")
     suspend fun getByDate(date: Long): List<EventEntity>
 
+    /**
+     * Phase 20.7：与 `[dayStart, dayEnd)` 有交集的**带时刻**事件
+     *
+     * 跨午夜的事件（23:00 → 次日 01:00）的 [date] 字段是第一天，
+     * 它的尾巴落在第二天 —— 只按 date 查，第二天就看不到它了。
+     * 所以补一条「按时间区间查」的：startTime < dayEnd AND endTime > dayStart。
+     *
+     * 全天事件（startTime / endTime 为 null）不在这里 —— 它们按 date 归属。
+     */
+    @Query(
+        "SELECT * FROM events WHERE startTime IS NOT NULL AND endTime IS NOT NULL " +
+            "AND startTime < :dayEnd AND endTime > :dayStart " +
+            "ORDER BY isAllDay DESC, startTime ASC"
+    )
+    fun observeOverlapping(dayStart: Long, dayEnd: Long): Flow<List<EventEntity>>
+
     /** 月视图：查询 [monthStart, monthEnd) 范围内的事件 */
     @Query("SELECT * FROM events WHERE date >= :monthStart AND date < :monthEnd ORDER BY date ASC, startTime ASC")
     fun observeMonthRange(monthStart: Long, monthEnd: Long): Flow<List<EventEntity>>

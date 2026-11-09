@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.example.personalassistant.core.ui.components.AppCard
 import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.core.ui.theme.AppSpacing
+import com.example.personalassistant.feature.calendar.domain.model.CalendarHabitItem
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.task.domain.model.Task
@@ -42,19 +43,25 @@ import com.example.personalassistant.feature.timetable.domain.model.Course
  * 所以网格下面接一排标签，把选中这一天的日程、任务、课程全列出来 ——
  * 横向滚动，一行一类，不换行。
  *
- * 日程的标签可点（进编辑），任务和课程的标签只展示。
+ * Phase 20：**日程 / 任务 / 课程三类都可点** —— 任务跳任务详情，课程跳课表详情。
+ * 之前只有日程能点，任务和课程只是「摆在那儿」，用户看得到却摸不着。
  */
 @Composable
 fun MonthTagList(
     dayDetail: DayDetail?,
     modifier: Modifier = Modifier,
     onEventClick: (Event) -> Unit = {},
+    onTaskClick: (Task) -> Unit = {},
+    onCourseClick: (Course) -> Unit = {},
+    // Phase 24B：点「习惯」标签 → 打开补卡面板（给选中的那一天补打卡）
+    onHabitClick: (CalendarHabitItem) -> Unit = {},
 ) {
     if (dayDetail == null) return
     val events = remember(dayDetail) { dayDetail.events }
     val tasks = remember(dayDetail) { dayDetail.tasks }
     val courses = remember(dayDetail) { dayDetail.courses }
-    if (events.isEmpty() && tasks.isEmpty() && courses.isEmpty()) return
+    val habits = remember(dayDetail) { dayDetail.habits }
+    if (events.isEmpty() && tasks.isEmpty() && courses.isEmpty() && habits.isEmpty()) return
 
     AppCard(
         modifier = modifier.fillMaxWidth(),
@@ -80,6 +87,7 @@ fun MonthTagList(
                         text = task.title,
                         color = MaterialTheme.colorScheme.primary,
                         done = task.isCompleted,
+                        onClick = { onTaskClick(task) },
                     )
                 },
             )
@@ -91,6 +99,21 @@ fun MonthTagList(
                     TagChipData(
                         text = course.name,
                         color = Color(course.color),
+                        onClick = { onCourseClick(course) },
+                    )
+                },
+            )
+        }
+        // Phase 24B：习惯 —— 点一下打开补卡面板（给选中的那一天补打卡）
+        if (habits.isNotEmpty()) {
+            TagRow(
+                label = "习惯",
+                tags = habits.map { habit ->
+                    TagChipData(
+                        text = habit.name,
+                        color = Color(habit.color),
+                        done = habit.isMet,
+                        onClick = { onHabitClick(habit) },
                     )
                 },
             )

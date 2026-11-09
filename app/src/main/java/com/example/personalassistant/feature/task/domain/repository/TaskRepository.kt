@@ -1,7 +1,7 @@
 package com.example.personalassistant.feature.task.domain.repository
 
+import com.example.personalassistant.feature.task.data.local.DailyCompletionRow
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
-import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
 import com.example.personalassistant.feature.task.domain.model.TaskSort
@@ -12,6 +12,11 @@ import kotlinx.coroutines.flow.Flow
  * 任务领域仓库接口
  *
  * 由 Data 层的 TaskRepositoryImpl 实现。
+ *
+ * ## Phase 16
+ *
+ * `sub_tasks` 表已并入 `tasks`，所以这个接口里**不再有独立的「清单项」类型** ——
+ * 子任务也是 [Task]（用 `parentTaskId` 表达层级）。
  */
 interface TaskRepository {
 
@@ -31,16 +36,20 @@ interface TaskRepository {
      */
     fun observeTaskById(id: Long): Flow<Task?>
 
-    /** 独立清单项（parentTaskId IS NULL） */
-    fun observeStandaloneChecklist(): Flow<List<SubTask>>
+    /**
+     * Phase 16：顶层任务（`parentTaskId IS NULL`）—— 含原「独立清单项」。
+     *
+     * 清单页与任务页现在看的是同一批数据，只是筛选维度不同。
+     */
+    fun observeStandaloneChecklist(): Flow<List<Task>>
 
     /**
-     * Phase 6b：观察某个任务下的子清单（parentTaskId = taskId）
+     * Phase 6b：观察某个任务下的子任务（`parentTaskId = taskId`）
      *
      * - 用于详情页子任务 section 实时刷新
-     * - 排序：`order` ASC, `createdAt` ASC（与 DAO 查询一致）
+     * - 排序：`manualOrder` ASC, `createdAt` ASC（与 DAO 查询一致）
      */
-    fun observeSubTasks(parentId: Long): Flow<List<SubTask>>
+    fun observeSubTasks(parentId: Long): Flow<List<Task>>
 
     /**
      * 旧路径：通用观察入口 —— 接 [TaskFilter] 和 [TaskSort]，返回过滤+排序后的任务流。
@@ -68,43 +77,73 @@ interface TaskRepository {
 
     // ===== 单点查询 =====
 
-    /** 获取任务与子清单；id 不存在时返回 null */
+    /** 获取任务与子任务；id 不存在时返回 null */
     suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks?
+
+    /**
+     * Phase 22.7：**所有**带提醒时间的未完成任务（含子任务）。
+     *
+     * 开机 / 应用更新后要靠它重建提醒调度（AlarmManager 的闹钟会被系统清掉）。
+     * 刻意包含子任务 —— 子任务也能单独设提醒。
+     *
+     * ⚠️ 默认实现返回空列表：绝大多数调用方（和绝大多数测试替身）不关心提醒重建。
+     * [com.example.personalassistant.feature.task.data.repository.TaskRepositoryImpl]
+     * 有真实实现；测试里要验证重建行为的请在 Fake 里覆盖它。
+     */
+    suspend fun getTasksWithReminders(): List<Task> = emptyList()
+
+    /**
+     * Phase 22.6：区间内按天的「计划数 / 完成数」。
+     *
+     * 以 `dueDate` 为准（截止在周几就算周几的计划），只算顶层任务。
+     *
+     * ⚠️ 默认实现返回空列表：绝大多数调用方不关心完成率统计。
+     * [com.example.personalassistant.feature.task.data.repository.TaskRepositoryImpl]
+     * 有真实实现；测试里要验证统计行为的请在 Fake 里覆盖它。
+     */
+    suspend fun getDailyCompletion(startMs: Long, endMs: Long): List<DailyCompletionRow> = emptyList()
+
+    /**
+     * Phase 22.6：区间内按天的「计划数 / 完成数」（连续完成天数用更宽的窗口）。
+     *
+     * @see getDailyCompletion
+     */
+    suspend fun getDailyCompletionUntil(startMs: Long, endMs: Long): List<DailyCompletionRow> = emptyList()
 
     // ===== 写操作 =====
 
     /**
-     * 写入任务及其子清单。
+     * 写入任务及其子任务。
      *
      * - 若 task.id = 0L 视为新增，返回新生成的 rowId
      * - 若 task.id > 0L 视为更新；同时把 subTasks 列表整体替换为任务下的清单
      * - 整个操作在一个事务内完成
      */
-    suspend fun upsertTask(task: Task, subTasks: List<SubTask>): Long
+    suspend fun upsertTask(task: Task, subTasks: List<Task>): Long
 
-    /** 删除任务。其子清单由 FK SET_NULL 自动转为独立项（不删除清单内容）。 */
+    /** 删除任务。其子任务由 FK SET NULL 自动提升为顶层（不删除子项内容）。 */
     suspend fun deleteTask(task: Task)
 
     /** 切换任务完成状态 */
     suspend fun toggleTaskComplete(id: Long, completed: Boolean)
 
-    /** 切换清单项完成状态 */
+    /** 切换子任务完成状态 */
     suspend fun toggleSubTaskComplete(id: Long, completed: Boolean)
 
-    /** 添加独立清单项（parentTaskId = null） */
+    /** 添加顶层任务（`parentTaskId = null`） */
     suspend fun addStandaloneSubTask(title: String): Long
 
     /**
-     * Phase 6b：在指定任务下新增一个子清单项（parentTaskId = parentId）
+     * Phase 6b：在指定任务下新增一个子任务（`parentTaskId = parentId`）
      *
-     * - 自动追加到当前最大 `order` + 1，避免显示错乱
+     * - 自动追加到当前最大 `manualOrder` + 1，避免显示错乱
      * - 空白标题由 UseCase 层拦截校验
      * - parentId 对应的 task 不存在时由 FK 报错（应不会发生，由 ViewModel 在 init 阶段保证）
      */
     suspend fun addSubTaskToTask(parentId: Long, title: String): Long
 
-    /** 删除清单项 */
-    suspend fun deleteSubTask(subTask: SubTask)
+    /** 删除子任务 */
+    suspend fun deleteSubTask(subTask: Task)
 
     /**
      * Phase 6a：批量重排任务 manualOrder（拖拽结束时一次性提交）。
@@ -114,6 +153,20 @@ interface TaskRepository {
      * - 不在列表里的任务 manualOrder 保持不变
      */
     suspend fun reorderTasks(orderedIds: List<Long>)
+
+    /**
+     * Phase 24：置顶 / 取消置顶。
+     *
+     * ⚠️ 只写这一列还不够 —— 排序里也得有 `isPinned`（见
+     * [com.example.personalassistant.feature.task.data.local.TaskDao] 与
+     * [com.example.personalassistant.feature.task.domain.model.TaskSort]），
+     * 否则置顶了界面也不会动。
+     *
+     * ⚠️ 默认实现是空操作：绝大多数调用方（和绝大多数测试替身）不关心置顶。
+     * [com.example.personalassistant.feature.task.data.repository.TaskRepositoryImpl]
+     * 有真实实现。
+     */
+    suspend fun setPinned(id: Long, pinned: Boolean) = Unit
 
     // ===== Phase 8 Sub-step 3 全局搜索 =====
 

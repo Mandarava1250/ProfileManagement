@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.personalassistant.core.ui.theme.onColorFor
 import com.example.personalassistant.feature.task.presentation.util.TagPalette
 import com.example.personalassistant.feature.task.presentation.util.TagPaletteSource
 import kotlinx.coroutines.launch
@@ -188,21 +189,12 @@ private fun ColorSwatch(
             Icon(
                 imageVector = Icons.Rounded.Check,
                 contentDescription = "已选",
-                tint = if (entry.isLightColor()) Color.Black else Color.White,
+                // 前景色统一走 core 的 onColorFor —— 按相对亮度选黑 / 白。
+                // 之前这里自己算了一遍亮度（阈值 0.6），跟 TagChip 的那份判断不一致，
+                // 同一个浅色标签在弹窗里和 chip 上会显示成两种颜色。
+                tint = onColorFor(color),
                 modifier = Modifier.size(20.dp),
             )
         }
     }
-}
-
-/**
- * 同 [com.example.personalassistant.feature.task.presentation.components.TagChip.onContainerColorFor] 的判断逻辑。
- * 简单就地实现避免跨文件引用（两份颜色判定逻辑都简短，独立维护无负担）。
- */
-private fun TagPalette.isLightColor(): Boolean {
-    val r = ((hex shr 16) and 0xFF).toInt()
-    val g = ((hex shr 8) and 0xFF).toInt()
-    val b = (hex and 0xFF).toInt()
-    val brightness = (r * 0.299f + g * 0.587f + b * 0.114f) / 255f
-    return brightness > 0.6f
 }

@@ -16,7 +16,20 @@ sealed class Screen(val route: String) {
     data object Timetable : Screen("timetable")
     data object Tasks : Screen("tasks")
     data object Finance : Screen("finance")
-    data object Calendar : Screen("calendar")
+    /**
+     * 日历 · 日视图（日历日视图 + 选中日的日程流）
+     *
+     * 日历三视图都是**顶层**路由，日历 Tab 的落点。
+     * 共享的 `CalendarViewModel` 挂在 NavHost（Activity）作用域上，
+     * 所以切视图不会丢「选中日」，而返回键也不会把栈底弹空。
+     */
+    data object CalendarDay : Screen("calendar/day")
+
+    /** 日历 · 周视图（周日历 + 工作日日程流 + 休息日日程流） */
+    data object CalendarWeek : Screen("calendar/week")
+
+    /** 日历 · 月视图（月日历网格 + 选中日的标签列表） */
+    data object CalendarMonth : Screen("calendar/month")
     data object Settings : Screen("settings")
     /** Phase 12：底部 5 号 Tab「我」 */
     data object Me : Screen("me")
@@ -47,9 +60,6 @@ sealed class Screen(val route: String) {
         fun build(eventId: Long? = null) = "calendar/edit/${eventId ?: -1L}"
         const val ARG_EVENT_ID = "eventId"
     }
-
-    data object AddTransaction : Screen("finance/add")
-    data object MonthlyBudget : Screen("finance/budget")
 
     /**
      * Phase 13：分类管理（独立 route）
@@ -95,6 +105,14 @@ sealed class Screen(val route: String) {
      *  - 行为：改完即时生效（写 DataStore → 顶层重新套色板）
      */
     data object Appearance : Screen("me/appearance")
+
+    /**
+     * Phase 23：习惯打卡页
+     *
+     *  - 入口：清单抽屉里的「习惯」项（ChecklistDrawer，Phase 17）
+     *  - 行为：二级页，无 BottomBar
+     */
+    data object Habits : Screen("habits")
 }
 
 /**
@@ -116,8 +134,25 @@ enum class BottomTab(
     val screen: Screen,
     @StringRes val labelRes: Int,
     val icon: ImageVector,
+    /**
+     * 这个 Tab 涵盖的所有路由 —— 底栏的选中态按它判定。
+     *
+     * 日历 Tab 有三个视图（日 / 周 / 月），各走一条独立路由；
+     * 站在周视图或月视图里时，底栏的「日历」图标也得亮着，
+     * 不然用户会以为自己在别的 Tab 上。
+     */
+    val routes: Set<String> = setOf(screen.route),
 ) {
-    Calendar(Screen.Calendar, R.string.tab_calendar, Icons.Rounded.CalendarMonth),
+    Calendar(
+        Screen.CalendarDay,
+        R.string.tab_calendar,
+        Icons.Rounded.CalendarMonth,
+        routes = setOf(
+            Screen.CalendarDay.route,
+            Screen.CalendarWeek.route,
+            Screen.CalendarMonth.route,
+        ),
+    ),
     Tasks(Screen.Tasks, R.string.tab_tasks, Icons.Rounded.Checklist),
     Timetable(Screen.Timetable, R.string.tab_timetable, Icons.Rounded.Today),
     Finance(Screen.Finance, R.string.tab_finance, Icons.Rounded.AccountBalanceWallet);

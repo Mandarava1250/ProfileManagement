@@ -1,7 +1,7 @@
 package com.example.personalassistant.feature.task.data.repository
 
+import com.example.personalassistant.feature.task.data.local.DailyCompletionRow
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
-import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
 import com.example.personalassistant.feature.task.domain.model.TaskSort
@@ -36,11 +36,11 @@ class FakeTaskRepository : TaskRepository {
     override fun observeTaskById(id: Long): Flow<Task?> =
         tasksState.map { list -> list.firstOrNull { it.id == id } }
 
-    override fun observeStandaloneChecklist(): Flow<List<SubTask>> =
-        MutableStateFlow<List<SubTask>>(emptyList())
+    override fun observeStandaloneChecklist(): Flow<List<Task>> =
+        MutableStateFlow<List<Task>>(emptyList())
 
-    override fun observeSubTasks(parentId: Long): Flow<List<SubTask>> =
-        MutableStateFlow<List<SubTask>>(emptyList())
+    override fun observeSubTasks(parentId: Long): Flow<List<Task>> =
+        MutableStateFlow<List<Task>>(emptyList())
 
     override fun observeTasks(
         filter: TaskFilter,
@@ -54,9 +54,26 @@ class FakeTaskRepository : TaskRepository {
 
     override suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks? = null
 
+    /** Phase 22.7：可注入的「带提醒的任务」列表（重建提醒的测试用） */
+    var tasksWithReminders: List<Task> = emptyList()
+
+    override suspend fun getTasksWithReminders(): List<Task> = tasksWithReminders
+
+    /** Phase 22.6：可注入的每日计划 / 完成统计（完成率测试用） */
+    var dailyCompletion: List<DailyCompletionRow> = emptyList()
+
+    /** Phase 22.6：连续完成天数用的宽窗口统计 */
+    var dailyCompletionUntil: List<DailyCompletionRow> = emptyList()
+
+    override suspend fun getDailyCompletion(startMs: Long, endMs: Long): List<DailyCompletionRow> =
+        dailyCompletion
+
+    override suspend fun getDailyCompletionUntil(startMs: Long, endMs: Long): List<DailyCompletionRow> =
+        dailyCompletionUntil
+
     // ===== 写操作 =====
 
-    override suspend fun upsertTask(task: Task, subTasks: List<SubTask>): Long {
+    override suspend fun upsertTask(task: Task, subTasks: List<Task>): Long {
         upsertCount++
         val resolved = if (task.id > 0L) task else task.copy(id = (tasksState.value.size + 1).toLong())
         tasksState.value = tasksState.value + resolved
@@ -76,8 +93,18 @@ class FakeTaskRepository : TaskRepository {
     override suspend fun toggleSubTaskComplete(id: Long, completed: Boolean) = Unit
     override suspend fun addStandaloneSubTask(title: String): Long = 0L
     override suspend fun addSubTaskToTask(parentId: Long, title: String): Long = 0L
-    override suspend fun deleteSubTask(subTask: SubTask) = Unit
+    override suspend fun deleteSubTask(subTask: Task) = Unit
     override suspend fun reorderTasks(orderedIds: List<Long>) = Unit
+
+    /** Phase 24：置顶调用记录（id -> 是否置顶），单测断言用。 */
+    val pinnedCalls = mutableListOf<Pair<Long, Boolean>>()
+
+    override suspend fun setPinned(id: Long, pinned: Boolean) {
+        pinnedCalls += id to pinned
+        tasksState.value = tasksState.value.map {
+            if (it.id == id) it.copy(isPinned = pinned) else it
+        }
+    }
 
     // ===== Phase 8 Sub-step 3 全局搜索 =====
 

@@ -7,15 +7,21 @@ import com.example.personalassistant.core.backup.model.ImportStrategy
 import com.example.personalassistant.core.backup.model.TableDiff
 import com.example.personalassistant.core.holiday.model.HolidayEntity
 import com.example.personalassistant.core.holiday.model.HolidayType
+import com.example.personalassistant.feature.calendar.data.local.EventCategoryEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolSettlementEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.habit.data.local.HabitCheckInEntity
+import com.example.personalassistant.feature.habit.data.local.HabitEntity
+import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
-import com.example.personalassistant.feature.task.data.local.SubTaskEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskEntity
+import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
@@ -35,8 +41,13 @@ import org.junit.Test
  * - 默认策略必须是 ADD（最保守，绝不静默覆盖用户数据）
  * - 联合主键表（task_tag_cross_ref）不能走 id 等价
  * - sampleRowIds 的上限与去重
- * - 13 张表的完整性与顺序（与 [BackupManifest.DEFAULT_TABLES] 对齐）
+ * - 19 张表的完整性与顺序（与 [BackupManifest.DEFAULT_TABLES] 对齐）
  * - 外键拓扑表 [BackupDiffCalculator.TABLE_FK_GRAPH] 自身的一致性
+ *
+ * Phase 16：sub_tasks 已删表（子任务并入 tasks.parentTaskId），
+ * 新增 task_lists / event_categories / student_profile 三张表。
+ * Phase 23：新增 habits / habit_checkins 两张表。
+ * 批次 C：新增 coin_pools 一张表（按 **accountId** 判等，不是按自增 id）。
  */
 class BackupDiffCalculatorTest {
 
@@ -55,8 +66,19 @@ class BackupDiffCalculatorTest {
     private fun task(id: Long, title: String = "任务$id") =
         TaskEntity(id = id, title = title)
 
-    private fun subTask(id: Long, parent: Long = 1L) =
-        SubTaskEntity(id = id, parentTaskId = parent, title = "子$id")
+    private fun taskList(id: Long, name: String = "清单$id") = TaskListEntity(
+        id = id,
+        nameNormalized = "list$id",
+        displayName = name,
+    )
+
+    private fun eventCategory(id: Long) = EventCategoryEntity(
+        id = id,
+        name = "分类$id",
+        color = 0xFF112233.toInt(),
+    )
+
+    private fun studentProfile(accountId: Long) = StudentProfileEntity(accountId = accountId)
 
     private fun tag(id: Long) = TagEntity(
         id = id,
@@ -122,6 +144,48 @@ class BackupDiffCalculatorTest {
         year = 2026,
     )
 
+    /** Phase 23：习惯本体 */
+    private fun habit(id: Long) = HabitEntity(id = id, name = "习惯$id")
+
+    /** Phase 23：习惯打卡记录（挂在习惯 1 上） */
+    private fun habitCheckIn(id: Long, habitId: Long = 1L) = HabitCheckInEntity(
+        id = id,
+        habitId = habitId,
+        date = 1_000L,
+        count = 1,
+    )
+
+    /**
+     * 批次 C：零钱池（挂在账户 1 上）
+     *
+     * ⚠️ `id` 与 `accountId` 是**两回事**：`id` 是自增列（备份导入 REPLACE 后会变），
+     * `accountId` 才是业务主键（一账户一池，UNIQUE）。
+     * 所以 fixture 把两者分开传，方便构造「id 不同但 accountId 相同」的场景。
+     */
+    private fun coinPool(id: Long = 1L, accountId: Long = 1L) = CoinPoolEntity(
+        id = id,
+        accountId = accountId,
+        balance = 100.0,
+    )
+
+    /**
+     * 批次 D：零钱池结算流水 fixture
+     *
+     * ⚠️ `id` 与 `(accountId, date)` 是**两回事**：`id` 是自增列（备份导入 REPLACE 后会变），
+     * `(accountId, date)` 才是业务主键（UNIQUE，一账户一天一条）。
+     */
+    private fun coinPoolSettlement(
+        id: Long = 1L,
+        accountId: Long = 1L,
+        date: Long = 1_757_030_400_000L,
+    ) = CoinPoolSettlementEntity(
+        id = id,
+        accountId = accountId,
+        date = date,
+        amount = 50.0,
+        ym = "2026-09",
+    )
+
     /** 按表名从预览里取差异；缺失即失败（避免测试静默跳过） */
     private fun BackupPreview.diffOf(tableName: String) =
         perTable.firstOrNull { it.tableName == tableName }
@@ -135,7 +199,7 @@ class BackupDiffCalculatorTest {
     // ---------- 完整性 ----------
 
     @Test
-    fun `compute 空备份空库 产出 13 张表且全部为空`() {
+    fun `compute 空备份空库 产出 19 张表且全部为空`() {
         val preview = compute(BackupPayload())
 
         assertEquals(
@@ -143,7 +207,7 @@ class BackupDiffCalculatorTest {
             BackupManifest.DEFAULT_TABLES.size,
             preview.perTable.size,
         )
-        assertEquals(13, preview.perTable.size)
+        assertEquals(19, preview.perTable.size)
         assertEquals(0, preview.totalToAdd)
         assertEquals(0, preview.totalToOverwrite)
         assertEquals(0, preview.totalSkippedTables)
@@ -343,33 +407,77 @@ class BackupDiffCalculatorTest {
     }
 
     @Test
-    fun `13 张表都能各自算出差异`() {
+    fun `19 张表都能各自算出差异`() {
         val payload = BackupPayload(
             userProfiles = listOf(profile(1)),
             semesters = listOf(semester(1)),
             courses = listOf(course(1)),
             tags = listOf(tag(1)),
+            taskLists = listOf(taskList(1)),
             tasks = listOf(task(1)),
-            subTasks = listOf(subTask(1)),
             taskTagCrossRefs = listOf(crossRef(1, 1)),
             events = listOf(event(1)),
+            eventCategories = listOf(eventCategory(1)),
             categories = listOf(category(1)),
             monthlyBudgets = listOf(monthlyBudget(1)),
             dailyPools = listOf(dailyPool(1)),
             transactions = listOf(transaction(1)),
             holidays = listOf(holiday(1)),
+            studentProfile = listOf(studentProfile(1)),
+            // Phase 23：习惯打卡两张表
+            habits = listOf(habit(1)),
+            habitCheckIns = listOf(habitCheckIn(1)),
+            // 批次 C：零钱池
+            coinPools = listOf(coinPool()),
+            // 批次 D：零钱池日切结算流水
+            coinPoolSettlements = listOf(coinPoolSettlement()),
         )
         val preview = compute(payload)
 
-        assertEquals(13, preview.perTable.size)
+        assertEquals(19, preview.perTable.size)
         assertEquals(
             "每张表各 1 行全新数据",
-            13,
+            19,
             preview.totalToAdd,
         )
         preview.perTable.forEach { diff ->
             assertEquals("${diff.tableName} 应有 1 行新增", 1, diff.toAdd.size)
         }
+    }
+
+    /**
+     * 批次 C：`coin_pools` 按 **accountId** 判等，不按自增 id。
+     *
+     * 备份里 id=5、库里 id=9，但 accountId 都是 1 —— 这是**同一个池子**（同一账户一个池），
+     * 所以应判为「覆盖」而不是「新增」。
+     *
+     * ⚠️ 如果误按 id 判等，这里会得到 toAdd=1 / toOverwrite=0，
+     * 预览界面就会告诉用户「要新增一个池子」，而实际写入时 REPLACE 会把老池子顶掉
+     * —— diff 报告与实际写入对不上。
+     */
+    @Test
+    fun `coin_pools 按 accountId 判等而非自增 id`() {
+        val payload = BackupPayload(coinPools = listOf(coinPool(id = 5L, accountId = 1L)))
+        val current = CurrentDbSnapshot(coinPools = listOf(coinPool(id = 9L, accountId = 1L)))
+
+        val diff = compute(payload, current).diffOf("coin_pools")
+
+        assertEquals("同一 accountId 应判为覆盖，而不是新增", 0, diff.toAdd.size)
+        assertEquals(1, diff.toOverwrite.size)
+    }
+
+    /**
+     * 批次 C：`coin_pools` 换账户 = 新增（accountId 不同就是另一个池子）。
+     */
+    @Test
+    fun `coin_pools 换 accountId 归入 toAdd`() {
+        val payload = BackupPayload(coinPools = listOf(coinPool(id = 5L, accountId = 2L)))
+        val current = CurrentDbSnapshot(coinPools = listOf(coinPool(id = 9L, accountId = 1L)))
+
+        val diff = compute(payload, current).diffOf("coin_pools")
+
+        assertEquals(1, diff.toAdd.size)
+        assertEquals(0, diff.toOverwrite.size)
     }
 
     // ---------- 外键拓扑表自身的一致性 ----------
@@ -413,17 +521,22 @@ class BackupDiffCalculatorTest {
         val graph = BackupDiffCalculator.TABLE_FK_GRAPH
 
         assertTrue(graph.getValue("courses").contains("semesters"))
-        assertTrue(graph.getValue("sub_tasks").contains("tasks"))
+        assertTrue(graph.getValue("tasks").contains("task_lists"))
         assertTrue(graph.getValue("task_tag_cross_ref") == setOf("tasks", "tags"))
         assertTrue(graph.getValue("transactions").contains("categories"))
+        assertTrue(graph.getValue("student_profile").contains("user_profiles"))
 
-        // events 与 holidays 是孤儿表：不参与级联（Phase 8 Sub-step 3 设计取舍）
-        assertTrue(graph.getValue("events").isEmpty())
+        // Phase 16：events 依赖 event_categories（语义依赖；DB 层没有这条 FK）
+        assertTrue(graph.getValue("events").contains("event_categories"))
+
+        // task_lists / event_categories 是根表；holidays 无 FK
+        assertTrue(graph.getValue("task_lists").isEmpty())
+        assertTrue(graph.getValue("event_categories").isEmpty())
         assertTrue(graph.getValue("holidays").isEmpty())
     }
 
     @Test
-    fun `依赖表在写入顺序上排在被依赖表之后`() {
+    fun `硬外键依赖表在写入顺序上排在被依赖表之前`() {
         val order: Map<String, Int> = BackupManifest.DEFAULT_TABLES
             .mapIndexed { index, table -> table to index }
             .toMap()
@@ -431,8 +544,14 @@ class BackupDiffCalculatorTest {
             order[table] ?: error("未知表 $table")
         }
 
+        // ⚠️ `events → event_categories` 是**语义依赖**（DB 层没有这条 FK），
+        // 而 DEFAULT_TABLES 里 events 排在 event_categories 之前 —— 这是有意为之
+        // （保持既定的 15 项固定顺序），所以这里对它网开一面。
+        val semanticOnlyEdges = setOf("events" to "event_categories")
+
         BackupDiffCalculator.TABLE_FK_GRAPH.forEach { (table, deps) ->
             deps.forEach { dep ->
+                if (table to dep in semanticOnlyEdges) return@forEach
                 assertTrue(
                     "$dep 必须先于 $table 写入，否则外键检查会失败",
                     indexOf(dep) < indexOf(table),
@@ -495,7 +614,7 @@ class BackupDiffCalculatorTest {
             courses = listOf(course(1L)),
             tags = listOf(tag(1L)),
             tasks = listOf(task(1L)),
-            subTasks = listOf(subTask(1L)),
+            taskLists = listOf(taskList(1L)),
             events = listOf(event(1L)),
             holidays = listOf(holiday(1L)),
         )
@@ -529,7 +648,7 @@ class BackupDiffCalculatorTest {
                     toOverwrite = emptyList(),
                 ),
                 TableDiff(
-                    tableName = "sub_tasks",
+                    tableName = "task_lists",
                     strategy = ImportStrategy.SKIP,
                     toAdd = emptyList<Any>(),
                     toOverwrite = emptyList(),

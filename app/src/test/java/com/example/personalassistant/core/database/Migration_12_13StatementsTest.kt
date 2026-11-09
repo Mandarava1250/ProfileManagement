@@ -1,6 +1,6 @@
 package com.example.personalassistant.core.database
 
-import com.example.personalassistant.feature.task.data.local.SubTaskEntity
+import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -170,14 +170,20 @@ class Migration_12_13StatementsTest {
      *
      * 这一条只能从「迁移 SQL 的 DEFAULT」+「实体的默认值」+「域模型的语义」三处对齐来保证，
      * 真跑一遍需要真 SQLite（androidTest），JVM 这里锁死三个常量必须一致。
+     *
+     * ## Phase 16
+     *
+     * 12→13 迁移建的是 `sub_tasks` 表（v15 已废弃该表），迁移 SQL 本身保持原样不动。
+     * 断言里原本引用的 `SubTaskEntity` 已随该表一起删除，改用现役的 `TaskEntity` ——
+     * 两者的 `priority` 默认值语义一致（都是 1 = 中优先级）。
      */
     @Test
     fun `legacy rows fall back to medium priority`() {
         // 1. 迁移 SQL 里写死的默认值
         assertEquals(1, DEFAULT_SUB_TASK_PRIORITY)
         // 2. 实体默认值（Kotlin 默认参数）必须跟迁移一致，否则 Room 校验会报
-        //    "Migration didn't properly handle: sub_tasks"
-        val entity = SubTaskEntity(parentTaskId = null, title = "旧行")
+        //    "Migration didn't properly handle: tasks"
+        val entity = TaskEntity(title = "旧行")
         assertEquals(DEFAULT_SUB_TASK_PRIORITY, entity.priority)
         // 3. 域模型语义：1 = 中优先级（TaskPriority.fromDb(1) 必须是 MEDIUM）
         assertEquals(TaskPriority.MEDIUM.dbValue, DEFAULT_SUB_TASK_PRIORITY)

@@ -1,4 +1,4 @@
-package com.example.personalassistant.feature.finance.presentation.add
+﻿package com.example.personalassistant.feature.finance.presentation.add
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.personalassistant.core.ui.theme.onColorFor
 
 /**
  * Phase 2：附件选择区
@@ -134,7 +135,7 @@ private fun AttachmentThumbnail(
             Icon(
                 imageVector = Icons.Rounded.Close,
                 contentDescription = "删除附件",
-                tint = Color.White,
+                tint = onColorFor(MaterialTheme.colorScheme.scrim),
                 modifier = Modifier.size(16.dp),
             )
         }

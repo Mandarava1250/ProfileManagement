@@ -27,12 +27,19 @@ import kotlinx.coroutines.withContext
  * - 让 snapshot 收集保持单一职责：DAO 调用都在这里，便于审计
  *
  * ## 写入顺序对应 [BackupManifest.DEFAULT_TABLES]
- * 字段填充顺序：user_profiles → semesters → courses → tags → tasks → sub_tasks
- * → task_tag_cross_ref → events → categories → monthly_budgets → daily_pools
- * → transactions → holidays。
+ * 字段填充顺序：user_profiles → semesters → courses → tags → task_lists → tasks
+ * → task_tag_cross_ref → events → event_categories → categories → monthly_budgets
+ * → daily_pools → transactions → holidays → student_profile → habits → habit_checkins。
  *
- * 注意：13 张表全部一次性读，不挑顺序（与导入写入顺序无关 —— 读阶段是只读快照，
+ * 注意：17 张表全部一次性读，不挑顺序（与导入写入顺序无关 —— 读阶段是只读快照，
  * 计算差异是纯内存操作；写入器才是 [BackupManifest.DEFAULT_TABLES] 顺序敏感）。
+ *
+ * Phase 16：新增 task_lists / event_categories / student_profile 三张表；
+ * 删除 sub_tasks（子任务已并入 tasks）。三个新 DAO 一律从 [AppDatabase] 取
+ * （TaskListDao 没有 Hilt provider，EventCategoryDao / StudentProfileDao 也没在本类注入，
+ * 统一走 database.xxxDao()，避免与 DI 图重复绑定）。
+ *
+ * Phase 23：新增 habits / habit_checkins 两张表，同样走 database.xxxDao()。
  */
 @Singleton
 open class BackupCurrentSnapshotProvider @Inject constructor(
@@ -49,9 +56,9 @@ open class BackupCurrentSnapshotProvider @Inject constructor(
 ) : BackupSnapshotProvider {
 
     /**
-     * 拉取当前数据库全部 13 张表的全量快照。
+     * 拉取当前数据库全部 17 张表的全量快照。
      *
-     * 必须在 IO 线程调用（包含 13 次 DB 读）；调用方负责选择协程上下文。
+     * 必须在 IO 线程调用（包含 17 次 DB 读）；调用方负责选择协程上下文。
      *
      * Phase 9 A2：[BackupSnapshotProvider] 接口契约：`suspend fun snapshot(): CurrentDbSnapshot`。
      *
@@ -66,15 +73,29 @@ open class BackupCurrentSnapshotProvider @Inject constructor(
             semesters = runCatching { semesterDao.getAll() }.getOrDefault(emptyList()),
             courses = runCatching { courseDao.getAllCourses() }.getOrDefault(emptyList()),
             tags = runCatching { tagDao.getAllTags() }.getOrDefault(emptyList()),
+            taskLists = runCatching { database.taskListDao().getAllTaskLists() }.getOrDefault(emptyList()),
             tasks = runCatching { taskDao.getAllTasks() }.getOrDefault(emptyList()),
-            subTasks = runCatching { taskDao.getAllSubTasks() }.getOrDefault(emptyList()),
             taskTagCrossRefs = runCatching { taskTagDao.getAllCrossRefs() }.getOrDefault(emptyList()),
             events = runCatching { eventDao.getAllEvents() }.getOrDefault(emptyList()),
+            eventCategories = runCatching {
+                database.eventCategoryDao().getAll()
+            }.getOrDefault(emptyList()),
             categories = runCatching { financeDao.getAllCategories() }.getOrDefault(emptyList()),
             monthlyBudgets = runCatching { financeDao.getAllMonthlyBudgets() }.getOrDefault(emptyList()),
             dailyPools = runCatching { financeDao.getAllDailyPools() }.getOrDefault(emptyList()),
             transactions = runCatching { financeDao.getAllTransactions() }.getOrDefault(emptyList()),
             holidays = runCatching { holidayDao.getAll() }.getOrDefault(emptyList()),
+            studentProfile = runCatching {
+                database.studentProfileDao().getAllStudentProfiles()
+            }.getOrDefault(emptyList()),
+            // Phase 23：习惯本体 —— habit_checkins 的父表
+            habits = runCatching { database.habitDao().getAll() }.getOrDefault(emptyList()),
+            // Phase 23：习惯打卡记录
+            habitCheckIns = runCatching { database.habitCheckInDao().getAll() }.getOrDefault(emptyList()),
+            // 批次 C：零钱池
+            coinPools = runCatching { financeDao.getAllCoinPools() }.getOrDefault(emptyList()),
+            // 批次 D：零钱池日切结算流水
+            coinPoolSettlements = runCatching { financeDao.getAllCoinPoolSettlements() }.getOrDefault(emptyList()),
         )
     }
 

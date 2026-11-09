@@ -91,6 +91,8 @@ class DailyAutoBackupWorkerTest {
             financeDao = database.financeDao(),
             holidayDao = database.holidayDao(),
             userProfileDao = database.userProfileDao(),
+            // Phase 16：清单表 / 事件分类 / 「我」档案三张新表从 AppDatabase 直接取
+            database = database,
         )
 
         val json = Json {

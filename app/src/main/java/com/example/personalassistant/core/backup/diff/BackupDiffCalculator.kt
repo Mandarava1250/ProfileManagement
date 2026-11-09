@@ -6,15 +6,20 @@ import com.example.personalassistant.core.backup.model.BackupPreview
 import com.example.personalassistant.core.backup.model.ImportStrategy
 import com.example.personalassistant.core.backup.model.TableDiff
 import com.example.personalassistant.core.holiday.model.HolidayEntity
+import com.example.personalassistant.feature.calendar.data.local.EventCategoryEntity
 import com.example.personalassistant.feature.calendar.data.local.EventEntity
 import com.example.personalassistant.feature.finance.data.local.CategoryEntity
+import com.example.personalassistant.feature.finance.data.local.CoinPoolSettlementEntity
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
 import com.example.personalassistant.feature.finance.data.local.TransactionEntity
+import com.example.personalassistant.feature.habit.data.local.HabitCheckInEntity
+import com.example.personalassistant.feature.habit.data.local.HabitEntity
+import com.example.personalassistant.feature.me.data.local.StudentProfileEntity
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
-import com.example.personalassistant.feature.task.data.local.SubTaskEntity
 import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskEntity
+import com.example.personalassistant.feature.task.data.local.TaskListEntity
 import com.example.personalassistant.feature.task.data.local.TaskTagCrossRef
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
@@ -25,7 +30,7 @@ import javax.inject.Singleton
  * Phase 8 Sub-step 4'（plan 8f'）：备份 vs 当前数据库差异计算器（纯函数）
  *
  * 给一份 [BackupPayload] + [CurrentDbSnapshot]，产出 [BackupPreview]：
- * - 13 张表各自的 toAdd / toOverwrite 列表
+ * - 17 张表各自的 toAdd / toOverwrite 列表
  * - 默认策略 = [ImportStrategy.ADD]（最保守：只增不覆盖）
  * - 外键级联 SKIP：上游表 SKIP → 下游表自动 SKIP，写入器无法违反 FK 约束
  *
@@ -41,14 +46,22 @@ import javax.inject.Singleton
  *
  * ## 外键拓扑
  * ```
- * user_profiles ── (accountId) ── transactions, monthly_budgets, daily_pools, categories
+ * user_profiles ── (accountId) ── transactions, monthly_budgets, daily_pools, categories, student_profile
  * semesters ────── (semesterId) ── courses
- * tasks ─────────── (taskId) ── sub_tasks, task_tag_cross_ref
+ * task_lists ───── (无父表，任务的归属清单)
+ * tasks ─────────── (listId) ── task_lists
+ * tasks ─────────── (taskId) ── task_tag_cross_ref
  * tags ──────────── (tagId)  ── task_tag_cross_ref
- * events ────────── (无备份 FK，备份里 events 是孤儿数据)
+ * event_categories ─ (categoryId) ── events
  * categories ────── (parentId 自引用，可选)
+ * habits ─────────── (habitId) ── habit_checkins
  * ```
- * 拓扑用「硬编码 adjacency list」写死，13 个节点很小，不值得跑真正的图算法。
+ * 拓扑用「硬编码 adjacency list」写死，17 个节点很小，不值得跑真正的图算法。
+ *
+ * ⚠️ Phase 16：`events → event_categories` 是**语义依赖**（DB 层没有这条 FK，
+ * `events.categoryId` 只是引用），而 DEFAULT_TABLES 里 events 排在 event_categories 之前。
+ * 单遍扫描的级联推断只能看到「排在自己前面的父表」被跳过，所以这条边目前不产生级联效果 ——
+ * 与 `tasks → user_profiles` 同理（都是给「用户改策略后重算级联」那一步留的数据）。
  *
  * ## 纯函数 + 无副作用
  * - 不接触 IO / DB / Clock（manifest 时间由传入的 payload 提供）
@@ -63,7 +76,7 @@ class BackupDiffCalculator @Inject constructor() {
      *
      * @param payload 解析后的备份内容（来自 [com.example.personalassistant.core.backup.importer.BackupImporter] 的中间产物）
      * @param manifest 备份清单（仅读 manifest 头信息；payload 已 contains 完整清单）
-     * @param current 当前 DB 的 13 张表全量快照
+     * @param current 当前 DB 的 17 张表全量快照
      */
     fun compute(
         payload: BackupPayload,
@@ -95,32 +108,39 @@ class BackupDiffCalculator @Inject constructor() {
             currentIds = current.tags.map { it.id }.toSet(),
             idOf = { it.id },
         )
+        val taskListsDiff = diffById(
+            tableName = "task_lists",
+            backup = payload.taskLists,
+            currentIds = current.taskLists.map { it.id }.toSet(),
+            idOf = { it.id },
+        )
         val tasksDiff = diffById(
             tableName = "tasks",
             backup = payload.tasks,
             currentIds = current.tasks.map { it.id }.toSet(),
             idOf = { it.id },
         )
-        val subTasksDiff = diffById(
-            tableName = "sub_tasks",
-            backup = payload.subTasks,
-            currentIds = current.subTasks.map { it.id }.toSet(),
-            idOf = { it.id },
-        )
         // task_tag_cross_ref 联合主键 (taskId, tagId) —— 不能直接走 id 等价
         val crossRefCurrentKeys: Set<CrossRefKey> = current.taskTagCrossRefs
             .map { CrossRefKey(it.taskId, it.tagId) }
             .toSet()
-        val crossRefDiff: TableDiff<TaskTagCrossRef> = diffByCompositeKey<TaskTagCrossRef>(
+        val crossRefDiff: TableDiff<TaskTagCrossRef> = diffByCompositeKey<TaskTagCrossRef, CrossRefKey>(
             tableName = "task_tag_cross_ref",
             backup = payload.taskTagCrossRefs,
             currentKeys = crossRefCurrentKeys,
             keyOf = { CrossRefKey(it.taskId, it.tagId) },
+            sampleIdOf = { it.taskId },
         )
         val eventsDiff = diffById(
             tableName = "events",
             backup = payload.events,
             currentIds = current.events.map { it.id }.toSet(),
+            idOf = { it.id },
+        )
+        val eventCategoriesDiff = diffById(
+            tableName = "event_categories",
+            backup = payload.eventCategories,
+            currentIds = current.eventCategories.map { it.id }.toSet(),
             idOf = { it.id },
         )
         val categoriesDiff = diffById(
@@ -153,21 +173,76 @@ class BackupDiffCalculator @Inject constructor() {
             currentIds = current.holidays.map { it.id }.toSet(),
             idOf = { it.id },
         )
+        // student_profile 主键是 accountId（不是自增 id），按 accountId 判等
+        val studentProfileDiff = diffById(
+            tableName = "student_profile",
+            backup = payload.studentProfile,
+            currentIds = current.studentProfile.map { it.accountId }.toSet(),
+            idOf = { it.accountId },
+        )
+        // Phase 23：习惯本体（habit_checkins 的父表）
+        val habitsDiff = diffById(
+            tableName = "habits",
+            backup = payload.habits,
+            currentIds = current.habits.map { it.id }.toSet(),
+            idOf = { it.id },
+        )
+        // Phase 23：习惯打卡记录（主键是自增 id，按 id 判等；
+        // `(habitId, date)` 唯一索引是业务层约束，不参与差异判定）
+        val habitCheckInsDiff = diffById(
+            tableName = "habit_checkins",
+            backup = payload.habitCheckIns,
+            currentIds = current.habitCheckIns.map { it.id }.toSet(),
+            idOf = { it.id },
+        )
+        // 批次 C：零钱池
+        //
+        // ⚠️ 按 **accountId** 判等，不按 id —— `coin_pools` 的 UNIQUE 与业务主键都是 accountId，
+        // `id` 只是自增列，备份导入 REPLACE 时会变。按 id 判等会让 diff 报告与实际写入对不上
+        // （详见 `BackupImporter.mergeCoinPools` 的注释）。先例：`student_profile`。
+        val coinPoolsDiff = diffById(
+            tableName = "coin_pools",
+            backup = payload.coinPools,
+            currentIds = current.coinPools.map { it.accountId }.toSet(),
+            idOf = { it.accountId },
+        )
+
+        // 批次 D：零钱池结算流水
+        //
+        // ⚠️ 按 **(accountId, date) 复合键**判等，不按 id ——
+        // `coin_pool_settlements` 的 UNIQUE 是 (accountId, date)，那才是业务主键；
+        // `id` 只是自增列，备份导入 REPLACE 时会变。按 id 判等会让 diff 报告与实际写入对不上。
+        val settlementCurrentKeys: Set<SettlementKey> = current.coinPoolSettlements
+            .map { SettlementKey(it.accountId, it.date) }
+            .toSet()
+        val coinPoolSettlementsDiff = diffByCompositeKey<CoinPoolSettlementEntity, SettlementKey>(
+            tableName = "coin_pool_settlements",
+            backup = payload.coinPoolSettlements,
+            currentKeys = settlementCurrentKeys,
+            keyOf = { SettlementKey(it.accountId, it.date) },
+            sampleIdOf = { it.accountId },
+        )
 
         val rawPerTable = listOf(
             userProfilesDiff,
             semestersDiff,
             coursesDiff,
             tagsDiff,
+            taskListsDiff,
             tasksDiff,
-            subTasksDiff,
             crossRefDiff,
             eventsDiff,
+            eventCategoriesDiff,
             categoriesDiff,
             monthlyBudgetsDiff,
             dailyPoolsDiff,
             transactionsDiff,
             holidaysDiff,
+            studentProfileDiff,
+            habitsDiff,
+            habitCheckInsDiff,
+            coinPoolsDiff,
+            coinPoolSettlementsDiff,
         )
 
         // ===== 2. 外键级联 SKIP 推断 =====
@@ -222,13 +297,24 @@ class BackupDiffCalculator @Inject constructor() {
         )
     }
 
-    // ---------- 单表差异：按联合主键 (taskId, tagId) ----------
+    // ---------- 单表差异：按联合主键 ----------
 
-    private fun <T> diffByCompositeKey(
+    /**
+     * 联合主键差异
+     *
+     * 两张表用联合主键：
+     * - `task_tag_cross_ref`：(taskId, tagId)
+     * - `coin_pool_settlements`：(accountId, date)
+     *
+     * @param sampleIdOf 采样 id（**仅展示用**，无业务含义）——
+     *   联合主键没有单 id，这里取键里的第一个分量占位。
+     */
+    private fun <T, K> diffByCompositeKey(
         tableName: String,
         backup: List<T>,
-        currentKeys: Set<CrossRefKey>,
-        keyOf: (T) -> CrossRefKey,
+        currentKeys: Set<K>,
+        keyOf: (T) -> K,
+        sampleIdOf: (T) -> Long,
     ): TableDiff<T> {
         val toAdd = mutableListOf<T>()
         val toOverwrite = mutableListOf<T>()
@@ -236,9 +322,8 @@ class BackupDiffCalculator @Inject constructor() {
             val key = keyOf(row)
             if (currentKeys.contains(key)) toOverwrite += row else toAdd += row
         }
-        // 联合主键没有单 id，sampleRowIds 用 taskId 占位（仅展示用，无业务含义）
-        val sampleIds = (toAdd.take(SAMPLE_LIMIT).map { keyOf(it).taskId } +
-                toOverwrite.take(SAMPLE_LIMIT).map { keyOf(it).taskId })
+        val sampleIds = (toAdd.take(SAMPLE_LIMIT).map(sampleIdOf) +
+                toOverwrite.take(SAMPLE_LIMIT).map(sampleIdOf))
             .distinct()
             .take(SAMPLE_LIMIT)
         return TableDiff(
@@ -255,6 +340,14 @@ class BackupDiffCalculator @Inject constructor() {
      * 联合主键包装（避免 Tuple/Pair 装箱开销）
      */
     private data class CrossRefKey(val taskId: Long, val tagId: Long)
+
+    /**
+     * 批次 D：零钱池结算流水的联合主键 (accountId, date)
+     *
+     * 一账户一天只可能有一条结算流水 —— 这条唯一索引就是幂等的最后一道闸，
+     * 所以 diff 必须按它判等，不能按自增 id（备份导入 REPLACE 时 id 会变）。
+     */
+    private data class SettlementKey(val accountId: Long, val date: Long)
 
     // ---------- 外键级联 SKIP ----------
 
@@ -308,24 +401,43 @@ class BackupDiffCalculator @Inject constructor() {
          * 写入顺序就是 [BackupManifest.DEFAULT_TABLES]，依赖方向：**child → parents**
          * （便于扫到子表时直接查「它依赖的父是否被 SKIP」）。
          *
-         * 注意：本表不含「events」，因为备份里 events 表是孤儿数据（外键指向 event_categories，
-         * 而 event_categories 不在备份范围内；Phase 8 Sub-step 3 设计取舍）。
-         * 即 events 不依赖任何备份表，所以可以独立 ADD/OVERWRITE/SKIP 不会级联。
+         * Phase 16 变化：
+         * - 删除 `sub_tasks` 边（子任务表已并入 tasks，Phase 16 删表）
+         * - 新增 `task_lists`（根表）、`tasks → task_lists`（tasks.listId → task_lists.id，CASCADE）
+         * - 新增 `events → event_categories`（语义依赖：events.categoryId 引用分类 id）
+         * - 新增 `event_categories`（根表）、`student_profile → user_profiles`（accountId）
+         *
+         * Phase 23 变化：
+         * - 新增 `habits`（根表）、`habit_checkins → habits`（habitId → habits.id，CASCADE）
+         *
+         * 注意：`events → event_categories` 是**语义依赖**（DB 层没有这条 FK），
+         * 而 DEFAULT_TABLES 里 events 排在 event_categories 之前，
+         * 单遍扫描的级联推断覆盖不到「排在后面的父表」——详见类 KDoc 的说明。
+         *
+         * `habit_checkins → habits` 没有这个问题：habits 排在 habit_checkins **之前**，
+         * 所以 habits 被 SKIP 时级联推断能正常把 habit_checkins 也标成 SKIP。
          */
         val TABLE_FK_GRAPH: Map<String, Set<String>> = mapOf(
             "user_profiles" to emptySet(),                       // 根表，不依赖任何表
             "semesters" to emptySet(),                           // 学期不依赖账户
             "courses" to setOf("semesters"),                     // courses.semesterId → semesters
             "tags" to emptySet(),                                // 标签不依赖其他表
-            "tasks" to setOf("user_profiles"),                   // tasks.accountId → user_profiles
-            "sub_tasks" to setOf("tasks"),                       // sub_tasks.taskId → tasks
+            "task_lists" to emptySet(),                          // 清单表自身无父表
+            "tasks" to setOf("user_profiles", "task_lists"),     // tasks.accountId + tasks.listId → task_lists.id
             "task_tag_cross_ref" to setOf("tasks", "tags"),      // (taskId, tagId)
-            "events" to emptySet(),                              // 孤儿表（Phase 8 Sub-step 3 决策）
+            "events" to setOf("event_categories"),               // events.categoryId → event_categories.id
+            "event_categories" to emptySet(),                    // 分类表自身无父表
             "categories" to setOf("user_profiles"),              // categories.accountId
             "monthly_budgets" to setOf("user_profiles"),         // monthly_budgets.accountId
             "daily_pools" to setOf("user_profiles"),             // daily_pools.accountId
             "transactions" to setOf("user_profiles", "categories"), // transactions.accountId + categoryId
             "holidays" to emptySet(),                            // 节假日表无 FK
+            "student_profile" to setOf("user_profiles"),         // student_profile.accountId → user_profiles.id
+            "habits" to emptySet(),                              // 习惯本体自身无父表
+            "habit_checkins" to setOf("habits"),                 // habit_checkins.habitId → habits.id
+            "coin_pools" to setOf("user_profiles"),               // 批次 C：coin_pools.accountId → user_profiles.id（真外键）
+            // 批次 D：coin_pool_settlements.accountId → user_profiles.id（真外键）
+            "coin_pool_settlements" to setOf("user_profiles"),
         )
     }
 }

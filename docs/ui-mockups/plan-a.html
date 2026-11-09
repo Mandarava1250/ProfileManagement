@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>方案 A · 秩序 —— 昔涟个人助手 UI 方案</title>
+<link rel="stylesheet" href="shared/mock.css">
+<script src="shared/icons.js"></script>
+<style>
+/* ===========================================================
+   方案 A · 秩序
+   —— 语义色封闭系统 + 唯一主视觉卡 + 清单卡片化 + 网格可横滑
+   =========================================================== */
+.phone{
+  --bg:#F3F6FB;
+  --surface:#FFFFFF;
+  --surface-2:#EAEFF7;
+  --text:#131820;
+  --text-2:#5A6478;
+  --text-3:#646E7E;
+  --brand:#0B57D0;
+  --brand-soft:#DEE8FC;
+  --brand-on-soft:#0A2B66;
+  --income:#1B5E20;
+  --expense:#B3261E;
+  --transfer:#37474F;
+  --over:#8C1D18;
+  --now:#B45309;
+  --warn:#7A4A00;
+  --warn-soft:#FFF0DC;
+  --line:#E3E8F0;
+  --r-card:20px;      /* AppRadii.card */
+  --r-chip:12px;      /* AppRadii.chip  */
+  --r-input:16px;     /* AppRadii.input */
+  --nav-bg:#FFFFFF;
+}
+.a-scroll{flex:1;overflow-y:auto;overflow-x:hidden}
+.a-scroll::-webkit-scrollbar{width:0;height:0}
+
+/* ---- 顶栏 ---- */
+.a-appbar{
+  flex:none;height:56px;display:flex;align-items:center;gap:6px;
+  padding:0 12px 0 6px;background:var(--surface);
+}
+.a-appbar .title{
+  font-size:19px;font-weight:700;letter-spacing:.2px;flex:1;
+  display:flex;align-items:center;gap:5px;padding-left:2px;
+}
+.a-appbar .title .sub{font-size:12px;font-weight:500;color:var(--text-3)}
+.a-ib{
+  width:44px;height:44px;border-radius:12px;border:none;background:transparent;
+  color:var(--text-2);display:grid;place-items:center;cursor:pointer;position:relative;
+}
+.a-ib.on{color:var(--brand)}
+.a-badge{
+  position:absolute;top:6px;right:5px;min-width:16px;height:16px;padding:0 4px;
+  border-radius:8px;background:var(--brand);color:#fff;font-size:10px;font-weight:700;
+  display:grid;place-items:center;line-height:1;
+}
+.a-line{height:1px;background:var(--line);flex:none}
+
+/* ---- 焦点条（清单顶部，固定不滚） ---- */
+.a-focus{
+  flex:none;background:var(--surface);padding:9px 16px 10px;
+  border-bottom:1px solid var(--line);
+}
+.a-focus .r1{display:flex;align-items:center;gap:10px}
+.a-focus .r1 b{font-size:12.5px;font-weight:600;white-space:nowrap}
+.a-focus .r1 .v{margin-left:auto;font-size:14px;font-weight:700;color:var(--brand);white-space:nowrap}
+.a-focus .r1 .v small{font-size:11px;font-weight:500;color:var(--text-3);margin-left:4px}
+.a-bar{height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden}
+.a-bar i{display:block;height:100%;border-radius:2px;background:var(--brand)}
+.a-bar.over i{background:var(--expense)}
+.a-bar.warn i{background:var(--warn)}
+
+/* ---- 快速添加 ---- */
+.a-quick{display:flex;gap:8px;padding:12px 16px;background:var(--surface);align-items:center}
+.a-quick .inp{
+  flex:1;height:42px;border-radius:var(--r-input);border:1px solid var(--line);
+  background:var(--bg);display:flex;align-items:center;padding:0 14px;
+  font-size:14px;color:var(--text-3);
+}
+.a-quick .add{
+  width:42px;height:42px;border-radius:14px;border:none;background:var(--brand);
+  color:#fff;display:grid;place-items:center;flex:none;cursor:pointer;
+}
+
+/* ---- 分组标题 ---- */
+.a-grouphd{
+  display:flex;align-items:center;gap:8px;padding:14px 16px 8px;
+}
+.a-grouphd b{font-size:13.5px;font-weight:700;letter-spacing:.2px}
+.a-grouphd .cnt{font-size:11.5px;color:var(--text-3)}
+.a-grouphd .act{
+  margin-left:auto;font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:3px;
+}
+
+/* ---- 清单卡片 ---- */
+.a-list{padding:0 16px 100px;display:flex;flex-direction:column;gap:8px}
+.a-item{
+  background:var(--surface);border-radius:var(--r-card);padding:13px 14px;
+  display:flex;gap:11px;align-items:flex-start;
+  box-shadow:0 1px 2px rgba(19,24,32,.05);
+}
+.a-check{
+  width:44px;height:44px;margin-left:-11px;margin-top:-11px;flex:none;
+  display:grid;place-items:center;cursor:pointer;
+}
+.a-check i{
+  width:21px;height:21px;border-radius:50%;border:1.9px solid #B9C2D2;display:block;position:relative;
+}
+.a-check.done i{background:var(--brand);border-color:var(--brand)}
+.a-check.done i::after{
+  content:"";position:absolute;left:6px;top:3px;width:5px;height:9.5px;
+  border:solid #fff;border-width:0 2px 2px 0;transform:rotate(42deg);
+}
+.a-item.done .a-title{color:var(--text-3);text-decoration:line-through}
+.a-main{flex:1;min-width:0}
+.a-title{
+  font-size:15px;font-weight:500;line-height:1.45;color:var(--text);
+  display:flex;align-items:center;gap:6px;
+}
+.a-title .pin{color:var(--brand);display:inline-flex}
+.a-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;align-items:center}
+.a-cat{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text-2)}
+.a-cat i{width:7px;height:7px;border-radius:2px;display:block}
+.a-chip{
+  font-size:11px;line-height:1;padding:4px 7px;border-radius:8px;
+  background:var(--surface-2);color:var(--text-2);font-weight:500;
+}
+.a-chip.warn{background:var(--warn-soft);color:var(--warn)}
+.a-chip.late{background:#FBE3E1;color:var(--over)}
+.a-chip.pri{background:#FBE3E1;color:var(--over);font-weight:600}
+.a-tag{
+  font-size:11px;line-height:1;padding:4px 8px;border-radius:999px;
+  border:1px solid #C9D3E4;color:#4E5C74;background:#fff;font-weight:500;
+}
+.a-tag i{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:5px}
+.a-sub{
+  margin:8px 0 0;padding-left:10px;border-left:2px solid var(--line);
+  display:flex;flex-direction:column;gap:6px;
+}
+.a-sub .a-item{
+  box-shadow:none;background:var(--bg);border-radius:14px;padding:10px 12px;
+}
+.a-more{
+  display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-3);
+  padding:6px 2px 0 12px;
+}
+
+/* ---- FAB ---- */
+.a-fab{
+  position:absolute;right:16px;bottom:16px;width:54px;height:54px;border-radius:18px;
+  background:var(--brand);color:#fff;border:none;display:grid;place-items:center;
+  box-shadow:0 8px 20px rgba(11,87,208,.34);cursor:pointer;
+}
+
+/* ---- 记账 ---- */
+.a-hero{
+  margin:12px 16px 0;background:var(--brand-soft);border-radius:var(--r-card);
+  padding:18px 18px 16px;
+}
+.a-hero .h1{display:flex;align-items:center;gap:8px}
+.a-hero .h1 span{font-size:12.5px;color:var(--brand-on-soft);opacity:.8}
+.a-hero .h1 .mode{
+  margin-left:auto;font-size:11.5px;font-weight:600;color:var(--brand-on-soft);
+  background:rgba(255,255,255,.62);padding:4px 9px;border-radius:999px;
+  display:flex;align-items:center;gap:3px;
+}
+.a-hero .amt{
+  font-size:36px;font-weight:800;letter-spacing:-.8px;color:var(--brand-on-soft);
+  line-height:1.15;margin-top:6px;
+}
+.a-hero .sub{
+  display:flex;justify-content:space-between;font-size:11.5px;
+  color:var(--brand-on-soft);opacity:.78;margin-top:4px;
+}
+.a-hero .bar{background:rgba(10,43,102,.16);margin-top:12px}
+.a-hero .bar i{background:var(--brand-on-soft);opacity:.78}
+.a-hero .foot{font-size:10.5px;color:var(--brand-on-soft);opacity:.62;margin-top:8px}
+.a-triple{display:flex;gap:8px;margin:10px 16px 0}
+.a-triple .cell{
+  flex:1;background:var(--surface);border-radius:14px;padding:11px 12px;
+  box-shadow:0 1px 2px rgba(19,24,32,.05);
+}
+.a-triple .cell span{font-size:11px;color:var(--text-3);display:block}
+.a-triple .cell b{font-size:15px;font-weight:700;display:block;margin-top:3px;letter-spacing:-.2px}
+.a-segs{display:flex;gap:6px;padding:14px 16px 6px;overflow:hidden}
+.a-segs .s{
+  font-size:12.5px;padding:7px 13px;border-radius:999px;background:var(--surface);
+  color:var(--text-2);border:1px solid var(--line);white-space:nowrap;
+}
+.a-segs .s.on{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:600}
+.a-dayhd{
+  display:flex;align-items:center;gap:8px;padding:16px 16px 6px;
+}
+.a-dayhd b{font-size:14px;font-weight:700}
+.a-dayhd .r{margin-left:auto;display:flex;gap:10px;font-size:11.5px;font-weight:600}
+.a-txn{
+  display:flex;gap:11px;align-items:center;padding:11px 16px;
+  border-bottom:1px solid var(--line);
+}
+.a-txn .ico{
+  width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;
+  color:#fff;
+}
+.a-txn .mid{flex:1;min-width:0}
+.a-txn .mid b{font-size:14.5px;font-weight:500;display:block}
+.a-txn .mid span{font-size:11px;color:var(--text-3);display:block;margin-top:2px}
+.a-txn .amt{text-align:right;font-size:14.5px;font-weight:700;letter-spacing:-.2px}
+.a-txn .amt small{display:block;font-size:10.5px;font-weight:400;color:var(--text-3);margin-top:2px}
+
+/* ---- 课表 ---- */
+.a-tt-hd{display:flex;align-items:center;gap:8px;padding:8px 16px 10px;background:var(--surface)}
+.a-tt-hd .pill{
+  font-size:12px;font-weight:600;padding:6px 10px;border-radius:999px;
+  background:var(--brand-soft);color:var(--brand-on-soft);display:flex;align-items:center;gap:4px;
+}
+.a-tt-hd .wk{flex:1;text-align:center;font-size:16px;font-weight:700}
+.a-tt-hd .cnt{font-size:11.5px;color:var(--text-3)}
+.a-tt-axis{
+  width:44px;flex:none;border-right:1px solid var(--line);position:relative;
+  background:var(--surface);
+}
+.a-tt-axis .t{
+  font-size:10px;color:var(--text-3);text-align:right;padding-right:6px;
+  position:absolute;right:0;transform:translateY(-50%);line-height:1;
+}
+.a-tt-axis .nowdot{
+  position:absolute;left:6px;width:9px;height:9px;border-radius:50%;
+  background:var(--now);transform:translateY(-50%);
+}
+.a-tt-scroll{flex:1;overflow-x:auto;overflow-y:hidden}
+.a-tt-scroll::-webkit-scrollbar{height:0}
+.a-tt-inner{width:420px}
+.a-tt-grid{position:relative;display:flex}
+.a-tt-col{flex:none;width:60px;border-right:1px solid #EEF1F6;position:relative}
+.a-tt-col .hline{position:absolute;left:0;right:0;border-top:1px solid #F0F3F8}
+.a-tt-col.today{background:#F6F9FF}
+.a-course{
+  position:absolute;left:2px;right:2px;border-radius:6px;overflow:hidden;
+  background:#fff;border:1px solid var(--line);border-left:3px solid var(--c);
+  padding:5px 6px;font-size:11px;line-height:1.32;color:var(--text);
+  box-shadow:0 1px 1px rgba(19,24,32,.06);
+}
+.a-course b{font-weight:600;display:block;overflow:hidden}
+.a-course span{font-size:10px;color:var(--text-3);display:block;overflow:hidden}
+.a-nowline{
+  position:absolute;left:0;right:0;height:2px;background:var(--now);z-index:3;
+}
+.a-nowline::before{
+  content:"";position:absolute;left:-4px;top:-3px;width:8px;height:8px;
+  border-radius:50%;background:var(--now);
+}
+.a-tt-days{display:flex;background:var(--surface);border-bottom:1px solid var(--line)}
+.a-tt-days .ax{width:44px;flex:none}
+.a-tt-days .row{display:flex;width:420px}
+.a-tt-days .d{
+  width:60px;flex:none;text-align:center;padding:6px 0 7px;
+}
+.a-tt-days .d span{font-size:10.5px;color:var(--text-3);display:block}
+.a-tt-days .d b{font-size:14px;font-weight:600;display:block;margin-top:1px}
+.a-tt-days .d.on b{
+  background:var(--brand);color:#fff;width:22px;height:22px;border-radius:50%;
+  margin:1px auto 0;line-height:22px;font-size:12.5px;
+}
+
+/* ---- 日历 ---- */
+.a-cal-legend{
+  display:flex;gap:14px;padding:8px 16px 4px;flex-wrap:wrap;
+}
+.a-cal-legend span{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2)}
+.a-cal-legend i{width:8px;height:8px;border-radius:2px;display:block}
+.a-mgrid{display:grid;grid-template-columns:repeat(7,1fr);padding:0 12px}
+.a-mcell{
+  height:52px;display:flex;flex-direction:column;align-items:center;padding-top:5px;
+}
+.a-mcell .d{font-size:13px;color:var(--text);width:24px;height:24px;border-radius:50%;
+  display:grid;place-items:center}
+.a-mcell.out .d{color:var(--text-3)}
+.a-mcell.today .d{background:var(--brand);color:#fff;font-weight:700}
+.a-mcell .bars{display:flex;gap:2px;margin-top:4px;height:3px}
+.a-mcell .bars i{width:8px;height:3px;border-radius:1.5px;display:block}
+.a-mcell .lunar{font-size:10px;color:var(--text-3);margin-top:2px;line-height:1}
+.a-mcell .lunar.hl{color:#A0562B;font-weight:600}
+.a-evrow{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);
+}
+.a-evrow .bar{width:3px;align-self:stretch;border-radius:2px;background:var(--c);min-height:34px}
+.a-evrow .mid{flex:1}
+.a-evrow .mid b{font-size:14px;font-weight:500;display:block}
+.a-evrow .mid span{font-size:11px;color:var(--text-3)}
+.a-evrow .kind{
+  font-size:10.5px;padding:3px 7px;border-radius:6px;background:var(--surface-2);color:var(--text-2);
+}
+
+/* ---- 习惯 ---- */
+.a-habit{
+  display:flex;align-items:center;gap:12px;background:var(--surface);
+  border-radius:var(--r-card);padding:13px 14px;
+  box-shadow:0 1px 2px rgba(19,24,32,.05);
+}
+.a-habit .hi{
+  width:42px;height:42px;border-radius:13px;display:grid;place-items:center;color:#fff;flex:none;
+}
+.a-habit .mid{flex:1;min-width:0}
+.a-habit .mid b{font-size:14.5px;font-weight:600;display:block}
+.a-habit .mid .t{font-size:11px;color:var(--text-3);margin:3px 0 6px}
+.a-habit .mid .bar{height:4px}
+.a-habit .a-btn{
+  width:44px;height:44px;border-radius:50%;border:1.8px solid var(--line);background:var(--surface);
+  color:var(--text-3);display:grid;place-items:center;flex:none;cursor:pointer;
+}
+.a-habit .a-btn.done{background:var(--brand);border-color:var(--brand);color:#fff}
+.a-stats{
+  display:flex;gap:8px;margin:12px 16px 4px;
+}
+.a-stats .s{
+  flex:1;background:var(--surface);border-radius:14px;padding:11px 12px;
+  box-shadow:0 1px 2px rgba(19,24,32,.05);
+}
+.a-stats .s span{font-size:11px;color:var(--text-3);display:block}
+.a-stats .s b{font-size:17px;font-weight:700;display:block;margin-top:2px}
+
+/* ---- 我的 ---- */
+.a-me{
+  display:flex;align-items:center;gap:14px;margin:12px 16px 0;
+  background:var(--surface);border-radius:var(--r-card);padding:18px 16px;
+  box-shadow:0 1px 2px rgba(19,24,32,.05);
+}
+.a-me .av{
+  width:58px;height:58px;border-radius:50%;background:var(--brand-soft);color:var(--brand-on-soft);
+  display:grid;place-items:center;font-size:20px;font-weight:700;flex:none;
+}
+.a-me .mid{flex:1}
+.a-me .mid b{font-size:17px;font-weight:700;display:block}
+.a-me .mid span{font-size:11.5px;color:var(--text-3);display:block;margin-top:4px}
+.a-ring{width:62px;height:62px;position:relative;flex:none}
+.a-ring svg{transform:rotate(-90deg)}
+.a-ring .val{
+  position:absolute;inset:0;display:grid;place-items:center;
+  font-size:15px;font-weight:800;color:var(--brand);
+}
+.a-megroup{margin:14px 16px 0}
+.a-megroup .gh{
+  font-size:11.5px;font-weight:700;color:var(--text-3);letter-spacing:.8px;
+  padding:0 4px 8px;
+}
+.a-megroup .li{
+  display:flex;align-items:center;gap:12px;background:var(--surface);
+  padding:14px 14px;border-bottom:1px solid var(--line);
+}
+.a-megroup .box{border-radius:var(--r-card);overflow:hidden;box-shadow:0 1px 2px rgba(19,24,32,.05)}
+.a-megroup .li:last-child{border-bottom:none}
+.a-megroup .li .ic{color:var(--text-2)}
+.a-megroup .li b{font-size:14px;font-weight:500;flex:1}
+.a-megroup .li .val{font-size:12px;color:var(--text-3)}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <p class="eyebrow">Personal Assistant · UI/UX 方案 A</p>
+  <h1>方案 A · 秩序</h1>
+  <p class="lede">
+    核心思路：<b>把颜色收进一套封闭的语义系统</b>，把<b>信息层级重排成「一条主轴」</b>。
+    品牌蓝只负责「交互与强调」，收入 / 支出 / 超支 / 当前时刻各有各的固定色，不再随主题色漂移；
+    卡片从四档底色收敛到两档，圆角从三档收敛到两档；每个模块只保留<b>一张主视觉卡</b>，
+    次要信息降级成可点的入口行，列表内容优先于统计图表。
+  </p>
+</div>
+
+<div class="plan-banner">
+  <div class="mark" style="background:#0B57D0">A</div>
+  <div class="txt">
+    <h2>秩序版 · Order</h2>
+    <p>
+      适合「希望一眼看清每个数字代表什么」的使用者。改动集中在：颜色语义收敛、卡片降级、列表层级对齐、
+      课表网格可横滑 + 当前时刻线、日历圆点改色条。代价是单屏信息量中等，没有特别紧凑或特别空。
+    </p>
+  </div>
+  <div class="kv">
+    <span>语义色封闭</span><span>单主视觉卡</span><span>卡片化清单</span>
+    <span>网格横滑</span><span>当前时刻线</span><span>触控 ≥ 44dp</span>
+  </div>
+</div>
+
+<div class="screen-grid">
+
+  <!-- ================= A1 清单 ================= -->
+  <section class="screen-cell">
+    <div class="screen-cap"><span class="idx">A1</span><span class="t">清单</span><span class="s">焦点条固定 · 卡片列表</span></div>
+    <div class="phone">
+      <div class="statusbar"><span>18:42</span><span class="sb-r"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i><i style="height:11px"></i></span></div>
+      <div class="viewport">
+        <div class="a-appbar">
+          <button class="a-ib"><svg class="ic"><use href="#i-menu"/></svg></button>
+          <div class="title">今天 <svg class="ic sm" style="color:var(--text-3)"><use href="#i-down"/></svg></div>
+          <button class="a-ib"><svg class="ic"><use href="#i-search"/></svg></button>
+          <button class="a-ib on"><svg class="ic"><use href="#i-filter"/></svg><span class="a-badge">2</span></button>
+        </div>
+        <div class="a-focus">
+          <div class="r1">
+            <b>今日焦点</b>
+            <span class="a-bar" style="flex:1"><i style="width:68%"></i></span>
+            <span class="v">68%</span>
+          </div>
+        </div>
+        <div class="a-quick">
+          <div class="inp">记一件事… 支持「明天 @学习 #DDL」</div>
+          <button class="add"><svg class="ic"><use href="#i-plus"/></svg></button>
+        </div>
+        <div class="a-line"></div>
+        <div class="a-scroll">
+          <div class="a-grouphd"><b>今天</b><span class="cnt">3 项</span><span class="act">优先级排序 <svg class="ic xs"><use href="#i-down"/></svg></span></div>
+          <div class="a-list">
+            <div class="a-item">
+              <span class="a-check"><i></i></span>
+              <div class="a-main">
+                <div class="a-title">高等数学作业 第 7 章 <span class="pin"><svg class="ic xs"><use href="#i-pin"/></svg></span></div>
+                <div class="a-meta">
+                  <span class="a-cat"><i style="background:#C5CAE9"></i>学习</span>
+                  <span class="a-chip warn">今天 23:00</span>
+                  <span class="a-chip pri">紧急</span>
+                  <span class="a-tag"><i style="background:#0B57D0"></i>专业课</span>
+                </div>
+              </div>
+            </div>
+            <div class="a-item">
+              <span class="a-check"><i></i></span>
+              <div class="a-main">
+                <div class="a-title">背单词 50 个</div>
+                <div class="a-meta">
+                  <span class="a-cat"><i style="background:#C8E6C9"></i>生活</span>
+                  <span class="a-chip">今天</span>
+                  <span class="a-tag"><i style="background:#8E24AA"></i>日常</span>
+                </div>
+              </div>
+            </div>
+            <div class="a-item">
+              <span class="a-check"><i></i></span>
+              <div class="a-main">
+                <div class="a-title">交电费</div>
+                <div class="a-meta">
+                  <span class="a-cat"><i style="background:#FFE0B2"></i>其他</span>
+                  <span class="a-chip">今天</span>
+                  <span class="a-chip">¥ 128.50</span>
+                </div>
+                <div class="a-sub">
+                  <div class="a-item">
+                    <span class="a-check done"><i></i></span>
+                    <div class="a-main">
+                      <div class="a-title done">查电表读数</div>
+                    </div>
+                  </div>
+                  <div class="a-more"><svg class="ic xs"><use href="#i-down"/></svg>展开子项 2/3</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="a-grouphd"><b>已完成</b><span class="cnt">2 项</span></div>
+          <div class="a-list">
+            <div class="a-item done">
+              <span class="a-check done"><i></i></span>
+              <div class="a-main">
+                <div class="a-title done">整理错题本</div>
+                <div class="a-meta">
+                  <span class="a-cat"><i style="background:#C5CAE9"></i>学习</span>
+                  <span class="a-chip">昨天</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="a-fab"><svg class="ic lg"><use href="#i-plus"/></svg></button>
+      </div>
+      <div class="navbar">
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-school"/></svg></span>课表</div>
+        <div class="nav on"><span class="ic"><svg class="ic"><use href="#i-list"/></svg></span>清单</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-wallet"/></svg></span>记账</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-cal"/></svg></span>日历</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-user"/></svg></span>我的</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= A2 记账 ================= -->
+  <section class="screen-cell">
+    <div class="screen-cap"><span class="idx">A2</span><span class="t">记账</span><span class="s">一张主卡 · 报表降级</span></div>
+    <div class="phone">
+      <div class="statusbar"><span>18:42</span><span class="sb-r"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i><i style="height:11px"></i></span></div>
+      <div class="viewport">
+        <div class="a-appbar">
+          <div class="title">记账</div>
+          <button class="a-ib"><svg class="ic"><use href="#i-up2"/></svg></button>
+          <button class="a-ib"><svg class="ic"><use href="#i-down2"/></svg></button>
+          <button class="a-ib"><svg class="ic"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="a-scroll" style="padding-bottom:78px">
+          <div style="display:flex;gap:8px;padding:2px 16px 0;align-items:center">
+            <span style="width:26px;height:26px;border-radius:50%;background:var(--brand-soft);color:var(--brand-on-soft);display:grid;place-items:center"><svg class="ic sm"><use href="#i-wallet"/></svg></span>
+            <b style="font-size:13px">日常钱包</b>
+            <svg class="ic xs" style="color:var(--text-3)"><use href="#i-down"/></svg>
+            <span style="margin-left:auto;font-size:11.5px;color:var(--text-3)">共 2 个账户</span>
+          </div>
+
+          <div class="a-hero">
+            <div class="h1"><span>今日剩余</span><span class="mode">自动 <svg class="ic xs"><use href="#i-down"/></svg></span></div>
+            <div class="amt">¥120.00</div>
+            <div class="sub"><span>本月预算 ¥3,000.00</span><span>已用 33%</span></div>
+            <div class="a-bar"><i style="width:33%"></i></div>
+            <div class="foot">日终自动存入零钱池</div>
+          </div>
+
+          <div class="a-triple">
+            <div class="cell"><span>本月支出</span><b style="color:var(--expense)">¥1,240</b></div>
+            <div class="cell"><span>本月收入</span><b style="color:var(--income)">¥2,000</b></div>
+            <div class="cell"><span>本月结余</span><b>¥760</b></div>
+          </div>
+
+          <div class="a-segs">
+            <span class="s on">流水</span><span class="s">本月报表</span><span class="s">零钱池</span><span class="s">预算</span>
+          </div>
+
+          <div class="a-dayhd"><b>今天</b><span class="r"><span style="color:var(--expense)">−¥180.00</span><span style="color:var(--income)">+¥0.00</span></span></div>
+          <div class="a-txn">
+            <div class="ico" style="background:#FFB74D;color:#20191B"><svg class="ic sm"><use href="#i-wallet"/></svg></div>
+            <div class="mid"><b>餐饮</b><span>食堂午饭 · 12:30</span></div>
+            <div class="amt" style="color:var(--expense)">−¥18.00<small>12:30</small></div>
+          </div>
+          <div class="a-txn">
+            <div class="ico" style="background:#64B5F6;color:#20191B"><svg class="ic sm"><use href="#i-swap"/></svg></div>
+            <div class="mid"><b>交通</b><span>地铁通勤 · 08:12</span></div>
+            <div class="amt" style="color:var(--expense)">−¥162.00<small>08:12</small></div>
+          </div>
+          <div class="a-dayhd"><b>昨天</b><span class="r"><span style="color:var(--expense)">−¥86.00</span><span style="color:var(--income)">+¥2,000.00</span></span></div>
+          <div class="a-txn">
+            <div class="ico" style="background:#B388FF;color:#20191B"><svg class="ic sm"><use href="#i-user"/></svg></div>
+            <div class="mid"><b>工资</b><span>11 月生活费 · 09:00</span></div>
+            <div class="amt" style="color:var(--income)">+¥2,000.00<small>09:00</small></div>
+          </div>
+          <div class="a-txn">
+            <div class="ico" style="background:#81C784;color:#20191B"><svg class="ic sm"><use href="#i-home"/></svg></div>
+            <div class="mid"><b>居住</b><span>宿舍电费 · 21:40</span></div>
+            <div class="amt" style="color:var(--expense)">−¥86.00<small>21:40</small></div>
+          </div>
+        </div>
+        <button class="a-fab"><svg class="ic lg"><use href="#i-plus"/></svg></button>
+      </div>
+      <div class="navbar">
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-school"/></svg></span>课表</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-list"/></svg></span>清单</div>
+        <div class="nav on"><span class="ic"><svg class="ic"><use href="#i-wallet"/></svg></span>记账</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-cal"/></svg></span>日历</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-user"/></svg></span>我的</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= A3 课表 ================= -->
+  <section class="screen-cell">
+    <div class="screen-cap"><span class="idx">A3</span><span class="t">课表</span><span class="s">宽列横滑 + 当前时刻线</span></div>
+    <div class="phone">
+      <div class="statusbar"><span>18:42</span><span class="sb-r"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i><i style="height:11px"></i></span></div>
+      <div class="viewport">
+        <div class="a-appbar">
+          <div class="title">课表</div>
+          <span class="pill" style="font-size:12px;font-weight:600;padding:6px 10px;border-radius:999px;background:var(--brand-soft);color:var(--brand-on-soft);display:flex;align-items:center;gap:4px">2026 秋季 <svg class="ic xs"><use href="#i-down"/></svg></span>
+          <button class="a-ib"><svg class="ic"><use href="#i-gear"/></svg></button>
+        </div>
+        <div class="a-tt-hd">
+          <button class="a-ib"><svg class="ic"><use href="#i-left"/></svg></button>
+          <div class="wk">第 11 周</div>
+          <button class="a-ib"><svg class="ic"><use href="#i-right"/></svg></button>
+          <span class="cnt">18 节</span>
+        </div>
+        <div class="a-tt-body" style="height:330px">
+          <div class="a-tt-axis">
+            <div class="t" style="top:40px">8:00</div>
+            <div class="t" style="top:88px">9:00</div>
+            <div class="t" style="top:136px">10:00</div>
+            <div class="t" style="top:184px">11:00</div>
+            <div class="t" style="top:232px">12:00</div>
+            <div class="t" style="top:280px">13:00</div>
+            <div class="t" style="top:328px">14:00</div>
+            <div class="nowdot" style="top:168px"></div>
+          </div>
+          <div class="a-tt-scroll">
+            <div class="a-tt-inner">
+              <div class="a-tt-days">
+                <div class="row">
+                  <div class="d"><span>一</span><b>2</b></div>
+                  <div class="d"><span>二</span><b>3</b></div>
+                  <div class="d on"><span>三</span><b>4</b></div>
+                  <div class="d"><span>四</span><b>5</b></div>
+                  <div class="d"><span>五</span><b>6</b></div>
+                  <div class="d"><span>六</span><b>7</b></div>
+                  <div class="d"><span>日</span><b>8</b></div>
+                </div>
+              </div>
+              <div class="a-tt-grid" style="height:290px">
+                <!-- 周一 -->
+                <div class="a-tt-col">
+                  <div class="hline" style="top:48px"></div><div class="hline" style="top:96px"></div>
+                  <div class="hline" style="top:144px"></div><div class="hline" style="top:192px"></div>
+                  <div class="hline" style="top:240px"></div><div class="hline" style="top:288px"></div>
+                  <div class="a-course" style="top:0;height:72px;--c:#E57373"><b>高等数学</b><span>教三 305</span></div>
+                  <div class="a-course" style="top:96px;height:72px;--c:#4DD0E1"><b>大学英语</b><span>外语楼 201</span></div>
+                  <div class="a-course" style="top:240px;height:48px;--c:#9575CD"><b>线性代数</b><span>教二 108</span></div>
+                </div>
+                <!-- 周二 -->
+                <div class="a-tt-col">
+                  <div class="hline" style="top:48px"></div><div class="hline" style="top:96px"></div>
+                  <div class="hline" style="top:144px"></div><div class="hline" style="top:192px"></div>
+                  <div class="hline" style="top:240px"></div><div class="hline" style="top:288px"></div>
+                  <div class="a-course" style="top:48px;height:72px;--c:#FFB74D"><b>数据结构</b><span>实验楼 A</span></div>
+                  <div class="a-course" style="top:192px;height:48px;--c:#81C784"><b>体育</b><span>操场</span></div>
+                </div>
+                <!-- 周三（今天） -->
+                <div class="a-tt-col today">
+                  <div class="hline" style="top:48px"></div><div class="hline" style="top:96px"></div>
+                  <div class="hline" style="top:144px"></div><div class="hline" style="top:192px"></div>
+                  <div class="hline" style="top:240px"></div><div class="hline" style="top:288px"></div>
+                  <div class="a-course" style="top:0;height:72px;--c:#64B5F6"><b>数据结构</b><span>实验楼 A</span></div>
+                  <div class="a-course" style="top:96px;height:72px;--c:#F06292"><b>马克思主义</b><span>文科楼 402</span></div>
+                  <div class="a-course" style="top:240px;height:72px;--c:#FFD54F"><b>大学物理</b><span>教一 210</span></div>
+                </div>
+                <!-- 周四 -->
+                <div class="a-tt-col">
+                  <div class="hline" style="top:48px"></div><div class="hline" style="top:96px"></div>
+                  <div class="hline" style="top:144px"></div><div class="hline" style="top:192px"></div>
+                  <div class="hline" style="top:240px"></div><div class="hline" style="top:288px"></div>
+                  <div class="a-course" style="top:48px;height:72px;--c:#9575CD"><b>高等数学</b><span>教三 305</span></div>
+                  <div class="a-course" style="top:192px;height:48px;--c:#4DD0E1"><b>大学英语</b><span>外语楼 201</span></div>
+                </div>
+                <!-- 周五 -->
+                <div class="a-tt-col">
+                  <div class="hline" style="top:48px"></div><div class="hline" style="top:96px"></div>
+                  <div class="hline" style="top:144px"></div><div class="hline" style="top:192px"></div>
+                  <div class="hline" style="top:240px"></div><div class="hline" style="top:288px"></div>
+                  <div class="a-course" style="top:0;height:72px;--c:#FFCDD2"><b>概率论</b><span>教二 210</span></div>
+                  <div class="a-course" style="top:96px;height:72px;--c:#81C784"><b>体育</b><span>操场</span></div>
+                </div>
+                <!-- 周六 -->
+                <div class="a-tt-col">
+                  <div class="hline" style="top:48px"></div><div class="hline" style="top:96px"></div>
+                  <div class="hline" style="top:144px"></div><div class="hline" style="top:192px"></div>
+                  <div class="hline" style="top:240px"></div><div class="hline" style="top:288px"></div>
+                </div>
+                <!-- 周日 -->
+                <div class="a-tt-col">
+                  <div class="hline" style="top:48px"></div><div class="hline" style="top:96px"></div>
+                  <div class="hline" style="top:144px"></div><div class="hline" style="top:192px"></div>
+                  <div class="hline" style="top:240px"></div><div class="hline" style="top:288px"></div>
+                </div>
+                <div class="a-nowline" style="top:128px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:10px 16px;font-size:11.5px;color:var(--text-3);display:flex;align-items:center;gap:6px">
+          <span style="width:14px;height:2px;background:var(--now);display:block;border-radius:1px"></span>
+          当前时刻 10:40 · 左右滑动查看完整一周
+        </div>
+      </div>
+      <div class="navbar">
+        <div class="nav on"><span class="ic"><svg class="ic"><use href="#i-school"/></svg></span>课表</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-list"/></svg></span>清单</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-wallet"/></svg></span>记账</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-cal"/></svg></span>日历</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-user"/></svg></span>我的</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= A4 日历 ================= -->
+  <section class="screen-cell">
+    <div class="screen-cap"><span class="idx">A4</span><span class="t">日历</span><span class="s">圆点改色条 · 角标可读</span></div>
+    <div class="phone">
+      <div class="statusbar"><span>18:42</span><span class="sb-r"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i><i style="height:11px"></i></span></div>
+      <div class="viewport">
+        <div class="a-appbar">
+          <button class="a-ib"><svg class="ic"><use href="#i-left"/></svg></button>
+          <div class="title">2026 年 11 月</div>
+          <button class="a-ib"><svg class="ic"><use href="#i-cal"/></svg></button>
+          <button class="a-ib"><svg class="ic"><use href="#i-gear"/></svg></button>
+        </div>
+        <div class="a-segs" style="padding:10px 16px 8px">
+          <span class="s on">月</span><span class="s">周</span><span class="s">日</span>
+        </div>
+        <div class="a-scroll">
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);padding:0 12px 4px">
+            <div style="text-align:center;font-size:11px;color:var(--text-3);padding:4px 0">一</div>
+            <div style="text-align:center;font-size:11px;color:var(--text-3);padding:4px 0">二</div>
+            <div style="text-align:center;font-size:11px;color:var(--text-3);padding:4px 0">三</div>
+            <div style="text-align:center;font-size:11px;color:var(--text-3);padding:4px 0">四</div>
+            <div style="text-align:center;font-size:11px;color:var(--text-3);padding:4px 0">五</div>
+            <div style="text-align:center;font-size:11px;color:var(--text-3);padding:4px 0">六</div>
+            <div style="text-align:center;font-size:11px;color:var(--text-3);padding:4px 0">日</div>
+          </div>
+          <div class="a-mgrid">
+            <div class="a-mcell out"><span class="d">26</span></div>
+            <div class="a-mcell out"><span class="d">27</span></div>
+            <div class="a-mcell out"><span class="d">28</span></div>
+            <div class="a-mcell out"><span class="d">29</span></div>
+            <div class="a-mcell out"><span class="d">30</span></div>
+            <div class="a-mcell out"><span class="d">31</span><span class="lunar">九月</span></div>
+            <div class="a-mcell"><span class="d">1</span><span class="bars"><i style="background:#0B57D0"></i></span><span class="lunar">十月初一</span></div>
+            <div class="a-mcell"><span class="d">2</span><span class="bars"><i style="background:#0B57D0"></i><i style="background:#E57373"></i></span><span class="lunar">初二</span></div>
+            <div class="a-mcell"><span class="d">3</span><span class="bars"><i style="background:#4DD0E1"></i></span><span class="lunar">初三</span></div>
+            <div class="a-mcell today"><span class="d">4</span><span class="bars"><i style="background:#0B57D0"></i><i style="background:#E57373"></i><i style="background:#4DD0E1"></i></span><span class="lunar">初四</span></div>
+            <div class="a-mcell"><span class="d">5</span><span class="bars"><i style="background:#9575CD"></i></span><span class="lunar">初五</span></div>
+            <div class="a-mcell"><span class="d">6</span></div>
+            <div class="a-mcell"><span class="d">7</span><span class="bars"><i style="background:#81C784"></i></span><span class="lunar">初七</span></div>
+            <div class="a-mcell"><span class="d">8</span></div>
+            <div class="a-mcell"><span class="d">9</span><span class="bars"><i style="background:#0B57D0"></i></span><span class="lunar">初九</span></div>
+            <div class="a-mcell"><span class="d">10</span></div>
+            <div class="a-mcell"><span class="d">11</span><span class="bars"><i style="background:#E57373"></i><i style="background:#F06292"></i></span><span class="lunar">初十</span></div>
+            <div class="a-mcell"><span class="d">12</span></div>
+            <div class="a-mcell"><span class="d">13</span></div>
+            <div class="a-mcell"><span class="d">14</span><span class="bars"><i style="background:#4DD0E1"></i></span><span class="lunar">十四</span></div>
+            <div class="a-mcell"><span class="d">15</span></div>
+            <div class="a-mcell"><span class="d">16</span><span class="bars"><i style="background:#0B57D0"></i></span><span class="lunar">十六</span></div>
+            <div class="a-mcell"><span class="d">17</span></div>
+            <div class="a-mcell"><span class="d">18</span></div>
+            <div class="a-mcell"><span class="d">19</span><span class="bars"><i style="background:#9575CD"></i></span><span class="lunar">十九</span></div>
+            <div class="a-mcell"><span class="d">20</span></div>
+            <div class="a-mcell"><span class="d">21</span></div>
+            <div class="a-mcell"><span class="d">22</span></div>
+            <div class="a-mcell"><span class="d">23</span><span class="bars"><i style="background:#81C784"></i></span><span class="lunar">廿三</span></div>
+            <div class="a-mcell"><span class="d">24</span></div>
+            <div class="a-mcell"><span class="d">25</span></div>
+            <div class="a-mcell"><span class="d">26</span><span class="bars"><i style="background:#0B57D0"></i><i style="background:#E57373"></i></span><span class="lunar">廿六</span></div>
+            <div class="a-mcell"><span class="d">27</span></div>
+            <div class="a-mcell"><span class="d">28</span></div>
+            <div class="a-mcell"><span class="d">29</span></div>
+            <div class="a-mcell"><span class="d">30</span><span class="lunar hl">节气</span></div>
+            <div class="a-mcell out"><span class="d">1</span></div>
+            <div class="a-mcell out"><span class="d">2</span></div>
+          </div>
+          <div class="a-cal-legend">
+            <span><i style="background:#0B57D0"></i>任务</span>
+            <span><i style="background:#E57373"></i>日程</span>
+            <span><i style="background:#4DD0E1"></i>课程</span>
+            <span><i style="background:#81C784"></i>习惯</span>
+          </div>
+          <div class="a-dayhd" style="padding-top:12px"><b>11 月 4 日 · 周三</b><span class="r"><span style="color:var(--text-3)">3 项</span></span></div>
+          <div class="a-evrow">
+            <span class="bar" style="--c:#4DD0E1"></span>
+            <div class="mid"><b>高等数学</b><span>08:00 – 09:40 · 教三 305</span></div>
+            <span class="kind">课程</span>
+          </div>
+          <div class="a-evrow">
+            <span class="bar" style="--c:#E57373"></span>
+            <div class="mid"><b>小组会议</b><span>14:00 – 15:00 · 线上</span></div>
+            <span class="kind">日程</span>
+          </div>
+          <div class="a-evrow">
+            <span class="bar" style="--c:#0B57D0"></span>
+            <div class="mid"><b>背单词 50 个</b><span>今天截止 · 学习</span></div>
+            <span class="kind">任务</span>
+          </div>
+        </div>
+      </div>
+      <div class="navbar">
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-school"/></svg></span>课表</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-list"/></svg></span>清单</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-wallet"/></svg></span>记账</div>
+        <div class="nav on"><span class="ic"><svg class="ic"><use href="#i-cal"/></svg></span>日历</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-user"/></svg></span>我的</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= A5 习惯 ================= -->
+  <section class="screen-cell">
+    <div class="screen-cap"><span class="idx">A5</span><span class="t">习惯</span><span class="s">44dp 打卡钮 · 渐变顶栏</span></div>
+    <div class="phone">
+      <div class="viewport">
+        <div style="flex:none;background-color:#2C6ADF;background-image:linear-gradient(180deg,#0B57D0 0%,#2C6ADF 118px)">
+          <div class="statusbar" style="color:#FFFFFF"><span>18:42</span><span class="sb-r"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i><i style="height:11px"></i></span></div>
+          <div class="a-appbar" style="background:transparent;color:#fff;padding-top:4px">
+            <div class="title" style="color:#fff">习惯</div>
+            <button class="a-ib" style="color:#FFFFFF"><svg class="ic"><use href="#i-cal"/></svg></button>
+          </div>
+        </div>
+        <div class="a-scroll">
+          <div class="a-stats" style="margin-top:6px">
+            <div class="s"><span>今日完成</span><b>3 / 5</b></div>
+            <div class="s"><span>连续天数</span><b>12</b></div>
+            <div class="s"><span>本周达成</span><b>86%</b></div>
+          </div>
+          <div style="padding:16px 16px 8px;font-size:13.5px;font-weight:700">今日待打卡</div>
+          <div style="display:flex;flex-direction:column;gap:8px;padding:0 16px 90px">
+            <div class="a-habit">
+              <div class="hi" style="background:#3F7DE0"><svg class="ic"><use href="#i-book"/></svg></div>
+              <div class="mid">
+                <b>背单词</b>
+                <div class="t">每日 50 个 · 已完成 50</div>
+                <div class="a-bar"><i style="width:100%;background:#3F7DE0"></i></div>
+              </div>
+              <button class="a-btn done" style="background:#3F7DE0;border-color:#3F7DE0"><svg class="ic"><use href="#i-check"/></svg></button>
+            </div>
+            <div class="a-habit">
+              <div class="hi" style="background:#E5834B"><svg class="ic"><use href="#i-target"/></svg></div>
+              <div class="mid">
+                <b>跑步</b>
+                <div class="t">每周 3 次 · 本周 1 次</div>
+                <div class="a-bar"><i style="width:33%;background:#E5834B"></i></div>
+              </div>
+              <button class="a-btn"><svg class="ic"><use href="#i-plus"/></svg></button>
+            </div>
+            <div class="a-habit">
+              <div class="hi" style="background:#3FA07A"><svg class="ic"><use href="#i-jar"/></svg></div>
+              <div class="mid">
+                <b>喝水</b>
+                <div class="t">每日 8 杯 · 已完成 5</div>
+                <div class="a-bar"><i style="width:62%;background:#3FA07A"></i></div>
+              </div>
+              <button class="a-btn"><svg class="ic"><use href="#i-plus"/></svg></button>
+            </div>
+            <div class="a-habit">
+              <div class="hi" style="background:#8E6BD0"><svg class="ic"><use href="#i-moon"/></svg></div>
+              <div class="mid">
+                <b>23:30 前睡觉</b>
+                <div class="t">每日 · 连续 12 天</div>
+                <div class="a-bar"><i style="width:100%;background:#8E6BD0"></i></div>
+              </div>
+              <button class="a-btn"><svg class="ic"><use href="#i-plus"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="navbar">
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-school"/></svg></span>课表</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-list"/></svg></span>清单</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-wallet"/></svg></span>记账</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-cal"/></svg></span>日历</div>
+        <div class="nav on"><span class="ic"><svg class="ic"><use href="#i-user"/></svg></span>我的</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= A6 我的 ================= -->
+  <section class="screen-cell">
+    <div class="screen-cap"><span class="idx">A6</span><span class="t">我的</span><span class="s">档案卡 + 分组入口</span></div>
+    <div class="phone">
+      <div class="statusbar"><span>18:42</span><span class="sb-r"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i><i style="height:11px"></i></span></div>
+      <div class="viewport">
+        <div class="a-appbar">
+          <div class="title">我的</div>
+          <button class="a-ib"><svg class="ic"><use href="#i-search"/></svg></button>
+          <button class="a-ib"><svg class="ic"><use href="#i-gear"/></svg></button>
+        </div>
+        <div class="a-scroll">
+          <div class="a-me">
+            <div class="av">岑</div>
+            <div class="mid">
+              <b>岑洛</b>
+              <span>计算机科学与技术 · 2024 级</span>
+              <span style="color:var(--income)">GPA 3.62 / 目标 3.80</span>
+            </div>
+            <div class="a-ring">
+              <svg width="62" height="62">
+                <circle cx="31" cy="31" r="26" fill="none" stroke="#EAEFF7" stroke-width="6"/>
+                <circle cx="31" cy="31" r="26" fill="none" stroke="#0B57D0" stroke-width="6"
+                        stroke-linecap="round" stroke-dasharray="163.4" stroke-dashoffset="30.2"/>
+              </svg>
+              <div class="val">81%</div>
+            </div>
+          </div>
+
+          <div class="a-megroup">
+            <div class="gh">外观</div>
+            <div class="box">
+              <div class="li"><svg class="ic"><use href="#i-palette"/></svg><b>主题色</b><span class="val">静谧蓝</span><svg class="ic sm" style="color:var(--text-3)"><use href="#i-right"/></svg></div>
+              <div class="li"><svg class="ic"><use href="#i-moon"/></svg><b>深色模式</b><span class="val">跟随系统</span><svg class="ic sm" style="color:var(--text-3)"><use href="#i-right"/></svg></div>
+              <div class="li"><svg class="ic"><use href="#i-spark"/></svg><b>动态取色</b><span class="val">关</span><svg class="ic sm" style="color:var(--text-3)"><use href="#i-right"/></svg></div>
+            </div>
+          </div>
+
+          <div class="a-megroup">
+            <div class="gh">数据</div>
+            <div class="box">
+              <div class="li"><svg class="ic"><use href="#i-wallet"/></svg><b>账户管理</b><span class="val">2 个</span><svg class="ic sm" style="color:var(--text-3)"><use href="#i-right"/></svg></div>
+              <div class="li"><svg class="ic"><use href="#i-shield"/></svg><b>备份与恢复</b><span class="val">上次 11-01</span><svg class="ic sm" style="color:var(--text-3)"><use href="#i-right"/></svg></div>
+              <div class="li"><svg class="ic"><use href="#i-bell"/></svg><b>通知提醒</b><span class="val">已开启</span><svg class="ic sm" style="color:var(--text-3)"><use href="#i-right"/></svg></div>
+            </div>
+          </div>
+
+          <div class="a-megroup">
+            <div class="gh">关于</div>
+            <div class="box">
+              <div class="li"><svg class="ic"><use href="#i-book"/></svg><b>隐私与离线</b><svg class="ic sm" style="color:var(--text-3)"><use href="#i-right"/></svg></div>
+              <div class="li" style="color:var(--expense)"><svg class="ic"><use href="#i-trash"/></svg><b>清除全部数据</b><svg class="ic sm" style="color:var(--expense)"><use href="#i-right"/></svg></div>
+            </div>
+          </div>
+          <div style="text-align:center;font-size:11px;color:var(--text-3);padding:22px 0 30px">v0.1.0 · 纯离线</div>
+        </div>
+      </div>
+      <div class="navbar">
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-school"/></svg></span>课表</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-list"/></svg></span>清单</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-wallet"/></svg></span>记账</div>
+        <div class="nav"><span class="ic"><svg class="ic"><use href="#i-cal"/></svg></span>日历</div>
+        <div class="nav on"><span class="ic"><svg class="ic"><use href="#i-user"/></svg></span>我的</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="note-list">
+  <h3>方案 A 相对现状改了什么</h3>
+  <ol>
+    <li><b>颜色语义封闭。</b>「收入 / 支出 / 转账 / 超支 / 当前时刻」各给一个固定值，永不跟随用户主题色；现状里收入在报表是主题蓝、在流水是绿，支出有两个红（<code>MonthlyReportCard.kt:116</code> vs <code>TransactionRow.kt:170</code>），「当前时刻」和「超支」共用 error（<code>WeekCalendarView.kt:436</code>）。</li>
+    <li><b>旧色残留清掉。</b>事件分类默认紫 <code>#6750A4</code>（<code>Event.kt:70</code>）、习惯默认樱花粉 <code>#FF69B4</code>（<code>Habit.kt:17</code>）、抽屉清单色 fallback 热粉（<code>ChecklistDrawer.kt:353</code>）统一进蓝系/中性色。</li>
+    <li><b>用户自选色上的前景色</b>一律走 <code>onColorFor()</code> 亮度判断，浅色分类不再配白图标（现状 <code>CategoryManagementDialog.kt:346-353</code> 等 5 处写死白）。</li>
+    <li><b>卡片从四档底色收敛到两档</b>（surface / brand-soft），圆角从 12/16/20 三档收敛到 20（卡）与 12（chip），与 <code>AppRadii</code> 对齐；间距只用 4/8/12/16/20/24。</li>
+    <li><b>记账首屏只留一张主视觉卡</b>（今日剩余），零钱池 / 报表 / 账户合计降级成可点入口；流水不需要滚过 4 张卡才看得到（现状 <code>FinanceScreen.kt:341-380</code>）。</li>
+    <li><b>清单的元信息与标题左缘对齐</b>，子项缩进 22dp 且带竖向引导线（现状父子只差 4dp，<code>ChecklistItemCard.kt:230</code>）；完成率从会滚走的卡片改成固定在顶部的焦点条。</li>
+    <li><b>课表网格可横滑</b>、列宽 60dp，课程卡左侧 3dp 课程色条 + 名称 + 地点两行；补上当前时刻线（现状完全没有，<code>TimetableGrid.kt</code> 全文无 now-indicator）。</li>
+    <li><b>日历月视图 4dp 圆点改 8×3px 色条</b>，可分辨度从「4 个点挤在 40dp 格内」提升；农历角标 9→10px，对比度提到 4.5:1 以上。</li>
+    <li><b>所有可点区域 ≥ 44dp</b>（现状日历「设置时间段」按钮 28dp、日历内习惯打卡 32dp）。</li>
+  </ol>
+</div>
+
+<div class="page-foot">
+  方案 A · 秩序 —— 静态原型（HTML/CSS，无交互逻辑）。<br>
+  另有 <a href="plan-b.html">方案 B · 紧凑</a>、<a href="plan-c.html">方案 C · 留白</a>、<a href="plan-d.html">融合版 D</a>，<a href="index.html">返回总览对比</a>。
+</div>
+
+</body>
+</html>

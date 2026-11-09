@@ -1,6 +1,7 @@
 package com.example.personalassistant.feature.finance.data.repository
 
 import com.example.personalassistant.core.di.IoDispatcher
+import com.example.personalassistant.feature.finance.data.local.CoinPoolSettlementPlan
 import com.example.personalassistant.feature.finance.data.local.DailyPoolEntity
 import com.example.personalassistant.feature.finance.data.local.FinanceDao
 import com.example.personalassistant.feature.finance.data.local.MonthlyBudgetEntity
@@ -13,6 +14,8 @@ import com.example.personalassistant.feature.finance.domain.MonthCutoffPolicy
 import com.example.personalassistant.feature.finance.domain.model.AccountBalanceSum
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
 import com.example.personalassistant.feature.finance.domain.model.Category
+import com.example.personalassistant.feature.finance.domain.model.CoinPool
+import com.example.personalassistant.feature.finance.domain.model.CoinPoolSettlement
 import com.example.personalassistant.feature.finance.domain.model.DailyPool
 import com.example.personalassistant.feature.finance.domain.model.GlobalMonthlySums
 import com.example.personalassistant.feature.finance.domain.model.MonthlyBudget
@@ -27,10 +30,12 @@ import com.example.personalassistant.feature.settings.FinanceCutoffSettings
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -117,6 +122,7 @@ class FinanceRepositoryImpl @Inject constructor(
         note: String?,
         date: Long,
         attachmentUri: String?,
+        linkedTaskId: Long?,
     ): Long = withContext(dispatcher) {
         val accountId = awaitAccountId()
         val poolDate = startOfDayMillis(date)
@@ -129,8 +135,9 @@ class FinanceRepositoryImpl @Inject constructor(
             date = date,
             note = note,
             createdAt = System.currentTimeMillis(),
-            source = "手动",
+            source = if (linkedTaskId != null) "清单" else "手动",
             attachmentUri = attachmentUri,
+            linkedTaskId = linkedTaskId,
         )
         when (type) {
             TransactionType.EXPENSE ->
@@ -417,13 +424,37 @@ class FinanceRepositoryImpl @Inject constructor(
 
     override fun observeTodayPool(): Flow<DailyPool?> =
         accountIdFlow.flatMapLatest { accountId ->
-            financeDao.observeDailyPool(accountId, startOfDayMillis(System.currentTimeMillis()))
+            todayStartMillisFlow().flatMapLatest { todayStart ->
+                financeDao.observeDailyPool(accountId, todayStart)
+            }
         }.map { it?.toDomain() }
 
     /**
      * Phase 3：算法的 3 处数据读取全部按当前账户 ——
      * 预算读取、当月支出统计、昨日 pool 结转。
      * 漏任一处都会让 A 账户的支出吃掉 B 账户的日预算（静默错账，比崩溃更难发现）。
+     *
+     * ## 批次 C：改成「更新已存在的当天行」（修「改了预算今日剩余不动」的根因）
+     *
+     * 原来第 5 步是「当日 pool 已存在 → 幂等跳过」，于是：
+     * 用户改本月可用余额 → 重算结果算出来了 → 被那行 `return` 丢掉 → 界面上纹丝不动。
+     * 而且当天那行往往是「记账时兜底建的」（`dailyBudget = 0.0`），于是日预算恒为 0。
+     *
+     * 现在的语义：
+     * - 当天行**不存在** → 新建（`remainingAmount = dailyBudget + carryOver`）
+     * - 当天行**存在** → **更新** `dailyBudget` / `carryOver` / `remainingAmount`，
+     *   其中 `remainingAmount` 按下面的不变量重算，**已花掉的部分原样保留**：
+     *
+     *   ```
+     *   remainingAmount = dailyBudget + carryOver + totalIncomeToday - totalSpentToday
+     *   ```
+     *
+     * 这条不变量跟 [FinanceDao.deductFromPool] / [FinanceDao.addIncomeToPool] 的写法对齐，
+     * 所以「改了预算」和「记了一笔」两条路径不会互相打架。
+     *
+     * ⚠️ 第 3 步算 `dailyBudget` 时那个 `coerceAtLeast(0.0)` **保留** ——
+     * 那是「日额度」的算法（本月已超支 → 今天不再发额度），
+     * 和「今日剩余（可负）」是两个概念，别混。
      */
     override suspend fun refreshDailyPool(today: Long) = withContext(dispatcher) {
         val accountId = awaitAccountId()
@@ -476,23 +507,34 @@ class FinanceRepositoryImpl @Inject constructor(
         //    （yesterdayPool 在 carryOverEnabled=false 时为 null → 0.0，与原来一致）
         val carryOver = yesterdayPool?.remainingAmount?.coerceAtLeast(0.0) ?: 0.0
 
-        // 5. 当日 pool 已存在 → 幂等跳过
-        if (todayPool != null) return@withContext
-
-        // 6. 创建今日 pool
-        financeDao.insertDailyPool(
-            DailyPoolEntity(
-                id = 0L,
+        // 5. 写入（批次 C 修根因）：不存在 → 新建；存在 → **更新**（不丢弃重算结果）
+        if (todayPool == null) {
+            financeDao.insertDailyPool(
+                DailyPoolEntity(
+                    id = 0L,
+                    accountId = accountId,
+                    date = todayPoolDate,
+                    dailyBudget = dailyBudget,
+                    remainingAmount = dailyBudget + carryOver,
+                    totalSpentToday = 0.0,
+                    totalIncomeToday = 0.0,
+                    carryOver = carryOver,
+                    lastUpdated = System.currentTimeMillis(),
+                )
+            )
+        } else {
+            // 已花掉 / 已赚到的部分原样带过去，只把「今天发多少额度」换掉
+            val newRemaining = dailyBudget + carryOver +
+                todayPool.totalIncomeToday - todayPool.totalSpentToday
+            financeDao.updateDailyPoolBudget(
                 accountId = accountId,
                 date = todayPoolDate,
                 dailyBudget = dailyBudget,
-                remainingAmount = dailyBudget + carryOver,
-                totalSpentToday = 0.0,
-                totalIncomeToday = 0.0,
+                remainingAmount = newRemaining,
                 carryOver = carryOver,
-                lastUpdated = System.currentTimeMillis(),
+                now = System.currentTimeMillis(),
             )
-        )
+        }
     }
 
     // ===================== 内部工具 =====================
@@ -557,6 +599,119 @@ class FinanceRepositoryImpl @Inject constructor(
         val date = Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate()
         return date.atStartOfDay(zone).toInstant().toEpochMilli()
     }
+
+    /**
+     * 「今天 00:00」的时间戳流：跨零点自动发新值
+     *
+     * ## 为什么用本地日期算下一个零点，而不是 `todayStart + ONE_DAY_MS`
+     *
+     * 夏令时切换那天本地日长 23 / 25 小时，用固定毫秒数会算错一天，
+     * 而且错的那天会一直错到下一次切换。
+     *
+     * ## 为什么多睡 1 秒
+     *
+     * 避开「正好卡在 00:00:00.000」那一毫秒的边界 ——
+     * 那时 `nextMidnight - now` 可能是 0，循环会立刻重发同一个值。
+     */
+    private fun todayStartMillisFlow(): Flow<Long> = flow {
+        val zone = ZoneId.systemDefault()
+        while (true) {
+            val now = System.currentTimeMillis()
+            emit(startOfDayMillis(now))
+            val nextMidnight = LocalDate.now(zone)
+                .plusDays(1)
+                .atStartOfDay(zone)
+                .toInstant()
+                .toEpochMilli()
+            delay((nextMidnight - now).coerceAtLeast(1L) + 1_000L)
+        }
+    }
+
+    // ===================== 批次 D：零钱池 =====================
+
+    override fun observeCoinPool(): Flow<CoinPool?> =
+        accountIdFlow.flatMapLatest { accountId ->
+            financeDao.observeCoinPool(accountId)
+        }.map { it?.toDomain() }
+
+    /**
+     * 批次 D：零钱池日切结算
+     *
+     * ## 结算到哪一天
+     *
+     * 传进来的 [settledDate] 就是「结算到哪天」（含）。调用方
+     * （[com.example.personalassistant.feature.finance.domain.usecase.SettleCoinPoolUseCase]）
+     * 传的是**昨天** —— 00:01 触发时「今天」才刚开始、还没过完，
+     * 拿「今天」去结算等于把还没发生的一天也结掉了。
+     *
+     * ## 补算起点
+     *
+     * - 水位线 > 0 → 从「水位线 + 1 天」开始（上次结到哪天，接着往下结）
+     * - 水位线 = 0（从没结算过）→ 从**最早一条 `daily_pools` 的日期**开始
+     *   （没参与过预算执行的日子没有可结算的东西）
+     *
+     * ## 补算时那些天怎么办
+     *
+     * 区间内**没有 `daily_pools` 行**的日子 → 当天没参与预算执行 → 不产生结转，
+     * 直接跳过；但**水位线照样推进**（那些天永久跳过，不会反复扫）。
+     *
+     * ⚠️ 已知限制：用户事后补记一笔**历史日期**的流水时，
+     * `recordExpense` 会给那天补建一行 `daily_pools`（额度为 0）——
+     * 但那天若已被水位线跳过，就不会再回头结算它。这是「历史不追溯」的有意取舍：
+     * 结算额是**当时**的决定，事后补账不该改写它。
+     */
+    override suspend fun settleCoinPool(settledDate: LocalDate): CoinPoolSettlement =
+        withContext(dispatcher) {
+            val accountId = awaitAccountId()
+            val zone = ZoneId.systemDefault()
+            val policy = cutoffPolicyFlow.first()
+            val now = System.currentTimeMillis()
+
+            // 1. 读水位线（已结算到哪天）
+            val pool = financeDao.getCoinPool(accountId)
+            val watermark = pool?.lastSettledDate ?: 0L
+
+            val noop = CoinPoolSettlement(
+                settledDate = settledDate.atStartOfDay(zone).toInstant().toEpochMilli(),
+                settledDays = 0,
+                settledAmount = 0.0,
+                balance = pool?.balance ?: 0.0,
+            )
+
+            // 2. 算补算起点
+            val fromDate: LocalDate = if (watermark > 0L) {
+                Instant.ofEpochMilli(watermark).atZone(zone).toLocalDate().plusDays(1)
+            } else {
+                val earliest = financeDao.getEarliestDailyPoolDate(accountId) ?: return@withContext noop
+                Instant.ofEpochMilli(earliest).atZone(zone).toLocalDate()
+            }
+            if (fromDate.isAfter(settledDate)) return@withContext noop
+
+            // 3. 生成结算计划（每一天 + 所属账期）
+            //    ⚠️ 用 LocalDate 逐日推进（不是 +86400000 毫秒）—— 夏令时那天本地日长 23/25 小时，
+            //    固定毫秒数会算错一天，而且会一直错到下一次切换。
+            val plans = buildList {
+                var d = fromDate
+                while (!d.isAfter(settledDate)) {
+                    add(
+                        CoinPoolSettlementPlan(
+                            date = d.atStartOfDay(zone).toInstant().toEpochMilli(),
+                            ym = BillingCycle.yearMonthOf(d, policy, zone),
+                        ),
+                    )
+                    d = d.plusDays(1)
+                }
+            }
+
+            // 4. 事务内结算（落结算流水 + 累加余额 + 推进水位线）
+            val outcome = financeDao.settleCoinPool(accountId, plans, now)
+            CoinPoolSettlement(
+                settledDate = settledDate.atStartOfDay(zone).toInstant().toEpochMilli(),
+                settledDays = outcome.settledDays,
+                settledAmount = outcome.settledAmount,
+                balance = outcome.balance,
+            )
+        }
 
     companion object {
         private const val ONE_DAY_MS = 24L * 60L * 60L * 1000L

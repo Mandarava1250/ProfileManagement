@@ -18,6 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.personalassistant.core.ui.theme.LocalAppColors
+import com.example.personalassistant.core.ui.theme.LocalAppSurfaces
 import com.example.personalassistant.feature.finance.domain.model.AccountBudgetSummary
 import com.example.personalassistant.feature.finance.domain.model.BudgetSummaryTotals
 import com.example.personalassistant.feature.finance.presentation.util.MoneyFormat
@@ -52,7 +54,7 @@ fun AccountSummaryCard(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        colors = CardDefaults.cardColors(containerColor = LocalAppSurfaces.current.paper),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -93,7 +95,7 @@ fun AccountSummaryCard(
                         .height(6.dp)
                         .background(
                             if (totals.usedRatio > 1.0) {
-                                MaterialTheme.colorScheme.error
+                                LocalAppColors.current.expenseInk
                             } else {
                                 MaterialTheme.colorScheme.primary
                             },
@@ -107,7 +109,7 @@ fun AccountSummaryCard(
                     text = "另有 ${totals.accountsMissingBudget} 个账户未设预算，" +
                         "未计入上面的合计与进度",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = LocalAppColors.current.expenseInk,
                 )
             }
 
@@ -117,7 +119,7 @@ fun AccountSummaryCard(
                     text = "转账数据不平衡：转入 ${MoneyFormat.formatPlain(totals.totalTransferIn)}，" +
                         "转出 ${MoneyFormat.formatPlain(totals.totalTransferOut)}，请检查流水",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = LocalAppColors.current.expenseInk,
                 )
             }
 
@@ -167,7 +169,7 @@ private fun AccountBudgetRow(row: AccountBudgetSummary) {
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = if (row.isOverBudget) FontWeight.SemiBold else FontWeight.Normal,
             color = when {
-                row.isOverBudget -> MaterialTheme.colorScheme.error
+                row.isOverBudget -> LocalAppColors.current.expenseInk
                 row.budgetMissing -> MaterialTheme.colorScheme.onSurfaceVariant
                 else -> MaterialTheme.colorScheme.onSurface
             },
@@ -187,7 +189,7 @@ private fun SummaryStat(label: String, value: String, negative: Boolean = false)
             text = value,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = if (negative) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            color = if (negative) LocalAppColors.current.expenseInk else MaterialTheme.colorScheme.onSurface,
         )
     }
 }

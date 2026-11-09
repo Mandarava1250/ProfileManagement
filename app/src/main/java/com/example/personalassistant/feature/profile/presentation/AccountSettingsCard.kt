@@ -1,13 +1,15 @@
 package com.example.personalassistant.feature.profile.presentation
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -19,15 +21,10 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,10 +35,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.personalassistant.core.ui.components.ColorBar
+import com.example.personalassistant.core.ui.components.ThinDivider
+import com.example.personalassistant.core.ui.components.ensureBarContrast
 import com.example.personalassistant.feature.profile.data.local.UserProfileEntity
 
 /**
@@ -90,51 +91,59 @@ fun AccountSettingsCard(
 
     val canDelete = accounts.size > 1
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.Person, contentDescription = null)
-                IconTitleGap()
-                Text("记账账户", style = MaterialTheme.typography.titleMedium)
+    // Phase 26：去掉卡片外壳。
+    //
+    // 「记账」分组标题已经由上层 FinanceSection 的 ModuleHeader 给了，
+    // 这里再套一张 primaryContainer 的卡片就是「标题下面又是一个大色块」——
+    // 这套方案里色块只留给「今天最重要的那张卡」，账户列表是普通的分组行。
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "每个账户一本独立账本：流水、分类、月预算、零钱池互不干扰。" +
+                "任务 / 日历 / 课表不受影响，仍然全局共享。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+        )
+
+        accounts.forEachIndexed { index, account ->
+            if (index > 0) {
+                ThinDivider()
             }
-            IconTitleGap()
-            Text(
-                text = "每个账户一本独立账本：流水、分类、月预算、零钱池互不干扰。" +
-                    "任务 / 日历 / 课表不受影响，仍然全局共享。",
-                style = MaterialTheme.typography.bodySmall,
+            AccountRow(
+                account = account,
+                isCurrent = account.id == currentAccountId,
+                canDelete = canDelete,
+                onSwitch = { onSwitch(account.id) },
+                onRename = { renamingAccount = account },
+                onDelete = { onDeleteRequest(account) },
+                onAvatarClick = { onAvatarClick(account) },
+                onAvatarRemove = { onAvatarRemove(account.id) },
+                onBalanceClick = { balanceAccount = account },
             )
+        }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+        ThinDivider()
 
-            accounts.forEach { account ->
-                AccountRow(
-                    account = account,
-                    isCurrent = account.id == currentAccountId,
-                    canDelete = canDelete,
-                    onSwitch = { onSwitch(account.id) },
-                    onRename = { renamingAccount = account },
-                    onDelete = { onDeleteRequest(account) },
-                    onAvatarClick = { onAvatarClick(account) },
-                    onAvatarRemove = { onAvatarRemove(account.id) },
-                    onBalanceClick = { balanceAccount = account },
-                )
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-            OutlinedButton(
-                onClick = { showCreateDialog = true },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                IconTitleGap()
-                Text("新建账户")
-            }
+        // 「新建账户」也降级成一行文字，不再是一个占满宽度的描边按钮
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showCreateDialog = true }
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Rounded.Add,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = "新建账户",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 
@@ -226,11 +235,23 @@ private fun AccountRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = !isCurrent, onClick = onSwitch)
-            .padding(vertical = 6.dp),
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        RadioButton(selected = isCurrent, onClick = onSwitch)
+        // 选中态改成 3dp 竖条（原来是一个 RadioButton 圆点）。
+        //
+        // 圆点在这套语言里已经被「分类色竖条 / 当前时刻线」占用了，
+        // 账户选中用同一根竖条，全 App 的「当前是哪一个」就长一个样。
+        // 竖条压在行首，宽度恒定 —— 未选中时留空位，账户名才不会左右跳。
+        ColorBar(
+            color = if (isCurrent) {
+                ensureBarContrast(MaterialTheme.colorScheme.primary)
+            } else {
+                Color.Transparent
+            },
+            modifier = Modifier.height(28.dp),
+        )
+        Spacer(Modifier.width(12.dp))
         // Phase 4：头像**只展示不可点**。
         // 整行已绑了 clickable(onSwitch)，头像若也可点会先误触「切换账户」，
         // 所以换头像走右侧独立的相机 IconButton（不嵌在行点击区里）。

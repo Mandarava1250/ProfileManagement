@@ -4,20 +4,32 @@ import com.example.personalassistant.feature.task.domain.model.ChecklistFilter
 import com.example.personalassistant.feature.task.domain.model.ChecklistGroup
 import com.example.personalassistant.feature.task.domain.model.ChecklistItem
 import com.example.personalassistant.feature.task.domain.model.ChecklistSort
-import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.Tag
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
+import com.example.personalassistant.feature.task.data.repository.FakeTaskRepository
+import com.example.personalassistant.feature.finance.data.repository.FakeFinanceRepository
 import com.example.personalassistant.feature.task.domain.repository.ChecklistRepository
 import com.example.personalassistant.feature.task.domain.repository.TagRepository
 import com.example.personalassistant.feature.task.domain.usecase.AddChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.AddNestedChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.AttachTagToChecklistItemUseCase
+import com.example.personalassistant.feature.task.domain.usecase.CreateTagUseCase
+import com.example.personalassistant.feature.task.domain.usecase.CreateTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DeleteChecklistItemUseCase
+import com.example.personalassistant.feature.task.domain.usecase.DeleteTaskListUseCase
 import com.example.personalassistant.feature.task.domain.usecase.DetachTagFromChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveAllTagsWithCountUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ObserveChecklistItemsUseCase
+import com.example.personalassistant.feature.task.domain.usecase.ObserveCompletionStatsUseCase
+import com.example.personalassistant.feature.task.domain.usecase.ObserveTaskListsUseCase
+import com.example.personalassistant.feature.task.domain.usecase.RecordExpenseFromTaskUseCase
+import com.example.personalassistant.feature.task.domain.usecase.RenameTaskListUseCase
+import com.example.personalassistant.feature.task.domain.usecase.RestoreChecklistItemUseCase
+import com.example.personalassistant.feature.task.domain.usecase.SetTaskPinnedUseCase
 import com.example.personalassistant.feature.task.domain.usecase.ToggleChecklistItemUseCase
 import com.example.personalassistant.feature.task.domain.usecase.UpdateChecklistItemUseCase
+import com.example.personalassistant.feature.task.data.repository.FakeTaskListRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -67,18 +79,18 @@ class ChecklistViewModelTest {
 
     // ===== Fake =====
 
-    /** 内存版清单仓库：存 SubTask + 标签映射，读流自己组树。 */
+    /** 内存版清单仓库：存 Task + 标签映射，读流自己组树。 */
     private class FakeChecklistRepository : ChecklistRepository {
 
-        private val itemsState = MutableStateFlow<List<SubTask>>(emptyList())
+        private val itemsState = MutableStateFlow<List<Task>>(emptyList())
         private val tagsState = MutableStateFlow<Map<Long, List<Tag>>>(emptyMap())
         private var nextId = 1L
 
         /** 当前存着的全部清单项（含嵌套子项）。 */
-        val items: List<SubTask> get() = itemsState.value
+        val items: List<Task> get() = itemsState.value
 
         /** 直接塞清单项（构造测试场景）。 */
-        fun setItems(items: List<SubTask>) {
+        fun setItems(items: List<Task>) {
             itemsState.value = items
             // 自增游标要跳过已存在的 id —— 否则后面 addItem 会撞 id
             val maxId = items.maxOfOrNull { it.id } ?: 0L
@@ -90,10 +102,13 @@ class ChecklistViewModelTest {
             tagsState.value = tags
         }
 
+        /** 某个清单项当前挂着的标签（断言用）。 */
+        fun tagsOf(itemId: Long): List<Tag> = tagsState.value[itemId].orEmpty()
+
         override fun observeChecklistItems(): Flow<List<ChecklistItem>> =
             combine(itemsState, tagsState) { items, tags -> buildTree(items, tags) }
 
-        override suspend fun getItem(id: Long): SubTask? = itemsState.value.find { it.id == id }
+        override suspend fun getItem(id: Long): Task? = itemsState.value.find { it.id == id }
 
         override suspend fun addItem(
             title: String,
@@ -101,38 +116,47 @@ class ChecklistViewModelTest {
             dueDate: Long?,
             priority: TaskPriority,
             amount: Double?,
+            listId: Long,
+            reminderTime: Long?,
         ): Long {
             val id = nextId++
-            itemsState.value = itemsState.value + SubTask(
+            itemsState.value = itemsState.value + Task(
                 id = id,
                 parentTaskId = null,
+                listId = listId,
                 title = title,
-                order = itemsState.value.size,
+                manualOrder = itemsState.value.size.toLong(),
                 category = category,
                 dueDate = dueDate,
                 priority = priority,
                 amount = amount,
+                reminderTime = reminderTime,
             )
             return id
         }
 
         override suspend fun addNestedItem(parentSubTaskId: Long, title: String): Long {
             val id = nextId++
-            itemsState.value = itemsState.value + SubTask(
+            itemsState.value = itemsState.value + Task(
                 id = id,
-                parentTaskId = null,
                 title = title,
-                parentSubTaskId = parentSubTaskId,
+                parentTaskId = parentSubTaskId,
             )
             return id
         }
 
-        override suspend fun updateItem(item: SubTask) {
+        override suspend fun updateItem(item: Task) {
             itemsState.value = itemsState.value.map { if (it.id == item.id) item else it }
         }
 
-        override suspend fun deleteItem(item: SubTask) {
+        override suspend fun deleteItem(item: Task) {
             itemsState.value = itemsState.value.filterNot { it.id == item.id }
+        }
+
+        /** Phase 18.7：撤销删除 —— 按原 id 放回去 */
+        override suspend fun restoreItem(item: Task): Long {
+            itemsState.value = itemsState.value.filterNot { it.id == item.id } + item
+            return item.id
         }
 
         override suspend fun toggleComplete(id: Long, completed: Boolean) {
@@ -155,14 +179,14 @@ class ChecklistViewModelTest {
         }
 
         /** 扁平列表 → 「顶层项 + 标签 + 子清单」树。 */
-        private fun buildTree(items: List<SubTask>, tags: Map<Long, List<Tag>>): List<ChecklistItem> {
-            val childrenByParent = items.filter { it.parentSubTaskId != null }.groupBy { it.parentSubTaskId!! }
-            fun build(item: SubTask): ChecklistItem = ChecklistItem(
-                subTask = item,
+        private fun buildTree(items: List<Task>, tags: Map<Long, List<Tag>>): List<ChecklistItem> {
+            val childrenByParent = items.filter { it.parentTaskId != null }.groupBy { it.parentTaskId!! }
+            fun build(item: Task): ChecklistItem = ChecklistItem(
+                task = item,
                 tags = tags[item.id].orEmpty(),
                 children = childrenByParent[item.id].orEmpty().map { build(it) },
             )
-            return items.filter { it.parentSubTaskId == null }.map { build(it) }
+            return items.filter { it.parentTaskId == null }.map { build(it) }
         }
     }
 
@@ -191,6 +215,8 @@ class ChecklistViewModelTest {
     private fun makeVm(
         repo: FakeChecklistRepository = FakeChecklistRepository(),
         tagRepo: TagRepository = FakeTagRepository(),
+        listRepo: FakeTaskListRepository = FakeTaskListRepository(),
+        taskRepo: FakeTaskRepository = FakeTaskRepository(),
     ): ChecklistViewModel = ChecklistViewModel(
         observeChecklistItems = ObserveChecklistItemsUseCase(repo),
         addChecklistItem = AddChecklistItemUseCase(repo),
@@ -201,6 +227,28 @@ class ChecklistViewModelTest {
         attachTagToItem = AttachTagToChecklistItemUseCase(repo),
         detachTagFromItem = DetachTagFromChecklistItemUseCase(repo),
         observeAllTagsWithCount = ObserveAllTagsWithCountUseCase(tagRepo),
+        // ===== Phase 17：清单（归属地）=====
+        observeTaskLists = ObserveTaskListsUseCase(listRepo),
+        createTaskList = CreateTaskListUseCase(listRepo),
+        renameTaskList = RenameTaskListUseCase(listRepo),
+        deleteTaskList = DeleteTaskListUseCase(listRepo),
+        // ===== Phase 19：命名过滤器 =====
+        namedFilterRepository = FakeNamedFilterRepository(),
+        // ===== Phase 22.6：完成率统计 =====
+        // 完成率读的是 TaskRepository（跟清单页的 ChecklistRepository 两套接口，
+        // 但生产上都落在同一张 tasks 表）
+        observeCompletionStats = ObserveCompletionStatsUseCase(FakeTaskRepository()),
+        // ===== Phase 22.5：新建清单项的默认值 =====
+        checklistDefaultsRepository = FakeChecklistDefaultsRepository(),
+        // ===== Phase 21：清单 ↔ 记账联动 =====
+        recordExpenseFromTask = RecordExpenseFromTaskUseCase(FakeFinanceRepository()),
+        financeRepository = FakeFinanceRepository(),
+        // ===== Phase 18.7：撤销删除 =====
+        restoreChecklistItem = RestoreChecklistItemUseCase(repo),
+        // ===== Phase 18.3：快速输入里的 #标签 =====
+        createTag = CreateTagUseCase(tagRepo),
+        // ===== Phase 24：置顶 =====
+        setTaskPinned = SetTaskPinnedUseCase(taskRepo),
     )
 
     private fun tag(id: Long): Tag = Tag(
@@ -257,8 +305,7 @@ class ChecklistViewModelTest {
 
         val stored = repo.items.single()
         assertEquals("子项", stored.title)
-        assertEquals(1L, stored.parentSubTaskId)
-        assertNull(stored.parentTaskId)
+        assertEquals(1L, stored.parentTaskId)
     }
 
     @Test
@@ -266,7 +313,7 @@ class ChecklistViewModelTest {
         val repo = FakeChecklistRepository()
         repo.setItems(
             listOf(
-                SubTask(
+                Task(
                     id = 1L,
                     parentTaskId = null,
                     title = "旧标题",
@@ -292,7 +339,7 @@ class ChecklistViewModelTest {
         val repo = FakeChecklistRepository()
         repo.setItems(
             listOf(
-                SubTask(
+                Task(
                     id = 1L,
                     parentTaskId = null,
                     title = "标题",
@@ -316,7 +363,7 @@ class ChecklistViewModelTest {
     @Test
     fun toggleCompleteIsForwardedToRepository() = runTest {
         val repo = FakeChecklistRepository()
-        repo.setItems(listOf(SubTask(id = 1L, parentTaskId = null, title = "项")))
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "项")))
         val vm = makeVm(repo)
 
         vm.toggleComplete(id = 1L, completed = true)
@@ -327,7 +374,7 @@ class ChecklistViewModelTest {
     @Test
     fun deleteItemRemovesItemFromRepository() = runTest {
         val repo = FakeChecklistRepository()
-        repo.setItems(listOf(SubTask(id = 1L, parentTaskId = null, title = "项")))
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "项")))
         val vm = makeVm(repo)
 
         vm.deleteItem(repo.items.single())
@@ -338,7 +385,7 @@ class ChecklistViewModelTest {
     @Test
     fun attachTagShowsTagInUiState() = runTest {
         val repo = FakeChecklistRepository()
-        repo.setItems(listOf(SubTask(id = 1L, parentTaskId = null, title = "项")))
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "项")))
         val vm = makeVm(repo)
 
         vm.attachTag(subTaskId = 1L, tagId = 7L)
@@ -350,7 +397,7 @@ class ChecklistViewModelTest {
     @Test
     fun detachTagRemovesTagFromUiState() = runTest {
         val repo = FakeChecklistRepository()
-        repo.setItems(listOf(SubTask(id = 1L, parentTaskId = null, title = "项")))
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "项")))
         val vm = makeVm(repo)
         vm.attachTag(subTaskId = 1L, tagId = 7L)
         // 先等挂载生效，再解绑
@@ -369,8 +416,8 @@ class ChecklistViewModelTest {
         val repo = FakeChecklistRepository()
         repo.setItems(
             listOf(
-                SubTask(id = 1L, parentTaskId = null, title = "工作项", category = "工作", order = 0),
-                SubTask(id = 2L, parentTaskId = null, title = "生活项", category = "生活", order = 1),
+                Task(id = 1L, parentTaskId = null, title = "工作项", category = "工作", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = null, title = "生活项", category = "生活", manualOrder = 1L),
             ),
         )
         val vm = makeVm(repo)
@@ -387,8 +434,8 @@ class ChecklistViewModelTest {
         val repo = FakeChecklistRepository()
         repo.setItems(
             listOf(
-                SubTask(id = 1L, parentTaskId = null, title = "带标签", order = 0),
-                SubTask(id = 2L, parentTaskId = null, title = "没标签", order = 1),
+                Task(id = 1L, parentTaskId = null, title = "带标签", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = null, title = "没标签", manualOrder = 1L),
             ),
         )
         repo.setTags(mapOf(1L to listOf(tag(7L))))
@@ -406,8 +453,8 @@ class ChecklistViewModelTest {
         val repo = FakeChecklistRepository()
         repo.setItems(
             listOf(
-                SubTask(id = 1L, parentTaskId = null, title = "工作项", category = "工作", order = 0),
-                SubTask(id = 2L, parentTaskId = null, title = "生活项", category = "生活", order = 1),
+                Task(id = 1L, parentTaskId = null, title = "工作项", category = "工作", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = null, title = "生活项", category = "生活", manualOrder = 1L),
             ),
         )
         val vm = makeVm(repo)
@@ -427,8 +474,8 @@ class ChecklistViewModelTest {
         val repo = FakeChecklistRepository()
         repo.setItems(
             listOf(
-                SubTask(id = 1L, parentTaskId = null, title = "B 项", order = 0),
-                SubTask(id = 2L, parentTaskId = null, title = "A 项", order = 1),
+                Task(id = 1L, parentTaskId = null, title = "B 项", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = null, title = "A 项", manualOrder = 1L),
             ),
         )
         val vm = makeVm(repo)
@@ -444,8 +491,8 @@ class ChecklistViewModelTest {
         val repo = FakeChecklistRepository()
         repo.setItems(
             listOf(
-                SubTask(id = 1L, parentTaskId = null, title = "工作项", category = "工作", order = 0),
-                SubTask(id = 2L, parentTaskId = null, title = "生活项", category = "生活", order = 1),
+                Task(id = 1L, parentTaskId = null, title = "工作项", category = "工作", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = null, title = "生活项", category = "生活", manualOrder = 1L),
             ),
         )
         val vm = makeVm(repo)
@@ -466,8 +513,8 @@ class ChecklistViewModelTest {
         val repo = FakeChecklistRepository()
         repo.setItems(
             listOf(
-                SubTask(id = 1L, parentTaskId = null, title = "父", order = 0),
-                SubTask(id = 2L, parentTaskId = null, title = "子", order = 0, parentSubTaskId = 1L),
+                Task(id = 1L, parentTaskId = null, title = "父", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = 1L, title = "子", manualOrder = 0L),
             ),
         )
         repo.setTags(mapOf(1L to listOf(tag(7L))))
@@ -489,8 +536,8 @@ class ChecklistViewModelTest {
         val repo = FakeChecklistRepository()
         repo.setItems(
             listOf(
-                SubTask(id = 1L, parentTaskId = null, title = "父", order = 0),
-                SubTask(id = 2L, parentTaskId = null, title = "子", order = 1),
+                Task(id = 1L, parentTaskId = null, title = "父", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = null, title = "子", manualOrder = 1L),
             ),
         )
         val vm = makeVm(repo)
@@ -498,5 +545,219 @@ class ChecklistViewModelTest {
         val state = vm.uiState.first { !it.isLoading }
 
         assertEquals(listOf("父", "子"), state.items.map { it.title })
+    }
+
+    // ===== Phase 18.6：多选 + 批量操作 =====
+
+    @Test
+    fun toggleSelectionTracksSelectedItems() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "项")))
+        val vm = makeVm(repo)
+
+        vm.toggleSelection(1L)
+        assertEquals(setOf(1L), vm.selectedIds.value)
+
+        vm.toggleSelection(1L)
+        assertTrue("再点一次就取消选中", vm.selectedIds.value.isEmpty())
+    }
+
+    @Test
+    fun batchSetPriorityUpdatesEverySelectedItem() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(
+            listOf(
+                Task(id = 1L, parentTaskId = null, title = "A", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = null, title = "B", manualOrder = 1L),
+                Task(id = 3L, parentTaskId = null, title = "C", manualOrder = 2L),
+            ),
+        )
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.toggleSelection(1L)
+        vm.toggleSelection(3L)
+        vm.batchSetPriority(TaskPriority.URGENT)
+
+        assertEquals(TaskPriority.URGENT, repo.items.first { it.id == 1L }.priority)
+        assertEquals(TaskPriority.URGENT, repo.items.first { it.id == 3L }.priority)
+        assertEquals("没选中的那项不该动", TaskPriority.MEDIUM, repo.items.first { it.id == 2L }.priority)
+        assertTrue("批量操作后退出多选", vm.selectedIds.value.isEmpty())
+    }
+
+    @Test
+    fun batchMoveToListUpdatesListId() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "项", listId = 1L)))
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.toggleSelection(1L)
+        vm.batchMoveToList(7L)
+
+        assertEquals(7L, repo.items.first { it.id == 1L }.listId)
+    }
+
+    @Test
+    fun batchDeleteRemovesSelectedItemsOnly() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(
+            listOf(
+                Task(id = 1L, parentTaskId = null, title = "A", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = null, title = "B", manualOrder = 1L),
+                Task(id = 3L, parentTaskId = null, title = "C", manualOrder = 2L),
+            ),
+        )
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.toggleSelection(1L)
+        vm.toggleSelection(2L)
+        vm.batchDelete()
+
+        assertTrue(repo.items.none { it.id == 1L || it.id == 2L })
+        assertEquals("没选中的那项不该被删", 1, repo.items.size)
+        assertEquals(2, vm.deleteNotice.value?.items?.size)
+    }
+
+    // ===== Phase 18.8：子项被提升为顶层项的提示 =====
+
+    @Test
+    fun deleteItemReportsPromotedChildCount() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(
+            listOf(
+                Task(id = 1L, parentTaskId = null, title = "父", manualOrder = 0L),
+                Task(id = 2L, parentTaskId = 1L, title = "子", manualOrder = 0L),
+            ),
+        )
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.deleteItem(repo.items.first { it.id == 1L })
+
+        val notice = vm.deleteNotice.value
+        assertEquals("删父项时子项会被提升为顶层项", 1, notice?.promotedChildCount)
+        assertEquals("父", notice?.items?.first()?.title)
+    }
+
+    @Test
+    fun deleteItemWithoutChildrenReportsNoPromotion() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "独苗")))
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.deleteItem(repo.items.first { it.id == 1L })
+
+        assertEquals(0, vm.deleteNotice.value?.promotedChildCount)
+    }
+
+    @Test
+    fun undoDeleteRestoresDeletedItem() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, parentTaskId = null, title = "项")))
+        val vm = makeVm(repo)
+        vm.uiState.first { !it.isLoading }
+
+        vm.deleteItem(repo.items.single())
+        assertTrue(repo.items.isEmpty())
+
+        vm.undoDelete()
+
+        assertEquals(1, repo.items.size)
+        assertEquals("项", repo.items.single().title)
+        assertNull(vm.deleteNotice.value)
+    }
+
+    // ===== Phase 18.3：快速输入里的 #标签 / ~清单 =====
+
+    @Test
+    fun addItemStripsTagFromTitleAndAttachesIt() = runTest {
+        val repo = FakeChecklistRepository()
+        val vm = makeVm(repo)
+
+        vm.addItem("买牛奶 #Work")
+
+        assertEquals("标题里不该再留着 #Work", "买牛奶", repo.items.single().title)
+        assertEquals(1, repo.tagsOf(repo.items.single().id).size)
+    }
+
+    @Test
+    fun addItemMovesItemToNamedList() = runTest {
+        val repo = FakeChecklistRepository()
+        val listRepo = FakeTaskListRepository()
+        val vm = makeVm(repo = repo, listRepo = listRepo)
+
+        vm.addItem("买牛奶 ~学习")
+
+        val stored = repo.items.single()
+        assertEquals("标题里不该再留着 ~学习", "买牛奶", stored.title)
+        assertEquals("学习", listRepo.lists.first { it.id == stored.listId }.displayName)
+    }
+
+    @Test
+    fun addItemWithoutTokensKeepsTitleAsIs() = runTest {
+        val repo = FakeChecklistRepository()
+        val vm = makeVm(repo)
+
+        vm.addItem("买牛奶")
+
+        assertEquals("买牛奶", repo.items.single().title)
+    }
+
+    // ===== Phase 24：左滑 / 右滑的单条操作 =====
+
+    @Test
+    fun setItemPinnedForwardsToRepository() = runTest {
+        val taskRepo = FakeTaskRepository()
+        val vm = makeVm(taskRepo = taskRepo)
+
+        vm.setItemPinned(7L, pinned = true)
+
+        assertEquals(listOf(7L to true), taskRepo.pinnedCalls)
+    }
+
+    @Test
+    fun setItemPinnedCanUnpin() = runTest {
+        val taskRepo = FakeTaskRepository()
+        val vm = makeVm(taskRepo = taskRepo)
+
+        vm.setItemPinned(7L, pinned = false)
+
+        assertEquals(listOf(7L to false), taskRepo.pinnedCalls)
+    }
+
+    @Test
+    fun setItemDueDateUpdatesTheItem() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, title = "买牛奶")))
+        val vm = makeVm(repo)
+
+        vm.setItemDueDate(1L, dueDate = 123L)
+
+        assertEquals(123L, repo.items.single().dueDate)
+    }
+
+    @Test
+    fun setItemDueDateWithNullClearsTheDueDate() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, title = "买牛奶", dueDate = 123L)))
+        val vm = makeVm(repo)
+
+        vm.setItemDueDate(1L, dueDate = null)
+
+        assertNull(repo.items.single().dueDate)
+    }
+
+    @Test
+    fun moveItemToListUpdatesTheListId() = runTest {
+        val repo = FakeChecklistRepository()
+        repo.setItems(listOf(Task(id = 1L, title = "买牛奶")))
+        val vm = makeVm(repo)
+
+        vm.moveItemToList(1L, listId = 42L)
+
+        assertEquals(42L, repo.items.single().listId)
     }
 }

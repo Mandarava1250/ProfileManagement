@@ -122,3 +122,27 @@ val AppTypography = Typography(
         letterSpacing = 0.5.sp
     )
 )
+
+/**
+ * 页面大标题 —— Phase 26「秩序 / 留白」方案的标题语言。
+ *
+ * 26sp / 700 / 字距 -0.4 —— Material 3 的 [Typography] 里没有这一档
+ * （headlineLarge 是 32sp，displayMedium 是 45sp，都不合用），
+ * 所以单独定义，不去动 M3 的既有档位。
+ */
+val AppBigTitle = TextStyle(
+    fontFamily = FontFamily.SansSerif,
+    fontWeight = FontWeight.Bold,
+    fontSize = 26.sp,
+    lineHeight = 30.sp,
+    letterSpacing = (-0.4).sp
+)
+
+/** 大标题下方的副标题（日期 / 副标题信息）—— 12sp。 */
+val AppPageSubtitle = TextStyle(
+    fontFamily = FontFamily.SansSerif,
+    fontWeight = FontWeight.Normal,
+    fontSize = 12.sp,
+    lineHeight = 16.sp,
+    letterSpacing = 0.4.sp
+)

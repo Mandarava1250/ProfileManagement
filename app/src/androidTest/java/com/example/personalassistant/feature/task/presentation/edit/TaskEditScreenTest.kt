@@ -7,7 +7,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.SavedStateHandle
 import com.example.personalassistant.core.notification.FakeNotificationPermissionRequester
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
-import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
 import com.example.personalassistant.feature.task.domain.model.TaskSort
@@ -45,20 +44,20 @@ class TaskEditScreenTest {
         override fun observeActive() = MutableStateFlow<List<Task>>(emptyList())
         override fun observeCompleted() = MutableStateFlow<List<Task>>(emptyList())
         override fun observeTaskById(id: Long) = MutableStateFlow<Task?>(null)
-        override fun observeStandaloneChecklist() = MutableStateFlow<List<SubTask>>(emptyList())
-        override fun observeSubTasks(parentId: Long) = MutableStateFlow<List<SubTask>>(emptyList())
+        override fun observeStandaloneChecklist() = MutableStateFlow<List<Task>>(emptyList())
+        override fun observeSubTasks(parentId: Long) = MutableStateFlow<List<Task>>(emptyList())
         override fun observeTasks(filter: TaskFilter, sort: TaskSort) =
             MutableStateFlow<List<Task>>(emptyList())
         override fun observeTasks(filter: FilterExpression, sort: TaskSort): Flow<List<Task>> =
             MutableStateFlow<List<Task>>(emptyList())
         override suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks? = null
-        override suspend fun upsertTask(task: Task, subTasks: List<SubTask>): Long = -1L
+        override suspend fun upsertTask(task: Task, subTasks: List<Task>): Long = -1L
         override suspend fun deleteTask(task: Task) {}
         override suspend fun toggleTaskComplete(id: Long, completed: Boolean) {}
         override suspend fun toggleSubTaskComplete(id: Long, completed: Boolean) {}
         override suspend fun addStandaloneSubTask(title: String): Long = -1L
         override suspend fun addSubTaskToTask(parentId: Long, title: String): Long = -1L
-        override suspend fun deleteSubTask(subTask: SubTask) {}
+        override suspend fun deleteSubTask(subTask: Task) {}
         override suspend fun reorderTasks(orderedIds: List<Long>) {}
         override fun searchTasks(keyword: String): Flow<List<Task>> =
             MutableStateFlow<List<Task>>(emptyList())
@@ -74,7 +73,7 @@ class TaskEditScreenTest {
         override suspend operator fun invoke(id: Long): TaskWithSubTasks? = null
     }
     private class NoopUpsertTask : UpsertTaskUseCase(repository = NoopTaskRepository) {
-        override suspend operator fun invoke(task: Task, subTasks: List<SubTask>): Long = -1L
+        override suspend operator fun invoke(task: Task, subTasks: List<Task>): Long = -1L
     }
     private class NoopDeleteTask : DeleteTaskUseCase(repository = NoopTaskRepository) {
         override suspend operator fun invoke(task: Task) {}

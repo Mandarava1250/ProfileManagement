@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,13 +23,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.core.ui.components.AppCard
 import com.example.personalassistant.core.ui.theme.AppSpacing
 import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
+import kotlin.math.roundToInt
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -50,6 +54,19 @@ fun TaskItem(
     onToggleComplete: (Boolean) -> Unit,
     onClick: () -> Unit,
     onDelete: () -> Unit,
+    // ===== Phase 25：拖拽排序 =====
+    /** 是否允许拖拽（只有「自定义顺序」排序下才为真） */
+    dragEnabled: Boolean = false,
+    /** 该项正被拖着（浮起来 + 跟手偏移） */
+    isDragging: Boolean = false,
+    /** 跟手位移（像素，向下为正） */
+    dragOffsetY: Float = 0f,
+    /** 认定为拖拽的那一刻 */
+    onDragStart: () -> Unit = {},
+    /** 拖拽过程中的 Y 位移增量（像素） */
+    onDrag: (Float) -> Unit = {},
+    /** 拖拽结束 */
+    onDragEnd: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Phase 14：优先级色收进语义 token（高 / 中 / 低 三档 + 中性）
@@ -66,16 +83,29 @@ fun TaskItem(
         TaskPriority.LOW -> MaterialTheme.colorScheme.outline
     }
 
-    AppCard(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        contentPadding = PaddingValues(AppSpacing.xs),
-        // 列表里密排的卡片不要阴影，否则一屏几十个会显得脏
-        elevated = false,
-        onClick = onClick,
+    // Phase 25：手势仲裁层（长按竖拖 = 排序）
+    // 任务页没有多选模式，所以 enableLongPress = false —— 只留拖拽这一条路。
+    ChecklistItemGestureBox(
+        enableLongPress = false,
+        enableDrag = dragEnabled,
+        onDragStart = onDragStart,
+        onDrag = onDrag,
+        onDragEnd = onDragEnd,
     ) {
+        AppCard(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                // Phase 25：被拖起来的那项浮起来一点，跟手时能看清是哪一条
+                .shadow(if (isDragging) 6.dp else 0.dp)
+                // Phase 25：跟手位移（被拖着的那一项跟着手指走）
+                .offset { IntOffset(0, dragOffsetY.roundToInt()) },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentPadding = PaddingValues(AppSpacing.xs),
+            // 列表里密排的卡片不要阴影，否则一屏几十个会显得脏
+            elevated = false,
+            onClick = onClick,
+        ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -124,6 +154,7 @@ fun TaskItem(
                     contentDescription = "删除",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
             }
         }
     }

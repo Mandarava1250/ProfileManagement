@@ -1,4 +1,4 @@
-package com.example.personalassistant.feature.finance.presentation.category
+﻿package com.example.personalassistant.feature.finance.presentation.category
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.finance.domain.model.TransactionType
 import com.example.personalassistant.feature.finance.presentation.components.IconPickerSheet
 import com.example.personalassistant.feature.finance.presentation.util.IconRegistry
+import com.example.personalassistant.core.ui.theme.onColorFor
 
 /**
  * C 重构阶段 7：新增分类对话框
@@ -85,7 +86,7 @@ internal fun AddCategoryDialog(
                     Icon(
                         imageVector = IconRegistry.resolve(iconName),
                         contentDescription = "选择图标",
-                        tint = Color.White,
+                        tint = onColorFor(Color(color)),
                         modifier = Modifier.padding(12.dp),
                     )
                 }

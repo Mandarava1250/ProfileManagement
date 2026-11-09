@@ -4,12 +4,20 @@ import com.example.personalassistant.core.di.IoDispatcher
 import com.example.personalassistant.feature.calendar.data.local.EventDao
 import com.example.personalassistant.feature.calendar.data.mapper.toDomain
 import com.example.personalassistant.feature.calendar.data.mapper.toEntity
+import com.example.personalassistant.feature.calendar.domain.model.CalendarHabitItem
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.DaySummary
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.calendar.domain.model.MonthSummary
+import com.example.personalassistant.feature.calendar.domain.repository.CalendarDisplayRepository
 import com.example.personalassistant.feature.calendar.domain.repository.CalendarRepository
+import com.example.personalassistant.feature.calendar.domain.util.CalendarTaskFilter
 import com.example.personalassistant.feature.calendar.domain.util.WeekCalculator
+import com.example.personalassistant.feature.habit.domain.model.Habit
+import com.example.personalassistant.feature.habit.domain.model.HabitCheckIn
+import com.example.personalassistant.feature.habit.domain.model.HabitTargetType
+import com.example.personalassistant.feature.habit.domain.repository.HabitDisplayRepository
+import com.example.personalassistant.feature.habit.domain.repository.HabitRepository
 import com.example.personalassistant.feature.task.data.local.TaskDao
 import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.task.domain.model.Task
@@ -49,6 +57,12 @@ class CalendarRepositoryImpl @Inject constructor(
     private val taskDao: TaskDao,
     private val courseDao: CourseDao,
     private val semesterDao: SemesterDao,
+    // Phase 20.3：日历「显示设置」（课程 / 清单项 / 已完成）
+    private val calendarDisplayRepository: CalendarDisplayRepository,
+    // Phase 20.3：「习惯打卡」开关复用习惯模块的（key = habit_show_in_calendar）
+    private val habitDisplayRepository: HabitDisplayRepository,
+    // Phase 24B：习惯数据（习惯定义 + 打卡记录）—— 日历侧只读，写走习惯域的 UseCase
+    private val habitRepository: HabitRepository,
     @IoDispatcher private val dispatcher: CoroutineDispatcher,
 ) : CalendarRepository {
 
@@ -91,14 +105,45 @@ class CalendarRepositoryImpl @Inject constructor(
         val dayEnd = date + ONE_DAY_MILLIS
         val dayOfWeek = dateToDayOfWeek(date)
 
-        val eventsFlow = eventDao.observeByDate(date).map { list -> list.map { it.toDomain() } }
+        // Phase 20.7：跨午夜的事件（23:00 → 次日 01:00）的 date 字段是第一天，
+        // 它的尾巴落在第二天 —— 只按 date 查，第二天就看不到它。
+        // 所以再补一路「与这一天有交集」的带时刻事件，两路去重后合并。
+        val eventsFlow = combine(
+            eventDao.observeByDate(date),
+            eventDao.observeOverlapping(date, dayEnd),
+        ) { byDate, overlapping ->
+            val ids = byDate.mapTo(HashSet()) { it.id }
+            (byDate + overlapping.filter { it.id !in ids }).map { it.toDomain() }
+        }
 
         // Phase 14：
         // - 用含已完成的查询 —— 日历里勾完的任务要留着，用户手动删除才消失
         // - 区间是闭区间，end 减 1ms 等于半开 [date, 次日 00:00)，
         //   否则次日 00:00 的任务会被相邻两天同时收录（同一条任务横跨两列）
-        val tasksFlow = taskDao.observeBetweenIncludingCompleted(date, dayEnd - 1)
-            .map { list -> list.map { it.toDomain() } }
+        //
+        // Phase 20.2（过滤点 1/3）：**带时间段的清单项按它占用的那几天出现**，
+        // 而不是按 dueDate —— 所以这里除了「截止时间落在这一天」的，
+        // 还要把「时段覆盖这一天」的带上（跨午夜的会出现在两天里）。
+        //
+        // ⚠️ 两路可能命中同一条（既有 dueDate 又有时段），按 id 去重。
+        // 排序沿用 DAO 的口径：priority DESC, dueDate ASC。
+        val tasksFlow = combine(
+            taskDao.observeBetweenIncludingCompleted(date, dayEnd - 1),
+            taskDao.observeAll(),
+        ) { dueDateTasks, allTasks ->
+            // 先转成 domain —— 过滤口径（[CalendarTaskFilter]）是按 domain 模型定的
+            val dueDateDomain = dueDateTasks.map { it.toDomain() }
+            val allDomain = allTasks.map { it.toDomain() }
+            val timed = allDomain.filter {
+                CalendarTaskFilter.isTimed(it) && CalendarTaskFilter.occupiesDay(it, date)
+            }
+            val dueDateIds = dueDateDomain.mapTo(HashSet()) { it.id }
+            (dueDateDomain + timed.filter { it.id !in dueDateIds })
+                .sortedWith(
+                    compareByDescending<Task> { it.priority.dbValue }
+                        .thenBy { it.dueDate }
+                )
+        }
 
         val semesterFlow = semesterDao.observeCurrent()
 
@@ -115,14 +160,51 @@ class CalendarRepositoryImpl @Inject constructor(
                 .map { it.toDomain() }
         }
 
-        return combine(eventsFlow, tasksFlow, coursesFlow, semesterFlow) { events, tasks, courses, semester ->
+        // Phase 24B：习惯打卡 —— 当天所有（未归档）习惯的次数
+        //
+        // 口径与习惯模块的 HabitDayCell 对齐：
+        // - count 永远是**当天**的次数（+ / − 按钮动的就是它）
+        // - isMet：每日目标看当天；每周目标看**所在周累计**（跟习惯页的月度表一致）
+        //
+        // 所以这里要把整周的打卡记录一起拉出来 —— 单日的 observeCheckInsOn 算不出周累计。
+        val weekStart = startOfWeekMillis(date)
+        val weekEnd = weekStart + 7 * ONE_DAY_MILLIS - 1
+        val habitsFlow: Flow<List<CalendarHabitItem>> = combine(
+            habitRepository.observeHabits(),
+            habitRepository.observeCheckInsInRange(weekStart, weekEnd),
+        ) { habits, checkIns ->
+            buildCalendarHabitItems(habits, checkIns, date)
+        }
+
+        // Phase 20.3：显示设置（课程 / 清单项 / 已完成 / 习惯打卡）
+        // 习惯开关直接复用习惯模块的 HabitDisplayRepository（key = habit_show_in_calendar），
+        // 两边共用同一个 key，用户只看到一个开关。
+        val displayPrefsFlow = combine(
+            calendarDisplayRepository.observe(),
+            habitDisplayRepository.observeShowInCalendar(),
+        ) { prefs, showHabits -> prefs.copy(showHabits = showHabits) }
+
+        // Phase 24B：学期 + 习惯 合成一路（combine 最多 5 路，先折成 1 路）
+        val extrasFlow = combine(semesterFlow, habitsFlow) { semester, habits -> semester to habits }
+
+        return combine(
+            eventsFlow,
+            tasksFlow,
+            coursesFlow,
+            extrasFlow,
+            displayPrefsFlow,
+        ) { events, tasks, courses, extras, prefs ->
+            val (semester, habits) = extras
             val weekNumber = semester?.let { WeekCalculator.weekNumber(date, it.startDate, it.endDate) }
             DayDetail(
                 date = date,
                 dayOfWeek = dayOfWeek,
                 events = events,
-                tasks = tasks,
-                courses = courses,
+                // Phase 20.3：清单项 / 已完成 两个开关在这里生效
+                tasks = prefs.filterTasks(tasks),
+                courses = if (prefs.showCourses) courses else emptyList(),
+                // Phase 24B：习惯打卡开关在这里生效 —— 关掉就一条都不显示
+                habits = if (prefs.showHabits) habits else emptyList(),
                 weekNumber = weekNumber,
             )
         }
@@ -133,8 +215,24 @@ class CalendarRepositoryImpl @Inject constructor(
             .map { list -> list.map { it.toDomain() } }
 
         // 任务：observeBetween 用毫秒时间戳
-        val tasksFlow = taskDao.observeBetween(monthStart, monthEnd)
-            .map { list -> list.map { it.toDomain() } }
+        //
+        // Phase 20.2（过滤点 2/3）：月汇总也要算上「带时间段的清单项」——
+        // 它按**占用的那几天**计数（跨午夜的占两天），而不是按 dueDate。
+        //
+        // ⚠️ 口径统一走 [CalendarTaskFilter]（三个过滤点共用），别在这里另写一套。
+        val tasksFlow = combine(
+            taskDao.observeBetween(monthStart, monthEnd),
+            taskDao.observeAll(),
+        ) { dueDateTasks, allTasks ->
+            MonthTaskBuckets(
+                // 普通清单项：没有时间段的才按 dueDate 归（带时段的走下面那条路）
+                plain = dueDateTasks.map { it.toDomain() }.filterNot { CalendarTaskFilter.isTimed(it) },
+                // 带时段的清单项：与 observeBetween 一样只算**未完成**的
+                timed = allTasks
+                    .map { it.toDomain() }
+                    .filter { CalendarTaskFilter.isTimed(it) && !it.isCompleted },
+            )
+        }
 
         // 课表：先按 dayOfWeek 分桶（DAO 拿所有 dayOfWeek 一次性拿）
         // 简化策略：单次拉所有 Course，客户端按 dayOfWeek + weekNumber 分组
@@ -165,7 +263,37 @@ class CalendarRepositoryImpl @Inject constructor(
             (1..7).associateWith { dow -> grouped[dow] ?: emptyList() }
         }
 
-        return combine(eventsFlow, tasksFlow, coursesByDayFlow, coursesFlow) { events, tasks, coursesByDay, weekNumber ->
+        // Phase 24B：当月每天「有打卡记录的习惯数」
+        //
+        // 只算**未归档**的习惯 —— 归档的习惯不再参与日常，历史记录留着但不占月网格角标。
+        val habitCountsFlow: Flow<Map<Long, Int>> = combine(
+            habitRepository.observeHabits(),
+            habitRepository.observeCheckInsInRange(monthStart, monthEnd - 1),
+        ) { habits, checkIns ->
+            val activeIds = habits.mapTo(HashSet()) { it.id }
+            checkIns.asSequence()
+                .filter { it.habitId in activeIds }
+                .groupBy { it.date }
+                .mapValues { (_, list) -> list.map { it.habitId }.distinct().size }
+        }
+
+        // Phase 20.3：显示设置（课程 / 清单项 / 已完成 / 习惯打卡）
+        val displayPrefsFlow = combine(
+            calendarDisplayRepository.observe(),
+            habitDisplayRepository.observeShowInCalendar(),
+        ) { prefs, showHabits -> prefs.copy(showHabits = showHabits) }
+
+        // Phase 24B：周次 + 显示设置 合成一路（combine 最多 5 路）
+        val extrasFlow = combine(coursesFlow, displayPrefsFlow) { weekNumber, prefs -> weekNumber to prefs }
+
+        return combine(
+            eventsFlow,
+            tasksFlow,
+            coursesByDayFlow,
+            habitCountsFlow,
+            extrasFlow,
+        ) { events, tasks, coursesByDay, habitCounts, extras ->
+            val (weekNumber, prefs) = extras
             val summary = mutableMapOf<Long, DaySummary>()
 
             // 1. events 分组
@@ -174,11 +302,27 @@ class CalendarRepositoryImpl @Inject constructor(
                 summary[date] = existing.copy(eventCount = evList.size)
             }
 
-            // 2. tasks 分组（task.dueDate 是毫秒时间戳，需要归到当天 00:00；null dueDate 跳过）
-            tasks.filter { it.dueDate != null }.groupBy { startOfDayMillis(it.dueDate!!) }.forEach { (date, tList) ->
-                if (date in monthStart until monthEnd) {
-                    val existing = summary[date] ?: DaySummary(date = date)
-                    summary[date] = existing.copy(taskCount = tList.size)
+            // 2. tasks 分组
+            //
+            // Phase 20.3：「清单项」开关关掉 → 这一整段不算（徽章上不显示清单项个数）
+            if (prefs.showTasks) {
+                // 2a. 普通清单项（task.dueDate 是毫秒时间戳，需要归到当天 00:00；null dueDate 跳过）
+                tasks.plain.filter { it.dueDate != null }
+                    .groupBy { startOfDayMillis(it.dueDate!!) }
+                    .forEach { (date, tList) ->
+                        if (date in monthStart until monthEnd) {
+                            val existing = summary[date] ?: DaySummary(date = date)
+                            summary[date] = existing.copy(taskCount = existing.taskCount + tList.size)
+                        }
+                    }
+                // 2b. Phase 20.2：带时段的清单项按**占用的那几天**计数（跨午夜的占两天）
+                tasks.timed.forEach { task ->
+                    CalendarTaskFilter.occupiedDays(task).forEach { day ->
+                        if (day in monthStart until monthEnd) {
+                            val existing = summary[day] ?: DaySummary(date = day)
+                            summary[day] = existing.copy(taskCount = existing.taskCount + 1)
+                        }
+                    }
                 }
             }
 
@@ -187,7 +331,13 @@ class CalendarRepositoryImpl @Inject constructor(
                 coursesByDay.forEach { (dow, courseList) ->
                     // 找月份内 dayOfWeek = dow 的所有 date
                     val datesForDow = enumerateDatesForDayOfWeek(monthStart, monthEnd, dow)
-                    val matchingCourses = courseList.filter { it.toDomain().appliesToWeek(weekNumber) }
+                    // Phase 20.3：关掉「课程」开关 → 课程数一律记 0，
+                    // 但**仍然要建出这一天的 entry**（isToday 标记挂在 entry 上）。
+                    val matchingCourses = if (prefs.showCourses) {
+                        courseList.filter { it.toDomain().appliesToWeek(weekNumber) }
+                    } else {
+                        emptyList()
+                    }
                     datesForDow.forEach { date ->
                         val existing = summary[date] ?: DaySummary(date = date)
                         summary[date] = existing.copy(courseCount = matchingCourses.size)
@@ -195,7 +345,19 @@ class CalendarRepositoryImpl @Inject constructor(
                 }
             }
 
-            // 4. 标记 today
+            // 4. 习惯打卡（Phase 24B）
+            //
+            // 关掉「习惯打卡」开关 → 这一整段不算（月网格上不显示习惯角标）。
+            if (prefs.showHabits) {
+                habitCounts.forEach { (date, count) ->
+                    if (date in monthStart until monthEnd) {
+                        val existing = summary[date] ?: DaySummary(date = date)
+                        summary[date] = existing.copy(habitCount = count)
+                    }
+                }
+            }
+
+            // 5. 标记 today
             summary[today]?.let { summary[today] = it.copy(isToday = true) }
 
             summary
@@ -226,6 +388,55 @@ class CalendarRepositoryImpl @Inject constructor(
     }
 
     /**
+     * Phase 24B：所在周的周一 00:00（毫秒时间戳）
+     *
+     * 周起始日是周一（与 CalendarViewModel.computeWeekRange 同一套口径）。
+     */
+    private fun startOfWeekMillis(date: Long): Long {
+        val zone = ZoneId.systemDefault()
+        val localDate = Instant.ofEpochMilli(date).atZone(zone).toLocalDate()
+        val monday = localDate.minusDays((localDate.dayOfWeek.value - 1).toLong())
+        return monday.atStartOfDay(zone).toInstant().toEpochMilli()
+    }
+
+    /**
+     * Phase 24B：把「习惯 + 一周的打卡记录」拼成日历侧的习惯条目
+     *
+     * - count：当天（[date]）的次数 —— + / − 按钮动的就是它
+     * - isMet：每日目标看当天；每周目标看所在周累计（与习惯页月度表口径一致）
+     */
+    private fun buildCalendarHabitItems(
+        habits: List<Habit>,
+        checkIns: List<HabitCheckIn>,
+        date: Long,
+    ): List<CalendarHabitItem> {
+        val dayCounts = HashMap<Long, Int>()
+        val weekCounts = HashMap<Long, Int>()
+        checkIns.forEach { checkIn ->
+            weekCounts[checkIn.habitId] = (weekCounts[checkIn.habitId] ?: 0) + checkIn.count
+            if (checkIn.date == date) {
+                dayCounts[checkIn.habitId] = (dayCounts[checkIn.habitId] ?: 0) + checkIn.count
+            }
+        }
+        return habits.map { habit ->
+            val count = dayCounts[habit.id] ?: 0
+            val met = if (habit.targetType == HabitTargetType.WEEKLY) {
+                (weekCounts[habit.id] ?: 0) >= habit.targetCount
+            } else {
+                count >= habit.targetCount
+            }
+            CalendarHabitItem(
+                habitId = habit.id,
+                name = habit.name,
+                color = habit.color,
+                count = count,
+                targetCount = habit.targetCount,
+                isMet = met,
+            )
+        }
+    }
+
+    /**
      * 列出月范围内 dayOfWeek = dow 的所有日期（00:00 时间戳）
      */
     private fun enumerateDatesForDayOfWeek(monthStart: Long, monthEnd: Long, dow: Int): List<Long> {
@@ -252,7 +463,37 @@ class CalendarRepositoryImpl @Inject constructor(
 
     override fun searchEvents(keyword: String): Flow<List<Event>> =
         eventDao.searchEvents(keyword).map { list -> list.map { it.toDomain() } }
+
+    // ===== Phase 20.1：清单项时间段 =====
+
+    /**
+     * 给清单项设置 / 清除时间段
+     *
+     * - 走 TaskDao 直接改 `startAt` / `endAt` 两列（其它列原样保留）
+     * - id 不存在 → 静默 no-op
+     */
+    override suspend fun setTaskTimeRange(taskId: Long, startAt: Long?, endAt: Long?) {
+        val entity = taskDao.getById(taskId) ?: return
+        taskDao.update(
+            entity.copy(
+                startAt = startAt,
+                endAt = endAt,
+                updatedAt = System.currentTimeMillis(),
+            )
+        )
+    }
 }
+
+/**
+ * Phase 20.2：月汇总里的清单项分两桶
+ *
+ * - [plain]：没有时间段的（按 dueDate 归到某一天）
+ * - [timed]：带时间段的（按占用的那几天归，跨午夜的占两天）
+ */
+private data class MonthTaskBuckets(
+    val plain: List<Task> = emptyList(),
+    val timed: List<Task> = emptyList(),
+)
 
 // ===== 跨模块 Entity → Domain 映射（轻量版，定义在这里避免污染 task/timetable） =====
 // Phase 8 Sub-step 9 Step 4：CourseEntity / SemesterEntity 的 toDomain 已迁到
@@ -274,4 +515,8 @@ internal fun TaskEntity.toDomain(): Task = Task(
     repeatEndDate = repeatEndDate,
     repeatDays = repeatDays,
     manualOrder = manualOrder,
+    // Phase 20.2：时间段与金额 —— 日历要靠它们判断「这是不是一个时段块」
+    amount = amount,
+    startAt = startAt,
+    endAt = endAt,
 )

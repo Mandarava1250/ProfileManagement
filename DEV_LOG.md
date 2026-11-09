@@ -62,6 +62,7 @@
 | 7b | 记账编辑闭环 + 报表 + 搜索 + 导入导出 + 自定义图标 | 1 | 2026-09-07 | 月度报表 / CSV 导入导出 |
 | 7c | Calendar 模块（5 个 sub-step） | 6 | 2026-09-07 | `EventEntity` / 月视图 / 周日视图 / DayDetailSheet / 编辑闭环 |
 | 8 | 多 sub-step 复合 phase | 18 | 2026-09-07~09-09 | Event 智能提醒 / 5 档优先级 / 全局搜索 / 备份恢复 / 主题 / 节假日 / Settings / 分类管理 / RRULE / 冲突检测 / 农历 |
+| 26 | 方案 D 全量 UI 改造 | 8 | 2026-11-08 | 设计令牌层 / 公共组件层 / 课表双视图 / 日历日程流 / 暖白 + 固定语义色 |
 
 ---
 
@@ -2731,3 +2732,656 @@ testsuite name="...accountswitcher.AccountSwitcherBarTest"
 - **APK 未在真机上安装运行过** —— 已验证的是「构建成功 + 签名有效 + GitHub 附件与本地构建逐字节一致」，真机安装与运行仍待验证。
 - **v13 → v14 迁移未在设备上实测**。
 - **定向 baseline profile 未采集**（APK 内为 AGP 自动生成的通用 profile）。
+
+---
+
+## 📓 Phase 16 ~ 22（清单体系对标滴答清单）执行记录
+
+> 本轮起点：`.cyrene/docs/plan-20261101-234612.md`
+> 分支：`feature/phase-16-checklist-rebuild`
+> 验证门槛：`assembleDebug` + `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全绿
+
+### 已完成
+
+| Phase | 主题 | 关键产出 | 状态 |
+|---|---|---|---|
+| 16 | 清单体系合并 | Room v15：`sub_tasks` 整表并入 `tasks`；新建 `task_lists`（内置收集箱 id=1）；`tasks` 加 7 列；备份 15 表 / FORMAT_VERSION=2 | ✅ @`d7a2519` |
+| 17 | 清单模块重构 | 底栏去双 Tab → 单页 + 左侧抽屉；智能清单（收集箱/今天/最近 7 天/全部/已完成）；用户清单 CRUD + 未完成数徽标；四象限接回 | ✅ @`ecdd5e8` |
+| 18a | 自然语言日期 | `QuickInputParser`：标题末尾「明天 / 下周三 / 3/15」等拆成截止时间 | ✅ @`ecdd5e8` |
+| 19 | 命名过滤器 | `FilterDsl` + `FilterExpression` 树；`NamedFilter` + `FilterExpressionSpec`（DataStore 持久化）；抽屉「筛选器」段一键套用 | ✅ @`513e93d` |
+| 20a | 清单 ↔ 日历同体 | `MonthTagList` 补任务 / 课程点击；日历里点任务跳详情、点课程跳编辑 | ✅ @`b065002` |
+| 21 | 清单 ↔ 记账联动 | Room v16：`transactions.linkedTaskId`（弱引用，不加外键）；`RecordExpenseFromTaskUseCase`（清单项一键记账） | ✅ 数据层 @`b065002` |
+| 22.1 | 全局搜索入口 | TaskScreen 顶栏搜索图标 → GlobalSearchScreen（路由早已注册，但此前无可达入口） | ✅ @`38fba0d` |
+| 22.3 | 搜索关键字高亮 | `SearchHighlight`（domain 纯函数）+ `HighlightedText`（AnnotatedString + SpanStyle） | ✅ @`38fba0d` |
+| 22.4 | 流水命中金额格式 | 搜索结果里的流水 subtitle 改走 `MoneyFormat`，并标出支出 / 收入 | ✅ @本轮 |
+| 22.6 | 完成率统计 | `CompletionStats` + `CompletionCalculator`（纯函数）：完成率 = 完成 ÷ 原计划、拖延数、连续完成天数 | ✅ @`5038812` |
+| 22.7 | **修提醒重启不重建** | `BootReceiver` 启动后扫全表重建任务提醒（此前依赖「用户打开 App」，不打开就永远不响） | ✅ @`75a0218` |
+
+### 本轮关键决策
+
+1. **`FilterExpression.matches` 不改** —— 它对 `ActiveOnly` / `CompletedOnly` 返回 `true` 是**刻意设计**
+   （完成状态过滤交给 SQL 层做，测试名就叫 "filter only"）。
+   清单页是内存过滤，另写 `matchesItem` 判完成状态，两边语义故意不同。
+2. **`linkedTaskId` 不加外键** —— 删清单项时流水应该留下（钱花出去的事实不该消失），
+   所以是弱引用；只加索引。
+3. **`TaskRepository.getTasksWithReminders()` 用接口默认实现**（返回空列表）——
+   避免 5 个匿名 `object : TaskRepository` 测试替身全部要改；`TaskRepositoryImpl` 有真实实现。
+4. **`CompletionCalculator.streak` 今天没做时从昨天数** —— 今天没过完，
+   不该把昨天的连续段清零（否则用户早上看到 0 会很挫败）。
+5. **全局搜索入口放顶栏而非「更多」面板** —— 跟滴答清单的习惯一致，且 Phase 17 改单页后
+   底栏已无「更多」。
+
+### 未完成（留给后续 Phase）
+
+- **22.2** 搜索覆盖清单项的标签 / 清单名命中
+- **22.5** 设置页新增「清单」分区（默认清单 / 默认优先级 / 默认提醒时间）
+- **22.6 UI** 完成率还没接到清单页（目前只有领域模型 + 计算逻辑）
+- **Phase 18** 滑动删除 + 撤销、批量选择、拖拽排序
+- **Phase 20** 课表今日聚合
+- **Phase 21 UI** 清单项一键记账的入口（数据层已就绪）
+
+### Room schema 版本历史（本轮）
+
+| 版本 | 变更 | 快照 |
+|---|---|---|
+| v15 | `task_lists` 新建 + `tasks` 加 7 列 + `sub_tasks` 并入 `tasks` | `15.json` |
+| v16 | `transactions.linkedTaskId` 列 + 索引 | `16.json` |
+
+---
+
+## 📓 Phase 22 ~ 23 续（搜索命中 / 完成率 UI / 设置页清单分区 / 习惯打卡 / 滴答滑动删除）
+
+> 承接上一段「Phase 16 ~ 22」记录。分支：`feature/phase-16-checklist-rebuild`
+> 验证门槛：`assembleDebug` + `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全绿
+
+### 已完成
+
+| Phase | 主题 | 关键产出 | 状态 |
+|---|---|---|---|
+| 22.2 | 搜索命中标签 / 清单名 | `TaskDao.searchTasks` 改用 `EXISTS` 子查询命中标签名与清单名；返回 `TaskSearchRow`（清单项 + 命中来源）；搜索结果副标题显示「标签：Work」「清单：Work」 | ✅ @`95d42db` |
+| 22.5 | 设置页「清单」分区 | 新增「清单」分区：默认清单 / 默认优先级 / 默认提醒时间（DataStore，不新增 Room 表）；快速添加时套用，编辑面板新建不套 | ✅ @`8b5266f` |
+| 22.6 UI | 完成率统计上屏 | 清单页顶部一张卡片：近 7 天完成率 + 进度条 + 已完成 / 拖延 / 连续天数 | ✅ @`0dad371` |
+| 21 UI | 清单项一键记账 | 完成**带金额**的清单项时弹「记一笔？」，选支出分类后记一笔（`linkedTaskId` 指回清单项）；已记过账的不再问 | ✅ @`136ad8c` |
+| 23 | **习惯打卡** | 新增 `habits` / `habit_checkins` 两表（Room v17 + `Migration_16_17`）；今日打卡 + 连续天数 / 月度打卡表 / 年度热力图；抽屉入口；备份导出导入（17 张表） | ✅ @`6c47de5` `14924ef` |
+| 18.5 | 清单项左滑删除 | 自写 `SwipeToDeleteBox`（`detectHorizontalDragGestures` + `Animatable`），左滑露出删除按钮，滑过阈值触发 | ✅ @本段 |
+| 18.7 | 删除后撤销 | 删完弹 Snackbar「已删除「xxx」/ 撤销」；`restoreItem` 按**原 id** 放回去，id 不变 | ✅ @本段 |
+
+### 本轮关键决策
+
+6. **搜索命中用 `EXISTS` 而不是 `JOIN`** —— `JOIN` 会让一个任务命中多个标签时在结果里**重复出现**，
+   还得再套一层 `DISTINCT`；`EXISTS` 只回答「有没有」，语义正好。
+7. **命中来源要显式告诉用户** —— 搜「Work」出来的清单项标题里可能压根没有 Work 这两个字，
+   不说清楚它为什么出现，用户会以为搜错了。
+8. **完成率不做折线图** —— 方案里写的是 `MPAndroidChart`，但为三个数字引一个新依赖不划算；
+   一张卡片（完成率 + 进度条 + 三个数）已经把「这周做得怎么样」说清楚了，而且不占地方。
+9. **快速添加套默认值，编辑面板新建不套** —— 编辑面板里用户已经明确选过优先级 / 日期了，
+   再覆盖一遍是添乱。
+10. **默认提醒只在有截止时间时才算** —— 没有截止时间就算不出提醒点，
+    所以「有截止时间」是这条默认值生效的前提。
+11. **习惯打卡先由自己持 DataStore 开关** —— 日历侧当时还没有通用「显示设置」，
+    先把开关放在习惯侧，等日历侧补上后把读写指过去就行，UI 不用动。
+12. **备份格式版本不升** —— 只新增两张表、不改字段语义，跟 Phase 3 / Phase 16 的先例一致；
+    旧备份靠字段默认值（`emptyList()`）兜住，导入时按「备份里有没有这个条目」判断要不要清表，
+    避免旧备份导入时把用户现有的习惯数据清空。
+13. **滑动删除自己写而不用 `SwipeToDismissBox`** —— Material3 的 `SwipeToDismissBox`
+    参数名在不同版本里改过好几轮，锁版本很脆；自己写只依赖
+    `detectHorizontalDragGestures` + `Animatable`，这两个 API 一直很稳。
+
+### 仍未完成
+
+- ~~**Phase 18.4** 清单项拖拽排序~~ → **已补完**（见下方「Phase 18 收尾」段）
+- ~~**Phase 18.6** 批量选择模式~~ → **已补完**（长按抬手进多选，支持改日期 / 优先级 / 清单 / 标签 / 删除）
+- ~~**Phase 18.8** 删父项时子项提升为顶层的 UI 提示~~ → **已补完**（并入撤销 Snackbar）
+- ~~**Phase 20** 课表今日聚合~~ → **已补完**（见下方「Phase 20」段）
+- **Phase 23 补充** 补卡 UI（月视图上点某天补卡）、习惯在日历里的实际渲染（开关位已就位，数据还没上屏）
+
+### Room schema 版本历史（续）
+
+| 版本 | 变更 | 快照 |
+|---|---|---|
+| v17 | `habits` + `habit_checkins` 两张新表（习惯打卡） | `17.json` |
+
+---
+
+## 📓 Phase 20（清单 ↔ 日历同体 · 课表今日聚合）
+
+> 分支：`feature/phase-16-checklist-rebuild`｜Room 版本不变（17）
+> 验证门槛：`assembleDebug` + `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全绿
+
+### 已完成
+
+| 项 | 主题 | 关键产出 |
+|---|---|---|
+| 20.1 | 时间段编辑入口 | `TaskTimeRangeSheet` + `SetTaskTimeRangeUseCase`（写 `tasks.startAt` / `endAt`） |
+| 20.2 | 时段块渲染 | 口径统一收在 `CalendarTaskFilter`（带时段 = `startAt` 与 `endAt` **都有值**；按**占用天**归属，跨午夜占两天）；三处过滤点 `observeDayDetail` / `observeMonthSummary` / `observeWeekTimeline` 都调它 |
+| 20.3 | 显示设置开关 | DataStore（**不新增 Room 表**）：`calendar_show_courses` / `calendar_show_tasks` / `calendar_show_completed`；「习惯打卡」**复用习惯模块的 `habit_show_in_calendar`**，两边同一把开关。入口在顶栏 `Tune` 图标 |
+| 20.4 | 今日聚合同轴 | `DayTimelineView` 给 `dayStart` 后，课程（当天分钟数）+ 带时段清单项（真实时段）+ 无时段清单项（截止占 1 小时）一起 `sortedBy { startMinute }` 排进**同一条 24 小时轴** |
+| 20.5 | 冲突提示 | `CalendarConflictDetector`（纯函数，闭开区间相交）→ 复用既有 `ConflictWarningBanner` |
+| 20.6 | 跳转清单项详情 | 日视图「今日待办」点标题 → `Screen.DetailTask.build(id)` |
+| 20.7 | 跨午夜不截断 | `CalendarTimeRange` 把时段切成「每天一段」（23:00→次日 01:00 = 23:00-24:00 + 00:00-01:00）；每段带 `crossesMidnight` 标记 |
+
+### 关键决策
+
+14. **三处过滤点共用一个口径函数** —— 计划文件特意点了「漏一处会导致月/周/日视图不一致」，
+    所以把判定收进 `CalendarTaskFilter`，三处都调它，不各写各的。
+15. **跨午夜的判据是「落在两个不同自然日」，不是「end > start」** —— 后者会把
+    「没有结束时间、按 1 小时补齐」的普通时段误标成跨天。
+16. **「习惯打卡」开关复用习惯模块那把** —— 日历侧本来没有通用显示设置，
+    造第二把会让用户困惑「我关了怎么还在」。
+
+### 已知不一致（报告未改）
+
+- 月汇总 `observeBetween` 排除已完成、日视图含已完成 → 徽章数与当天列表数本来就对不上，
+  「已完成」开关也因此对月视图徽章无效。
+- 性能未实测：`observeDayDetail` 多订阅一路整表 `observeAll()`，周视图订阅 7 个 DayDetail
+  → 7 路整表扫描。个人 App 量级可接受，清单项上千条时值得再优化。
+- 习惯打卡在日历里**只做了开关位，还没渲染打卡数据** —— 那是 Phase 23.6 的活。
+
+---
+
+## 📓 Phase 18 收尾（拖拽排序 / 批量操作 / 子项提升提示）
+
+> 分支：`feature/phase-16-checklist-rebuild`｜Room 版本不变（17）
+
+### 已完成
+
+| 项 | 主题 | 关键产出 |
+|---|---|---|
+| 18.4 | 清单项拖拽排序 | 复用任务页的 `ReorderableTaskListViewModel`（`hiltViewModel(key = "reorder-checklist")`），落库仍走 `TaskRepository.reorderTasks` → `tasks.manualOrder`；本地顺序存**全局顶层顺序**（`ChecklistUiState.allTopLevelIds`），在某个清单里拖动不影响别的清单的槽位 |
+| 18.6 | 批量操作 | **长按抬手 = 进入多选**（长按后继续竖拖 = 排序）；批量支持 5 项：改日期 / 改优先级 / 移入清单 / 加标签 / 删除（二次确认） |
+| 18.8 | 子项提升提示 | 跟 18.7 的「撤销」合在一条 Snackbar：单删「已删除「买牛奶」，2 个子项已提升为顶层项」；批量删「已删除 3 项，1 个子项已提升为顶层项」。子项数 = 删除前数的**直接子项**个数，对齐 FK SET NULL 语义 |
+
+### 关键决策
+
+17. **手势仲裁层套在滑动删除外面**（`ChecklistItemGestureBox`）——
+    内层 `detectHorizontalDragGestures` 一旦消费位移，外层立刻退出，不会出现「滑一半变拖拽」。
+18. **不用 `detectTapGestures` + `detectDragGesturesAfterLongPress` 组合** ——
+    这两个 API 在同一个长按超时上同时触发，分不清「多选」和「拖拽」。
+19. **拖拽有启用条件**（排序=手动 + 不分组 + 无筛选 + 非多选）——
+    否则拖的是「子集」，会把全局顺序搅乱。
+20. **长按改为进入多选，不再打开编辑面板** —— 编辑面板仍可从铅笔图标进。
+
+### 行为边界
+
+- 拖拽只对**顶层项**生效；筛选 / 分组 / 非手动排序 / 多选模式下不可拖。
+- 批量改日期只有快捷选项（无自定义日期选择器）；批量加标签**只支持添加**（不支持移除）；
+  「移入清单」是移动不是复制。
+- 18.5 左滑只保留了删除，未扩展「改日期 / 移入清单 / 右滑完成置顶」。
+
+### 发现的既有 bug（报告未改）
+
+1. `ReorderableTaskItem`（任务页）用 `pointerInput` 记的 `recordCenterY` 取的是**项自身高度的一半**，
+   不是视口位置 —— 命中判定实质是「位移超过一行高度」而非按位置命中。
+2. 任务页拖拽把 `manualOrder` 按「象限内下标」写，会和象限外任务撞值
+   （清单侧用全局数组重排规避了，任务页未动）。
+3. `SwipeToDeleteBox` 的删除图标 `contentDescription` 硬编码「删除」，未走 strings.xml。
+
+---
+
+## 📓 Phase 24（补完尾巴 + 修三个 BUG + 记账模块三件大事）
+
+> 分支：`feature/phase-16-checklist-rebuild`｜Room 17 → **18**（新增 `coin_pools`）｜备份 17 表 → 18 表
+> 验证门槛：`assembleDebug` + `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全绿
+
+### 一、清单模块（任务 2 / 3 / 4）
+
+| 项 | 主题 | 关键产出 |
+|---|---|---|
+| 18.5 扩展 | 左滑多动作 + 右滑 | 新建 `SwipeActionBox`（通用双向滑动容器），语义从「滑过即执行」改为「**滑到位吸附停住，等用户点图标**」；左右吸附阈值各自独立算（每动作 64dp）；左右都 `consume()` |
+| 18.5 接线 | 左滑三动作 / 右滑两动作 | 左滑 `改日期` / `移入清单` / `删除`，右滑 `完成` / `置顶`；复用 `ChecklistBatchSheets` 里现成的日期 / 清单面板（同包 `internal`，零改动） |
+| 18.5 置顶 | 补齐 `isPinned` 链路 | `TaskDao.setPinned` → `TaskRepository.setPinned` → `SetTaskPinnedUseCase` → VM → UI；**同时给排序加 `isPinned DESC`**（`TaskDao` 三个 observe + `TaskSort` + `ChecklistFilter`），否则点了置顶界面纹丝不动 |
+| 18.3 BUG | `recordCenterY` 命中判定 | 删掉 `ReorderableTaskItem` 的 `recordCenterY` 上报（它传的是**项自身高度的一半**，不是视口坐标 → 所有行命中窗口完全重叠，退化成「拖过一整行才换位」）；改用 `lazyState.layoutInfo.visibleItemsInfo` 按 key 取真实行高，比**半行高**换位 —— 与清单侧 `ChecklistTab` 完全同构 |
+| 18.4 BUG | `manualOrder` 撞值 | 改成**全局重排**（与清单侧一致）：`TaskUiState.allActiveIds` 全量顶层项，拖拽中只在象限内换位、落库写全局下标 → `manualOrder = 0..N-1` 全局唯一 |
+
+### 二、习惯与日历（任务 1）
+
+| 项 | 主题 | 关键产出 |
+|---|---|---|
+| B1 | 习惯数据上屏 | `HabitCheckInDao.observeRangeAll(start, end)`（跨习惯区间查询）→ `HabitRepository.observeCheckInsInRange`；日历四个模型补 `habits` / `habitCount`（`DayDetail` / `DaySummary` / `CalendarDayCell` / `WeekDayColumn`）；`CalendarRepositoryImpl` 的 `observeDayDetail` + `observeMonthSummary` 接入 |
+| B2 | 渲染 | 日视图「习惯打卡」卡片（可勾选 / 取消）；月视图「习惯」标签行（第 4 行，复用 `TagChipData` / `TagChip`）；月网格第 4 个 badge；周视图全天标签区 |
+| B3 | 补卡 UI | 新建 `HabitCheckInSheet`（`ModalBottomSheet`）：点月视图「习惯」chip → 打开，日期取 `selectedDate`，`+` / `−` 各调一次 `CheckInHabitUseCase(habitId, date, ±1)` —— **数据层本来就支持补卡**（`CheckInHabitUseCase` 的 `date` 参数），缺的只是 UI |
+| B4 | 清尾巴 | `HabitScreen` 过期副标题、`HabitDisplayRepository` 过期 KDoc、删除死代码 `DayDetailSheet.kt`（365 行，月视图改用 `MonthTagList` 后无人调用） |
+
+### 三、记账模块（任务 5 / 6 / 7）
+
+| 项 | 主题 | 关键产出 |
+|---|---|---|
+| 5 修复 | 今日剩余不同步 | **病根在 `FinanceRepositoryImpl.kt:482` 的 `if (todayPool != null) return@withContext`** —— 重算结果算到了，被幂等守卫丢弃；DAO 也没有更新已存在行的方法。改成「更新当天行」 |
+| 6 两种模式 | 今日剩余口径 | `TodayRemainingMode`（FIXED / AUTO，DataStore key `finance_today_remaining_mode`）+ `TodayRemainingCalculator`（纯函数）。FIXED = 本月可用余额 − 本月已支出；AUTO = 该值 ÷ `BillingCycle.remainingDays`（账期口径） |
+| 7 零钱池 | 独立于今日剩余 | 新建 `coin_pools` 表（Room v18）：`accountId` unique、`balance` **可负数**、FK → `user_profiles` CASCADE；`CoinPoolCard` 与「今日剩余」卡平级；备份导出 / 导入 / diff / 外键全补（18 表） |
+| 帮凶 | 三处连带不一致 | `BudgetViewModel._yearMonth` 自然月 → 账期月（`BillingCycle.yearMonthOf`）；`isAutoRefresh` 死开关接上 `DailyPoolRefreshWorker`；`observeTodayPool` 跨零点能重新求值 |
+
+### 四、本轮关键决策
+
+21. **「今日剩余」改成派生值，不再落库** —— 落库的派生值 = 用户改一次预算、历史那一行也跟着变，月底对账看到的全是假的。派生的东西每次现算，永远不可能和源数据不一致（`UserProfileEntity.initialBalance` 已经立过这条规矩）。
+22. **`daily_pools` 表保留，职责收窄为「预算执行快照」** —— 它是**历史**（10 月 5 日那天实际发了多少日预算），改本月预算不该让那行跟着变；而且结转依赖它（`carryOver = max(0, 昨日 pool.remainingAmount)`），删表 = 结转功能消失。
+23. **零钱池单独建表而不是复用 `daily_pools`** —— 后者是日切快照（每天一行），改成持续余额要动 `dailyBudget` / `carryOver` / `totalSpentToday` 一整套字段，历史数据也没法迁。新表一个账户一个池，语义干净。
+24. **滑动语义从「滑过即执行」改成「滑出图标等用户点」** —— 多动作时前者会误伤（想改日期结果删了）。
+25. **`recordCenterY` 的修法是「不传坐标」而不是「传对坐标」** —— 绝对视口坐标在拖拽过程中会因布局重排而失效，半行高阈值法不需要绝对坐标，跟清单侧那套已经跑通的手感一模一样。
+26. **`manualOrder` 用全局重排而非分组内 offset** —— 分组 offset（象限序号 × 1e6 + 局部下标）只是把撞值换成稀疏，任务一多照样撞，还留一堆空洞。
+27. **`coin_pools` 不依赖外键 CASCADE** —— `PRAGMA foreign_keys` 是**连接级**开关，备份导入 / 数据重置路径会临时关掉外键检查 → CASCADE 不触发 → 零钱池变孤儿行。所以在 `AccountRepositoryImpl.deleteAccount` 里加**显式**删除。
+
+### 五、过程中揪出并修掉的真 BUG
+
+- **Room DDL 漏 `DEFAULT 1`** —— `CoinPoolEntity` 声明了 `@ColumnInfo(defaultValue = "1")`，Room 生成的 DDL 带 `DEFAULT 1`，但迁移里的 CREATE 语句漏了。**编译期看不出来**，Room 运行期 `TableInfo` 校验会判列不一致 → 用户一升级就崩 `Migration didn't properly handle: coin_pools`。已在 `Migration_17_18Test` 里加断言钉住。
+
+### 六、已知边界（未做 / 待后续）
+
+- **Room 迁移没有真机验证** —— `MigrationTestHelper` 需要设备；DDL 与 `18.json` 的一致性是**静态比对 + JVM 断言**，不是真机迁移验证。
+- **`daily_pools` 的备份 diff-by-id 坑未修** —— UNIQUE 是 `(accountId, date)` 但 diff 按 id 比对，同一天两行 id 不同时会互相替换。跨模块 + 影响既有备份语义，需单独授权。`coin_pools` 已从设计上按 `accountId` 判等避开。
+- **周视图 7 个 `DayDetail` → 7 份习惯区间查询**，Room 查询数从 ~14 涨到 ~21，未实测。
+- **`buildCalendarHabitItems` 是 repository 私有方法**，不是纯函数 → JVM 单测覆盖不到（要覆盖得先提到 `domain/util/`）。
+- **任务页拖拽组件仍是死代码** —— 本轮只把组件修对（18.3 / 18.4 修的是潜伏 BUG），没给任务页接线；接线还得给任务页加「手动排序」排序选项，属产品决策。
+- **零钱池没有存取流水明细** —— 只有余额 + 备注，没有历史表；需要的话得再加 `coin_pool_records`。
+
+---
+
+## 📓 Phase 25（清单 UI/UX + 零钱池改日切结算 + 任务页拖拽彻底完成）
+
+> 分支：`feature/phase-16-checklist-rebuild`｜Room 18 → **19**（新增 `coin_pool_settlements`）｜备份 18 表 → 19 表
+> 验证门槛：`assembleDebug` + `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全绿
+
+### 一、清单模块 UI/UX 优化 + 排版修复
+
+| 位置 | 改了什么 |
+|---|---|
+| `ChecklistBatchBar.kt` | 去掉 `IconButton(modifier = Modifier.padding(0.dp))` —— 它把按钮内边距清零了，6 个操作按钮的图标几乎贴在一起，触达区也没了余量。恢复默认内边距后触达区回到 48dp（外层 Row 有 `horizontalScroll`，窄屏横滑即可） |
+| `ChecklistItem.kt` | 卡片内边距 `12.dp / 4.dp` → `AppSpacing.sm / AppSpacing.xxs`；meta 区 `4.dp / 2.dp` → `AppSpacing.xxs`（同文件里硬编码与 token 混用，缩进看起来忽宽忽窄） |
+| `ChecklistItem.kt` | 标题 `maxLines = 2` → **1**（滴答的风格是单行标题；两行标题把行高撑开，列表扫视时节奏很乱。多出来的信息下沉到 meta 区，`FlowRow` 会自动换行） |
+| `ChecklistItem.kt` | 编辑按钮不存在时那个 `Spacer(4.dp)` 是一段莫名其妙的空隙 → 挪进 `if (onEdit != null)` 里 |
+
+**已确认不用做的**：空状态**已经有了**（`EmptyState` + `ic_empty_checklist` 插图 + 筛选 / 未筛选两套文案）；勾选框在多选模式下**宽度不变**（两个分支都是 `Checkbox`），不会跳动。
+
+### 二、零钱池改为「今日剩余日切自动存入」
+
+> 用户原话：零钱池是今日剩余在今日结束后自动存入零钱池，用户无法自行更改零钱池的余额。
+
+| 项 | 内容 |
+|---|---|
+| 拆手动入口 | 删 `AdjustCoinPoolUseCase` / `SetCoinPoolBalanceUseCase`（后者全项目零调用方）+ `FinanceRepository.adjustCoinPool` / `setCoinPoolBalance` + `CoinPoolCard` 的 8 处手动入口（存入 / 取出按钮、编辑弹窗、`dialogMode` 状态、随之失效的 import） |
+| 结算额口径 | **当日净结余**（伙伴拍板）：`daily_pools[D].dailyBudget + totalIncomeToday − totalSpentToday` |
+| 结算时机 | 挂在 `RefreshDailyPoolUseCase.invoke()` **内部** —— `DailyPoolRefreshWorker` 与 `PersonalAssistantApp` **一行都不用改** |
+| 结算到哪天 | **昨天**（D = 触发日 − 1 天）。00:01 时「今天」刚开始、当天的额度还没花；昨天的钱也还属于旧账期 |
+| 手动刷新 | `force()` **不结算** —— 手动重算当天额度不该篡改历史账 |
+| 幂等 | Room **19**（新表 `coin_pool_settlements`，UNIQUE `(accountId, date)`）+ `coin_pools.lastSettledDate` 水位线；同一天重复结算 → REPLACE 覆盖，**余额只在真正新增了结算记录时才 += amount** |
+| 补算 | 对 `(lastSettledDate, D]` 逐日补；某日无 `daily_pools` 行 → 跳过（那天系统没参与预算执行，不产生结转） |
+| 备份 | 18 表 → 19 表；`BackupDiffCalculator` 对新表**按 accountId + date 复合键判等**（不能照抄 `coin_pools` 的单键）；`FORMAT_VERSION` 保持 2 |
+
+**关键决策**
+
+21. **「今日剩余」改成派生值，不落库** —— 落库的派生值 = 用户改一次预算、历史那一行也跟着变，月底对账看到的全是假的。
+22. **`daily_pools` 保留，职责收窄为「预算执行快照」** —— 它记的是「10 月 5 日那天实际发了多少日预算」，那是**当时的决定**；而且结转依赖它（`carryOver = max(0, 昨日 pool.remainingAmount)`），删表 = 结转功能消失。
+23. **零钱池单独建表** —— `daily_pools` 是日切快照（每天一行），改成持续余额要动 `dailyBudget` / `carryOver` / `totalSpentToday` 一整套字段，历史数据也没法迁。
+24. **`coin_pools` 不依赖外键 CASCADE** —— `PRAGMA foreign_keys` 是**连接级**开关，备份导入 / 数据重置路径会临时关掉外键检查 → CASCADE 不触发 → 零钱池变孤儿行。所以删账户时显式删。
+
+### 三、任务页拖拽彻底完成
+
+上一轮（Phase 24）把数据层和组件修对了，这轮把**交互**接上：
+
+| 项 | 内容 |
+|---|---|
+| `TaskItem` | 加 `dragEnabled` / `isDragging` / `dragOffsetY` / `onDragStart` / `onDrag` / `onDragEnd`；外面套 `ChecklistItemGestureBox`（`enableLongPress = false` —— 任务页没有多选）；被拖项加阴影 + 跟手偏移 |
+| `TaskRow` | 加同样参数并透传 |
+| `TasksTab` | `hiltViewModel(key = "reorder-tasks")` + `rememberLazyListState()`；`draggingId` / `dragOffsetY` / `dragSnapshot` 状态；`LaunchedEffect(state.allActiveIds) { reorderVm.resetLocalOrder(...) }`；命中判定用 `ReorderHitResolver.shouldSwap`（半行高换位）+ `dragOffsetY` 补偿布局移位 |
+| 象限边界 | 只能在**当前象限内**换位 —— 候选目标必须与被拖项同象限（`quadrantOf` 映射） |
+| 落库 | `endDrag(dragSnapshot)` 写**全局下标** → `manualOrder = 0..N-1` 全局唯一，别的象限里的项位置不被挤掉 |
+| 启用条件 | 只有 `sort == TaskSort.MANUAL_ORDER` 时才允许拖 —— 其它排序下拖完会被立刻重排回去 |
+| 已完成区 | 不参与拖拽 |
+
+**关键决策**
+
+25. **任务页不改造 `ReorderableTaskList` 组件** —— 它是「每个象限调用一次」的设计，任务页是「一个 LazyColumn 里多象限」。清单页那套（直接在 LazyColumn 里自己算命中 + 用 `ReorderableTaskListViewModel` 管顺序）已经跑通了，照抄更稳。组件保持修对的状态，等真有「独立 LazyColumn」场景再用。
+26. **象限边界靠「全局序列里的相邻项是否同象限」判定** —— 不用另建分组索引：全局顺序是按象限拍平的，同象限的项在序列里本来就挨着。
+
+### 七、已知边界
+
+- **Room v19 迁移没有真机验证** —— `MigrationTestHelper` 需要设备；DDL 与 `19.json` 的一致性是静态比对 + JVM 断言。
+- **拖拽手感只过了编译级验证** —— 模拟器上长按拖一下才知道对不对味。
+- **「任务页拖拽」在矩阵视图（`TaskViewMode.MATRIX`）下不可用** —— 矩阵视图是独立布局，不走 LazyColumn。
+- **`daily_pools` 的备份 diff-by-id 坑未修** —— UNIQUE 是 `(accountId, date)` 但 diff 按 id 比对。跨模块且影响既有备份语义，需单独授权。`coin_pools` 已从设计上按 `accountId` 判等避开。
+
+---
+
+## 📓 Phase 26（清单页色块外露 BUG 修复 + 颜色统一）
+
+> 分支：`feature/phase-16-checklist-rebuild`｜Room 仍是 19｜验证门槛：`assembleDebug` + `testDebugUnitTest` + `compileDebugAndroidTestKotlin` 全绿
+
+### 一、BUG：滑动动作区整片透出来，把每一行切成彩色条纹
+
+**现象**：清单列表里每一行都被紫 / 粉 / 橙几块色条切碎，标题文字被色块盖掉一半。
+
+**根因**：`SwipeActionBox` 的两层结构里，**上层内容没有背景色**。
+
+```
+Box {                                        ← 底层：动作区（5 个彩色按钮）
+    Box(matchParentSize) { Row { 动作按钮 } }
+    Box(fillMaxWidth + offset) { content() }  ← 上层内容，背景透明 ← 元凶
+}
+```
+
+底层动作区是**常驻绘制**的（5 个按钮各占 64dp 宽），靠上层内容把它盖住。上层一透明，那 5 块颜色就整片透出来。
+
+清单页的两条放大因素：
+- 清单页的 `LazyColumn` 自身**没有背景**（透明，靠 Scaffold 底色）
+- `ChecklistItemRow` / `ChecklistItemCard` 也**没有背景**
+
+所以内容层必须自带不透明底色。
+
+**修法**：`SwipeActionBox` 加 `contentBackground: Color? = null`（null = `MaterialTheme.colorScheme.surface`），内容层 `.background(contentBackground ?: MaterialTheme.colorScheme.surface)`。
+
+### 二、颜色统一
+
+**滑动动作**：五个动作曾各用一种 Material3 容器色 —— 改日期 `secondaryContainer`、移入清单 `tertiaryContainer`、删除 `errorContainer`、完成 `primaryContainer`、置顶 `tertiary`。五种色相在同一条滑动条上排开，就是「杂乱」的来源。
+
+现在只剩一条语义：**删除 = 红**（`errorContainer`），其余四个动作统一 `primaryContainer` —— 靠图标区分就够了（Event / FolderOpen / Check / PushPin）。
+
+**快速添加行的 token chip**：日期 / 标签 / 清单三种 token 曾各用一种容器色（primary / tertiary / secondary），挤在一行里也是三块杂色。现在统一 `primaryContainer`，类型靠图标（DateRange / LocalOffer / List）区分。
+
+### 三、确认过、刻意保留的语义色
+
+这些不是「杂乱」，是有含义的，没动：
+
+| 位置 | 颜色 | 含义 |
+|---|---|---|
+| 删除按钮 / 删除确认 / 逾期日期 / 「拖延」计数 | `error` / `errorContainer` | 危险与逾期 |
+| 主操作、选中态、筛选高亮、Badge、进度条 | `primary` | 强调与主行动 |
+| 象限 P1/P2/P3 | `error` / `tertiary` / `primary` | 象限语义（任务页、矩阵视图） |
+| 优先级 | `appColors.priority*Ink` | 优先级语义 |
+| 分类色点 | 用户自定义分类色 | 用户自己的选择 |
+| 抽屉选中项 | `secondaryContainer` | 选中态 |
+
+### 四、已知边界
+
+- **内容层底色默认 `surface`** —— 如果清单列表所在容器的底色不是 `surface`，行与行之间会有一条色差。清单页当前列表区是 Scaffold 底色（`surface` 家族），看不出差别；若日后换容器底色，`SwipeActionBox` 的 `contentBackground` 参数就是给这用的。
+- **这一版没做整体的视觉重设计** —— 只修了「色块外露」这个硬伤 + 把散色收敛成语义色。清单项的排版节奏（行高、meta 区换行）上一轮已经调过。
+- **没做真机截图比对** —— 效果需要伙伴在设备上看一眼：滑动时动作区露出应该是一条浅蓝底 + 一个红色删除按钮，不再是五彩条纹。
+
+---
+
+### 📦 Phase 26：方案 D 全量 UI 改造（8 个独立 commit）
+
+> 六个模块整体换成 D 方案：清单 / 记账 / 课表 / 日历 / 习惯 / 我的·设置·外观·账户。
+> 外加一层新的设计令牌（P0）与公共组件（P1）。
+> **按阶段拆成 8 个 commit**，任一阶段出问题可单独 `git revert` 而不影响其它阶段。
+
+#### `198ebe9` —— P0 设计令牌层
+
+- **完成项**：暖白底 `#F7F6F3`；固定语义色（收入 `#2E6B33` / 支出 `#B23A2E` / 转账 `#4A5560` / 临界 `#7A4A00` / **当前时刻 `#B45309`**）—— 语义色**不跟随用户主题色**
+- 新增 `LocalAppSurfaces`（paper / divider / dividerSoft / barTrack）、`LocalAppColors`（语义色入口）
+- 字号基准：大标题 26sp/700、行标题 15.5sp、正文 15sp、次要 11.5sp、分组标题 13.5sp/700，**最小 10sp**
+- `DateUtils.currentMinuteOfDay()` —— 课表 / 日历的「现在」线共用一份
+
+#### `3120475` —— P1 公共组件层
+
+- **完成项**：`BigTitleHeader` / `UnderlineTabs` / `SectionLabel` / `GroupEntryRow` / `RingCheckbox` / `ColorBar`（+ 顶层 `ensureBarContrast`）/ `ThinProgressBar`
+- `AppCard` 加 `shape` 参数（14dp 走 `AppRadii.card14`，不动全局圆角常量）
+- `AppTopBar` 渐变默认关闭（`showGradient = false`）
+
+#### `6b99393` —— P2 记账模块
+
+- **完成项**：四标签「流水 / 报表 / 零钱池 / 预算」；今日剩余卡改 A 结构 × C 皮肤（暖白 + 左侧 3dp 品牌蓝竖条 + 34sp Light 金额）
+- 流水行改 3dp 分类竖条，副行去掉「· SOURCE」尾巴；月报收支结余走固定语义色
+- 5 处白底图标改用 `onColorFor` 判前景色（深浅底都看得清）
+
+#### `3f30c00` —— P3 课表模块（双视图 + 修存量 bug）
+
+- **完成项**：时间线 / 整周网格双视图（独立 StateFlow，不进主 combine）；60dp 固定列 + 横向滑动；课程卡 13% 淡底 + 3dp 实色左条 + 8dp 圆角；当前时刻线（2dp `now` 色 + 8dp 圆点）；时间轴只画整点；`DayHeaderRow` 52dp + 今天 22dp 蓝圆
+- **修了 `isCurrentWeek` 写死 `true`** —— 「回到本周」按钮因此永远不出现，用户手动翻周后回不去
+- **修了 modifier 顺序 bug**：`.height(h)` 后面跟 `.padding(top = t)`，把 t 从 h 内部扣掉，子内容可用高度变成 `h - t`。排在后面的课（9:45 之后）高度被压到 ≤ 0，**整门课在 App 里根本不显示**。改用 `.offset(y = t)`（offset 不参与测量）
+- 抽出 `TimetableLayout.courseSlot()` 纯函数 → `TimetableLayoutTest` 4 个单测（守住「高度只跟时长有关，与排在第几行无关」）
+- 删除零调用点的死代码 `CourseCard.kt`
+
+#### `ddb236f` —— P4 清单模块
+
+- **完成项**：圆环勾选框（`RingCheckbox`）；meta 一行纯文字（分类 3dp 竖条 → 优先级 → 截止 → 金额），去掉胶囊底；meta 与标题左缘对齐
+- 快速添加改内联底线；筛选按钮改 44dp 圆形 + 自绘徽标；侧滑动作区改直角块，`ACTION_WIDTH` 64 → 56dp
+- 抽屉选中态改「3dp 蓝竖条 + 蓝图标 + SemiBold」三重信号；补「+ 新建清单」入口；**修「删除清单」死路径**（`deletingList` 状态被赋值但没有入口触发）
+- 删除 `CompletionStatsCard.kt`（完成率已由大标题副标题承载）
+
+#### `97815ac` —— P5 日历模块
+
+- **完成项**：新增 `AgendaStream` 日程流 —— 事件 + 课程 + 任务三类拍平成一条竖线（44dp 时刻 + 7dp 圆点 + 标题 + 副信息 + 1px 上边框）；**全天事项排在带时刻事项之前，其余按开始时刻升序**（沿用 `DayDetail` 既有约定）
+- `AgendaDay.buildAgendaDay()` 纯函数 → `AgendaDayTest` 5 个单测
+- 日历页改 `BigTitleHeader`（「11 月」+「今天 N 项安排 ⌄」）+ `UnderlineTabs` 四标签（日程 / 月 / 周 / 日）
+- **「现在」线从 `colorScheme.error`（红）改固定 `now` 语义色** —— 红色是冲突 / 逾期的语义，「现在」撞色会让人以为出错了
+- 时间轴块从「16% 底 + 32% 描边」改「13% 淡底 + 3dp 实色左条」（`drawBehind` 画，不占布局）
+- 农历角标 9sp → 10sp；非本月日期从 `onSurfaceVariant @ 40%`（约 2.3:1）改完整色值（≥ 4.5:1）
+- 习惯打卡按钮 32dp → 44dp 触达 + 34dp 蓝色方块
+
+#### `d71dd68` —— P6 习惯模块
+
+- **完成项**：「今日」区块一物一块；`HabitRow` 重画为 `HabitBlock`（34dp 圆角方块图标 + 名称 + 目标 + 计数 + 2dp 进度条 + 右下**文字**打卡按钮）；接上 `Habit.iconKey`（之前 UI 写死 `Icons.Rounded.Star`）
+- 默认色 `#FF69B4`（旧樱花粉）→ `#3F7DE0`（蓝系）；只影响新建，存量数据不动
+
+#### `6f3659e` —— P7 我的 / 设置 / 外观 / 账户
+
+- **完成项**：「我的」页新增档案卡（64dp 圆形头像 + 名字 20sp + 账户名副行，不虚构学号）；GPA 改 38sp Light + 3dp 进度条；「外观」入口拆成分组文字行；`SettingsNavBar` 的 `TabRow` → 下划线标签
+- 搜索高亮色写死玫红 `#E91E63` → 品牌蓝
+
+#### 验证
+
+- `gradlew :app:assembleDebug :app:testDebugUnitTest` —— **BUILD SUCCESSFUL**，**1161 个 JVM 单测全绿，0 失败**（Phase 25 是 1138 个，新增 23 个）
+- 新增单测：`TimetableLayoutTest`（4）+ `AgendaDayTest`（5）+ `SemanticColorsTest` 扩写
+
+#### 原型同步（`docs/ui-mockups/plan-d.html`）
+
+原型原来停在「设计稿」状态，跟实现已经分叉。这一轮按实现的实际形态改回来了：
+
+| 屏 | 改动 |
+|---|---|
+| **D1 清单** | 补左上角 **☰ 抽屉入口**（实现里 `BigTitleHeader` 的 `navigationIcon` 槽）；副标题「本周完成率」→ **「近 7 天完成率」**（实现口径是 7 天窗口，写「本周」跨周那几天算不进来）；删掉「查看全部 12 项」脚注（实现没有这个入口） |
+| **D3 课表·时间线** | **删掉两行日程**（小组会议 / 自习）—— 实现的课表时间线只显示课程，日程归日历；删掉右侧「课程 / 日程」类型标签（实现没有）；时刻列「90 分」→ **起止时刻**；「现在」行改成 **8dp 圆点 + 1px 横线**（实现没有「在…上课中」那行文案）；删掉「接下来 11 月 5 日」区块与「切换到整周网格」脚注 |
+| **D4 课表·网格** | 下方「今日课程」列表同样改成起止时刻、删类型标签 |
+| **D5 日历** | 副标题「本周 7 项安排」→ **「今天 N 项安排」**；加 **下划线标签「日程 / 月 / 周 / 日」**；删 7 天日期条（实现的 `AgendaStream` 只显示选中的那一天，靠每段日期小标题分隔）；改成 **只有一天** 且 **全天事项排在最前**；删「查看月视图」脚注 |
+| **D7 我的** | 档案卡副行「计算机科学与技术 · 2024 级」+「学号 2024xxxx12」→ **「记账账户」**（实现用的是现成的账户名，不虚构专业学号） |
+| 公共 | `shared/icons.js` 补 `i-menu` 图标；`plan-d.html` 内联样式补 `.nowdot` / `.nowline`，删掉不再使用的 `.kind` 规则 |
+
+**验证方式**：起 `python -m http.server` 把 `docs/ui-mockups/` 挂到本地，用 Playwright 打开渲染，逐屏 dump `innerText` 与实现逐条对照。控制台除 favicon 404 外无报错，7 屏全部正常渲染。
+
+#### 已知边界（留给下一轮 / 需真机确认）
+
+1. ~~**真机无法目测**~~ —— **已解决**（2026-11-08 晚）。之前那个 `aosp_atd` 镜像已经不用了，现在跑的是 `pm_ui36`（google_apis 镜像，Pixel 模拟器），能正常显示。可以用 `adb shell uiautomator dump` + 像素采样做目测替代验收
+2. **课表 modifier 顺序的回归测试只覆盖到算式层**（`TimetableLayoutTest`）。Modifier 链本身的顺序要 instrumented test 才量得到真实尺寸 —— 清单第 3.1 条得在真机上看一眼
+3. ~~**课表副标题的「⌄」是静态字符**~~ —— **已做成真下拉**（见下方「Phase 26 收尾」）
+4. ~~**日历的日程流只支持选中日**~~ —— **日日程保持单天**，另外加了工作日 / 休息日两种区间聚合（见下方「Phase 26 收尾」）
+5. ~~**月 / 周 / 日三种网格是标签页**~~ —— **已拆成独立路由**（见下方「Phase 26 收尾」）
+6. **~~`docs/ui-mockups/plan-d.html` 原型与实现有出入~~** —— 已同步（见下方「原型同步」条目）。
+7. **中间 commit 未逐个编译验证** —— 8 个阶段是一次性改完再统一验证的，只有最终 HEAD 是确认全绿的。单独 revert 某个阶段后建议先跑一次编译
+
+### Phase 26 收尾 —— 五项补齐（2026-11-08）
+
+伙伴提了五件事，这一轮全做完，拆成两个 commit。
+
+#### `feat: 日历六视图拆独立路由 + 日程流区间聚合 + 视图切换器`
+
+| 需求 | 做法 |
+|---|---|
+| **月 / 周 / 日拆成独立路由** | 新增 `Screen.CalendarMonth` / `CalendarWeek` / `CalendarDay` / `CalendarWorkday` / `CalendarRestday`，都**不进** `BOTTOM_BAR_ROUTES` —— 是二级页，底栏不显示，`BottomBarRoutesTest` 那句「恰好 6 条」也不受影响。`CalendarScreen` 加 `mode: CalendarScreenMode` 参数，路由决定这一屏长什么样 |
+| **日程流按选中日聚合** | 新增 `AgendaScope`（日 / 工作日 / 休息日）+ 纯函数 `agendaDates(anchor, scope)`。**「日日程」只有一天**，不展开成整周；工作日 = 所在那周的周一~周五，休息日 = 周六~周日 |
+| **导航栏第二个（从右往左）能切视图** | 右侧操作区从左到右排成 `显示设置 / 选择月份 / **视图切换器** / 下一个` —— 视图切换器落在**倒数第二位**，从右往左数第二个就是它。点开是六项菜单，当前视图打勾 |
+
+配套改动：
+
+- `CalendarViewModel` 加 `agendaScope` / `navUnit` / `agendaDays`；`applyMode(mode)` 是「路由 → 视图」的映射收口
+- 翻页单位改看 `navUnit` 而不是 `viewType` —— 「工作日日程」聚合的是整周，翻一次得翻一周
+- `AgendaDay` 加 `detail` 字段：点某一行时要拿回 Event / Task / Course 本体（事件编辑要完整对象，光有 id 不够）
+- `BigTitleHeader` 加 `subtitleContent` 槽 —— 副标题要能交互，纯字符串做不到
+- 「回到今天」挪到左侧导航组（跟「上一个」一组），把右侧倒数第二位让给视图切换器
+
+#### `feat: 课表副标题动态下拉 + 周数边界钳制`
+
+- **副标题的「⌄」变成活的**：收起 `⌄` / 展开 `⌃`，点了真能开学期菜单。**只有一个学期时不画箭头** —— 摆个点不动的箭头骗人。菜单本体抽成 `SemesterDropdownMenu`，`SemesterSelector` 也复用它，两处不会漂移
+- **周数钳到 `[0, totalWeeks]`**：新增 `semesterTotalWeeks(semester)`（学期跨天数 ÷ 7 + 1）+ `clampWeekNumber(week, totalWeeks)`。`selectWeek` 与状态派生两处都过一遍钳制
+
+  为什么必须钳：翻周入口是「第 N 周 - 1」，在第 1 周继续往前翻会得到 0，再翻就是 -1。负周号让 `Course.appliesToWeek(-1)` 全部落空 —— **界面看着正常，课程却一门都不显示**，极难排查
+
+#### 验证
+
+- `gradlew :app:assembleDebug :app:testDebugUnitTest` —— **BUILD SUCCESSFUL**，**1174 个 JVM 单测全绿，0 失败**（上一轮 1161 个，新增 13 个）
+- 新增单测：`SemesterWeeksTest`（7）+ `AgendaRangeTest`（6）
+  - `SemesterWeeksTest` —— 总周数算得对、负周号钳到 0、超上界钳到 `totalWeeks`、没有学期时钳到 0
+  - `AgendaRangeTest` —— **「日日程」只有一天**、工作日是周一~周五、休息日是周六日、锚在周日也算同一周
+
+#### 本轮补充的已知边界
+
+8. **本轮两个 commit 是同一份代码拆开提交的** —— 一起编译、一起跑单测（`BUILD SUCCESSFUL` / 1174 全绿）。单独 revert 其中一个后需要重跑一次编译
+9. **日历的六条路由还只进了 NavHost，没进 `navigateToTab`** —— 视图切换器走的是 `navigate` + `popUpTo`，底栏选中态在这些二级页上不跟随。需要的话下一轮可以把日历的二级页也纳入 tab 选中判定
+10. **日历六条路由各自持有独立的 `CalendarViewModel`** —— `hiltViewModel()` 的 scope 是 NavBackStackEntry，不同路由 = 不同实例 = 各自一份 `selectedDate`。实际表现：**在月视图里选了 11 月 20 号，切到周视图会跳回今天**。修法是把这一组路由收进一个嵌套 `navigation()` 图，共享图级 scope 的 VM —— 下一轮做
+
+### Phase 27 —— 日历三视图（日 / 周 / 月）重整（2026-11-08）
+
+伙伴要求：视图合并成三档，视图切换列表放在标题组件下方、顺序 日→周→月，三视图都显示下方导航栏（视图切换栏 + App 底栏）。
+
+#### 三笔 commit
+
+| commit | 内容 |
+|---|---|
+| `8a05aac` | 日历三视图独立路由 + 底栏白名单扩到 8 条 |
+| `9bdc187` | 日历视图合并为日/周/月 + 标题下方下划线标签 |
+| `00c682a` | fix: `UnderlineTabs` 标签等宽铺满 |
+
+#### 合并后的结构
+
+| 视图 | 路由 | 上半（组件） | 下半（列表） |
+|---|---|---|---|
+| **日** | `calendar/day` | `DayCalendarView`（时间轴 + 今日课程 + 预算横条） | `AgendaStream` 选中日 |
+| **周** | `calendar/week` | `WeekCalendarView` | 工作日 `AgendaStream`（周一~周五）+ 休息日 `AgendaStream`（周六日） |
+| **月** | `calendar/month` | `MonthCalendarGrid` | `MonthTagList` 选中日标签列表 |
+
+- 视图切换从导航栏的下拉菜单改成**标题下方的 `UnderlineTabs`**（日 / 周 / 月）
+- 导航栏右侧的「切换视图」图标按钮删掉；右侧剩 `显示设置 / 选择月份 / 下一个`，左侧仍是 `上一个 / 回到今天`
+- `CalendarScreenMode` 从 6 个值简化成 `DAY / WEEK / MONTH`
+- `CalendarViewModel` 的 `_agendaScope` 单值流换成三条并行流：`dayAgendaDays` / `workdayAgendaDays` / `restdayAgendaDays`
+- `agendaDates(anchor, scope)` 纯函数与 `AgendaScope` 枚举原样保留（`AgendaRangeTest` 6 个用例不用改）
+- 底栏白名单 6 → 8 条（三条日历路由都进去），deeplink 白名单同步补三条
+
+#### 走过的两条弯路（都留在这段记录里）
+
+**一、嵌套 NavGraph —— 白屏**
+
+按计划先把三条路由收进 `navigation()` 图（想顺带解决「切视图丢选中日」）。真机一按返回键，**整页变空白**：
+
+图的 startDestination 是「日」，NavHost 的 startDestination 是那张图。栈是 `[图, 日]`，返回键把「日」弹掉 → 图里没有 destination 可显示 → 白屏。
+
+改回**三条顶层路由 + Activity 作用域共享 ViewModel**：在 `AppNavHost` 里 `hiltViewModel<CalendarViewModel>()`（scope = Activity）拿到共享实例，传给三个视图；切视图用 `navigate(target) { popUpTo("calendar/day") { inclusive = false } }`，栈底「日」永远留着。
+
+**二、`UnderlineTabs` 只渲染出第一个标签**
+
+真机上标签栏只有「日」，「周」「月」点不到。根因在公共组件：
+
+```kotlin
+Box(Modifier.fillMaxWidth().height(2.dp).background(...))   // 下划线槽
+```
+
+`fillMaxWidth()` 在 `Row` 里取的是**剩余空间**（≈ 整行宽），于是第一个标签的 `Column` 撑满整行，后面的标签被推到屏幕外。
+
+- 先试 `Modifier.width(IntrinsicSize.Min)` → **无限测量**，整个界面 dump 不出来（Intrinsic 测量下 `fillMaxWidth` 的 maxWidth 是无穷）
+- 最终解：标签 `Column` 加 `weight(1f)` **等宽铺满**（Material Tab 的做法），文字居中
+
+这个组件是公共的，课表页的「学期 / 课时表」、设置页也在用 —— 一并修好了。
+
+#### 验证
+
+- `gradlew :app:assembleDebug :app:testDebugUnitTest` —— **BUILD SUCCESSFUL**，**1174 个 JVM 单测全绿，0 失败**
+- 真机（`pm_ui36` 模拟器，google_apis 镜像）用 `uiautomator dump` 逐项核对：
+  - 标题下方出现「日 / 周 / 月」下划线标签，**顺序正确**
+  - 三个视图里 **App 底栏都在**
+  - 周视图副标题「本周 5 项安排 ⌄」，月视图有月份网格 + 标签列表
+  - **从「月」按返回键回到「日」**（不再退出 App）—— 这条是上一轮那个 bug 的回归验证
+- 工具留在 `.cyrene/`（gitignore 的工具目录，不进仓库）：`tap.py`（按文字点设备）、`dump.py`（层级转文字）、`verify.py`（三视图一键核对）、`week.py`（周视图日期顺序核对）
+
+### Phase 27.1 —— 周视图布局错乱修复（2026-11-09）
+
+伙伴反馈：日历的周模块 UI/UX 布局错乱，要求**按周一~周日的顺序、按日期前后排列，显示所有安排与清单**。
+
+#### 错在哪（真机 dump 出来的）
+
+```
+一 2 | 二 3 | 三 4 | 四 5 | 五 6 | 六 7 | 日 8     ← 星期头
+15:00 16:00 17:00                                    ← 时间刻度只剩 3 个！
+11月2日 星期一
+08:00 test class
+11月3日 星期二
+11月4日 星期三
+11月7日 星期六
+11月8日 星期日
+```
+
+三个问题叠在一起：
+
+- **时间轴只剩 3 小时** —— 24 小时（46dp × 24 = 1104dp）被塞进 1/3 屏
+- **11 月 5 日、6 日直接消失** —— 工作日流只占 1/3 高，看不见后面的
+- **三个可滚区各占 1/3** —— 周历（内部滚）+ 工作日流（内部滚）+ 休息日流（内部滚），滚轮打架
+
+根因是上一轮合并「周」时，把周日历和工作日/休息日两条流都塞进了 `weight(1f)` 里。
+
+#### 怎么改的
+
+**整页一个滚动条**：
+
+```
+Column(verticalScroll)
+├── WeekCalendarView(时间轴跟着整页滚)
+└── AgendaStream(整周 7 天，lazy = false)
+```
+
+- `AgendaScope` 加 `WEEK` 值；`agendaDates(anchor, WEEK)` 返回周一~周日七天
+- VM 加 `weekAgendaDays`；`workdayAgendaDays` / `restdayAgendaDays` 不再被页面订阅
+- `WeekCalendarView` 加 `timeGridScrollState` 参数：传外部的滚动条时，时间轴不再自己滚、也不抢 `weight(1f)`（「现在」线用的是固定 `HourHeight` 算的，不依赖 `scrollState.value`，所以挪走不影响定位）
+- `AgendaStream` 加 `lazy` 参数：`LazyColumn` 不能嵌在 `verticalScroll` 里（无限高度约束会崩），所以整周清单走非惰性版 —— 一周的数据量完全扛得住
+
+#### 验证
+
+- `gradlew :app:assembleDebug :app:testDebugUnitTest` —— **BUILD SUCCESSFUL**，**1176 个 JVM 单测全绿**（新增 `AgendaRangeTest` 两条：整周是周一~周日七天连排、整周 == 工作日 + 休息日）
+- 真机 dump 滚到底：
+  `['11月2日 星期一', '11月3日 星期二', '11月4日 星期三', '11月5日 星期四', '11月6日 星期五', '11月7日 星期六', '11月8日 星期日']`
+  —— **七天连着排，一天不缺**，一次滑动到底（只剩一个滚动条）
+
+### Phase 27.2 —— 底栏日历图标在周 / 月视图下不标注（2026-11-09）
+
+伙伴反馈：处于日历的周 / 月模块时，底栏的「日历」图标没有选中标注，只有日模块才有。
+
+#### 根因
+
+`BottomTabItem` 里写死了单路由比较：
+
+```kotlin
+val selected = currentRoute == tab.screen.route
+```
+
+日历 Tab 的 `screen` 是 `Screen.CalendarDay`（route = `calendar/day`）。站在周视图时 `currentRoute` 是 `calendar/week`，不相等 → 图标不亮。
+
+Phase 27 把日历拆成三条路由时，底栏这层没跟着改 —— 上一轮把它记成了「已知边界 9」，这轮直接修掉。
+
+#### 改法
+
+`BottomTab` 加一个 `routes` 字段：**这个 Tab 认领的所有路由**，底栏选中态按它判定。
+
+```kotlin
+val routes: Set<String> = setOf(screen.route)   // 默认只认自己的入口
+```
+
+日历 Tab 显式认领三条：`calendar/day` / `calendar/week` / `calendar/month`。其余 Tab 走默认值，不用改。
+
+顺带把 `onClick` 的「已选中就跳过」去掉了 —— 站在周 / 月视图时点「日历」要能回到日视图（`navigateToTab` 的 `popUpTo(起点)` 会把周 / 月弹掉）。跨 Tab 再回来时 `restoreState` 恢复上次看的那个视图。
+
+#### 验证
+
+- `gradlew :app:assembleDebug :app:testDebugUnitTest` —— **BUILD SUCCESSFUL**，**1178 个 JVM 单测全绿**（新增两条：日历 Tab 认领日 / 周 / 月三条路由；每个 Tab 至少认领自己的入口路由）
+- 真机（读底栏 `selected="true"` 的节点）：
+
+```
+日视图 选中: ['日', '日历']
+周视图 选中: ['周', '日历']     ← 修好了
+月视图 选中: ['月', '日历']     ← 修好了
+清单页 选中: ['清单']            ← 切到别的 Tab 不会误选
+```
+
+
+
+#### 顺带澄清的两件事
+
+- **上一轮报的黑屏不是 App 的锅** —— `emulator.exe` 和 `qemu` 两个进程都消失了（渲染进程退出，窗口框架留着），crash buffer 空、logcat 无异常。重启模拟器后 App 渲染完全正常（435 种颜色）
+- **「本机无法目测」这条过期了** —— 现在跑的是 `pm_ui36`（google_apis 镜像），能显示；`adb shell uiautomator dump` + 像素直方图可以替代肉眼验收
+
+

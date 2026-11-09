@@ -4,17 +4,18 @@ package com.example.personalassistant.core.backup.model
  * Phase 8 Sub-step 4'（plan 8f'）：备份预览数据集合
  *
  * 由 [com.example.personalassistant.core.backup.diff.BackupDiffCalculator.compute] 产出：
- * 拿「备份 payload」与「当前 DB snapshot」做差异，得到 13 张表的 [TableDiff]。
+ * 拿「备份 payload」与「当前 DB snapshot」做差异，得到 19 张表的 [TableDiff]。
  *
  * - [formatVersion] / [sourceDbVersion] / [createdAt] 直接来自备份 manifest，只读
- * - [perTable] 13 项，按 [BackupManifest.DEFAULT_TABLES] 顺序（外键依赖顺序）排好
+ * - [perTable] 19 项，按 [BackupManifest.DEFAULT_TABLES] 顺序（外键依赖顺序）排好
  *
  * 用户在 [BackupPreviewScreen] 上修改的策略写在 [com.example.personalassistant.core.backup.model.TableDiff.strategy]
  * 字段里；调用 `BackupPreviewViewModel.confirmImport()` 时整份 [BackupPreview] 喂给
  * [com.example.personalassistant.core.backup.importer.BackupImporter.importWithPreview]。
  *
  * ## 不变量
- * - `perTable.size == 13`
+ * - `perTable.size` == 表集合的表数（批次 C 起是 **18** 张，与
+ *   [BackupManifest.DEFAULT_TABLES] 一致）
  * - 每项的 `tableName` 都来自 [BackupManifest.DEFAULT_TABLES]（不出现未知表）
  */
 data class BackupPreview(

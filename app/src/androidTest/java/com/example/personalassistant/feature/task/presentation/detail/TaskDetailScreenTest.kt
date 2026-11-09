@@ -6,7 +6,6 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.SavedStateHandle
 import com.example.personalassistant.feature.task.domain.model.FilterExpression
-import com.example.personalassistant.feature.task.domain.model.SubTask
 import com.example.personalassistant.feature.task.domain.model.Tag
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskFilter
@@ -38,7 +37,7 @@ import org.junit.Test
  * 不用 Hilt —— 沿用项目 TaskEditScreenTest 同模式。
  *
  * 覆盖：
- * 1. 任务存在时：BasicInfo 标题 + SubTask 列表渲染
+ * 1. 任务存在时：BasicInfo 标题 + Task 列表渲染
  * 2. 任务变 null 时：自动回调 onBack（删除场景）
  */
 class TaskDetailScreenTest {
@@ -50,25 +49,25 @@ class TaskDetailScreenTest {
 
     private class FakeTaskRepository(
         val taskFlow: MutableStateFlow<Task?> = MutableStateFlow(null),
-        val subTaskFlow: MutableStateFlow<List<SubTask>> = MutableStateFlow(emptyList()),
+        val subTaskFlow: MutableStateFlow<List<Task>> = MutableStateFlow(emptyList()),
     ) : TaskRepository {
         override fun observeActive() = MutableStateFlow<List<Task>>(emptyList())
         override fun observeCompleted() = MutableStateFlow<List<Task>>(emptyList())
         override fun observeTaskById(id: Long) = taskFlow
-        override fun observeStandaloneChecklist() = MutableStateFlow<List<SubTask>>(emptyList())
+        override fun observeStandaloneChecklist() = MutableStateFlow<List<Task>>(emptyList())
         override fun observeSubTasks(parentId: Long) = subTaskFlow
         override fun observeTasks(filter: TaskFilter, sort: TaskSort) =
             MutableStateFlow<List<Task>>(emptyList())
         override fun observeTasks(filter: FilterExpression, sort: TaskSort): Flow<List<Task>> =
             MutableStateFlow<List<Task>>(emptyList())
         override suspend fun getTaskWithSubTasks(id: Long): TaskWithSubTasks? = null
-        override suspend fun upsertTask(task: Task, subTasks: List<SubTask>): Long = -1L
+        override suspend fun upsertTask(task: Task, subTasks: List<Task>): Long = -1L
         override suspend fun deleteTask(task: Task) {}
         override suspend fun toggleTaskComplete(id: Long, completed: Boolean) {}
         override suspend fun toggleSubTaskComplete(id: Long, completed: Boolean) {}
         override suspend fun addStandaloneSubTask(title: String): Long = -1L
         override suspend fun addSubTaskToTask(parentId: Long, title: String): Long = -1L
-        override suspend fun deleteSubTask(subTask: SubTask) {}
+        override suspend fun deleteSubTask(subTask: Task) {}
         override suspend fun reorderTasks(orderedIds: List<Long>) {}
         override fun searchTasks(keyword: String): Flow<List<Task>> =
             MutableStateFlow<List<Task>>(emptyList())
@@ -108,7 +107,7 @@ class TaskDetailScreenTest {
     private class NoopDeleteSubTaskUseCase(
         private val repo: FakeTaskRepository,
     ) : DeleteSubTaskUseCase(repository = repo) {
-        override suspend operator fun invoke(subTask: SubTask) {}
+        override suspend operator fun invoke(subTask: Task) {}
     }
 
     private class NoopToggleTaskCompleteUseCase(
@@ -129,7 +128,7 @@ class TaskDetailScreenTest {
      */
     private class FakeTaskDetailViewModel(
         initialTask: Task?,
-        initialSubTasks: List<SubTask>,
+        initialSubTasks: List<Task>,
     ) : TaskDetailViewModel(
         savedStateHandle = SavedStateHandle(mapOf(ARG_TASK_ID to 1L)),
         observeSubTasks = FakeObserveSubTasksUseCase(FakeTaskRepository()),
@@ -167,8 +166,8 @@ class TaskDetailScreenTest {
             priority = TaskPriority.HIGH,
         )
         val subTasks = listOf(
-            SubTask(id = 10L, parentTaskId = 1L, title = "设计 VM"),
-            SubTask(id = 11L, parentTaskId = 1L, title = "写 UI"),
+            Task(id = 10L, parentTaskId = 1L, title = "设计 VM"),
+            Task(id = 11L, parentTaskId = 1L, title = "写 UI"),
         )
         val fakeVm = FakeTaskDetailViewModel(
             initialTask = task,
@@ -189,7 +188,7 @@ class TaskDetailScreenTest {
         composeTestRule.onNodeWithText("任务详情").assertIsDisplayed()
         // BasicInfo section 任务标题
         composeTestRule.onNodeWithText("完成 Phase 6b").assertIsDisplayed()
-        // SubTask section 标题
+        // Task section 标题
         composeTestRule.onNodeWithText("子清单").assertIsDisplayed()
         // 子清单条目
         composeTestRule.onNodeWithText("设计 VM").assertIsDisplayed()

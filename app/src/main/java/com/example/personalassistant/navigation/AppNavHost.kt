@@ -45,15 +45,19 @@ import androidx.navigation.navArgument
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.example.personalassistant.R
 import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.feature.calendar.CalendarScreen
+import com.example.personalassistant.feature.calendar.presentation.CalendarScreenMode
+import com.example.personalassistant.feature.calendar.presentation.CalendarViewModel
 import com.example.personalassistant.feature.finance.FinanceScreen
 import com.example.personalassistant.feature.finance.presentation.budget.BudgetScreen
 import com.example.personalassistant.feature.finance.presentation.category.CategoryManagementScreen
 import com.example.personalassistant.feature.globalsearch.domain.model.GlobalSearchHitType
 import com.example.personalassistant.feature.globalsearch.presentation.GlobalSearchScreen
+import com.example.personalassistant.feature.habit.presentation.HabitScreen
 import com.example.personalassistant.feature.me.MeScreen
 import com.example.personalassistant.feature.me.presentation.GpaRuleEditScreen
 import com.example.personalassistant.feature.settings.SettingsScreen
@@ -90,6 +94,10 @@ import com.example.personalassistant.feature.timetable.presentation.settings.Tim
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
+    // 日历三视图共享的 ViewModel —— 挂在 NavHost（Activity）作用域上，
+    // 所以「日 / 周 / 月」切来切去，「选中日」不会丢。
+    val calendarViewModel: CalendarViewModel = hiltViewModel()
+
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
@@ -136,11 +144,21 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
         NavHost(
             navController = navController,
             // Phase 14：首屏改为日历 —— 日历的「日」视图就是「今日」，符合今日优先的思路
-            startDestination = BottomTab.Calendar.screen.route,
+            startDestination = Screen.CalendarDay.route,
             modifier = Modifier.padding(innerPadding),
         ) {
             // === 4 个主 Tab + 「我」「设置」（后两者从更多面板进入）===
-            composable(BottomTab.Calendar.screen.route) { CalendarScreen(navController) }
+            // Phase 27：日历三视图都是顶层路由，共享 Activity 作用域的 ViewModel。
+            // 共享 → 切视图不丢「选中日」；顶层 → 返回键不会把栈底弹空。
+            composable(Screen.CalendarDay.route) {
+                CalendarScreen(navController, CalendarScreenMode.DAY, calendarViewModel)
+            }
+            composable(Screen.CalendarWeek.route) {
+                CalendarScreen(navController, CalendarScreenMode.WEEK, calendarViewModel)
+            }
+            composable(Screen.CalendarMonth.route) {
+                CalendarScreen(navController, CalendarScreenMode.MONTH, calendarViewModel)
+            }
             composable(BottomTab.Tasks.screen.route) { TaskScreen(navController) }
             composable(BottomTab.Timetable.screen.route) { TimetableScreen(navController) }
             composable(BottomTab.Finance.screen.route) { FinanceScreen(navController) }
@@ -203,7 +221,7 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
                     onOpenInCalendar = {
                         // Phase 15 P0-1.1：统一走 navigateToTab —— 顺带把二级页一并弹掉，
                         // 栈里只剩「起点 + 日历」，底栏选中态也跟着回到日历
-                        navController.navigateToTab(Screen.Calendar.route)
+                        navController.navigateToTab(Screen.CalendarDay.route)
                     },
                 )
             }
@@ -272,6 +290,14 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
             composable(Screen.FinanceBudget.route) {
                 BudgetScreen(onBack = { navController.popBackStack() })
             }
+
+            // === Phase 23：习惯打卡 ===
+            //
+            // 入口在清单抽屉（feature/task 的 ChecklistDrawer）里 ——
+            // 那一行由主代理接 HabitDrawerEntry（habit 模块提供，task 模块不依赖 habit 模块）。
+            composable(Screen.Habits.route) {
+                HabitScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 
@@ -309,7 +335,10 @@ fun AppNavHost(pendingNavRoute: MutableState<String?>? = null) {
  * 而不是把实现复制到测试里（复制出来的版本迟早会漂移）。
  */
 internal val BOTTOM_BAR_ROUTES = setOf(
-    Screen.Calendar.route,
+    // 日历三视图都在白名单里 —— 日 / 周 / 月三个视图都常驻底栏
+    Screen.CalendarDay.route,
+    Screen.CalendarWeek.route,
+    Screen.CalendarMonth.route,
     Screen.Tasks.route,
     Screen.Timetable.route,
     Screen.Finance.route,
@@ -338,7 +367,9 @@ private fun isKnownDeepLinkRoute(route: String): Boolean {
     return route == Screen.Timetable.route ||
         route == Screen.Tasks.route ||
         route == Screen.Finance.route ||
-        route == Screen.Calendar.route ||
+        route == Screen.CalendarDay.route ||
+        route == Screen.CalendarWeek.route ||
+        route == Screen.CalendarMonth.route ||
         route == Screen.Me.route ||
         route == Screen.Settings.route ||
         route == Screen.GlobalSearch.route ||
@@ -397,14 +428,16 @@ private fun RowScope.BottomTabItem(
     currentRoute: String?,
     onNavigateToTab: (String) -> Unit,
 ) {
-    val selected = currentRoute == tab.screen.route
+    // 选中态按 Tab 涵盖的**所有**路由判定 —— 日历 Tab 有日 / 周 / 月三条路由，
+    // 站在周视图里时「日历」图标同样要亮。
+    val selected = currentRoute != null && currentRoute in tab.routes
     NavigationBarItem(
         selected = selected,
         onClick = {
-            if (currentRoute != tab.screen.route) {
-                // Phase 15 P0-1.1：统一走 navigateToTab —— 栈行为与页面内跨 Tab 跳转一致
-                onNavigateToTab(tab.screen.route)
-            }
+            // 不按「已选中」跳过 —— 站在周 / 月视图时点「日历」也走一次导航，
+            // navigateToTab 的 popUpTo(起点) 会把周 / 月弹掉，回到日视图。
+            // （跨 Tab 再回来时 restoreState 会恢复上次看的那个视图。）
+            onNavigateToTab(tab.screen.route)
         },
         // 文字标签已经承担了语义，图标 contentDescription 设 null 避免读屏重复朗读
         icon = { Icon(tab.icon, contentDescription = null) },

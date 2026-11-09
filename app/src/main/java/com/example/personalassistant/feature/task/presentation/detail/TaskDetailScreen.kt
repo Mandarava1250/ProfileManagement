@@ -135,7 +135,7 @@ fun TaskDetailScreen(
                     onToggleComplete = viewModel::toggleComplete,
                 )
 
-                // ===== Section 2: SubTask =====
+                // ===== Section 2: Task =====
                 SubTaskSection(
                     subTasks = state.subTasks,
                     completedCount = state.completedSubTaskCount,

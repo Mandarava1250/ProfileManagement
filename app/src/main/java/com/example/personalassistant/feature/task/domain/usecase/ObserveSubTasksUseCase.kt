@@ -1,6 +1,6 @@
 package com.example.personalassistant.feature.task.domain.usecase
 
-import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.repository.TaskRepository
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -12,10 +12,12 @@ import javax.inject.Inject
  * （让 ViewModel 调 UseCase 而不是直接调 Repository）。
  *
  * Phase 6b：`open` 让 Compose UI / VM 测试 fork 子类覆盖 invoke 直接喂流。
+ *
+ * Phase 16：子项也是 [Task]（同一张 `tasks` 表）。
  */
 open class ObserveSubTasksUseCase @Inject constructor(
     private val repository: TaskRepository,
 ) {
-    open operator fun invoke(parentId: Long): Flow<List<SubTask>> =
+    open operator fun invoke(parentId: Long): Flow<List<Task>> =
         repository.observeSubTasks(parentId)
 }

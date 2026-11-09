@@ -1,5 +1,6 @@
 package com.example.personalassistant.feature.calendar.presentation
 
+import com.example.personalassistant.feature.calendar.domain.model.CalendarHabitItem
 import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.timetable.domain.model.Course
@@ -47,4 +48,10 @@ data class WeekDayColumn(
      * 用户就分不清哪个任务是周几的。
      */
     val tasks: List<Task> = emptyList(),
+    /**
+     * Phase 24B：这天的习惯打卡
+     *
+     * 习惯没有时刻，所以它进「全天标签区」，不占时间轴。
+     */
+    val habits: List<CalendarHabitItem> = emptyList(),
 )

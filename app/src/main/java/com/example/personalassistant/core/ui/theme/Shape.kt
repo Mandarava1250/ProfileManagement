@@ -21,3 +21,12 @@ val AppShapes = Shapes(
     large = RoundedCornerShape(20.dp),
     extraLarge = RoundedCornerShape(28.dp)
 )
+
+/**
+ * 14dp —— Phase 26「秩序 / 留白」方案的卡片圆角。
+ *
+ * Material 3 的 [Shapes] 只有五档固定值，装不下 14dp；
+ * 而 [AppRadii.card]（20dp）有 11 个既有调用点，直接改会波及本次范围之外的页面。
+ * 所以卡片圆角单独走这个常量，本次涉及的四模块显式传它。
+ */
+val AppShapeCard14 = RoundedCornerShape(14.dp)

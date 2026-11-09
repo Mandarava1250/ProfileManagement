@@ -32,9 +32,11 @@ class BackupFormatVersionTest {
     }
 
     @Test
-    fun `FORMAT_VERSION 应从 1 开始`() {
-        // 未来如果升 v2，本测试提醒修改
-        assertEquals(1, BackupFormatVersion.FORMAT_VERSION)
+    fun `FORMAT_VERSION 应为 2`() {
+        // Phase 16（v15）：备份格式升 v2 —— 表集合变了（新增 task_lists、
+        // 废弃 sub_tasks / sub_task_tag_cross_ref），旧备份需要区分处理。
+        // 未来如果升 v3，本测试提醒修改。
+        assertEquals(2, BackupFormatVersion.FORMAT_VERSION)
     }
 
     @Test

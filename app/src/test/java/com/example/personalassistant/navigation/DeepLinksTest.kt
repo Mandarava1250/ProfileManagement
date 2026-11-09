@@ -170,7 +170,9 @@ class DeepLinksTest {
             "timetable",
             "tasks",
             "finance",
-            "calendar",
+            "calendar/day",
+            "calendar/week",
+            "calendar/month",
             "settings",
             "globalsearch",
             "settings/backup-preview",
@@ -212,7 +214,9 @@ class DeepLinksTest {
         return route == Screen.Timetable.route ||
             route == Screen.Tasks.route ||
             route == Screen.Finance.route ||
-            route == Screen.Calendar.route ||
+            route == Screen.CalendarDay.route ||
+            route == Screen.CalendarWeek.route ||
+            route == Screen.CalendarMonth.route ||
             route == Screen.Settings.route ||
             route == Screen.GlobalSearch.route ||
             route == Screen.BackupPreview.route ||

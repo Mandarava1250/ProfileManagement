@@ -1,4 +1,4 @@
-package com.example.personalassistant.feature.finance.presentation.category
+﻿package com.example.personalassistant.feature.finance.presentation.category
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.example.personalassistant.feature.finance.domain.model.Category
 import com.example.personalassistant.feature.finance.domain.model.TransactionType
 import com.example.personalassistant.feature.finance.presentation.util.IconRegistry
+import com.example.personalassistant.core.ui.theme.onColorFor
 
 /**
  * C 重构阶段 7：分类行
@@ -58,7 +59,7 @@ internal fun CategoryRow(
             Icon(
                 imageVector = IconRegistry.resolve(category.iconName),
                 contentDescription = null,
-                tint = Color.White,
+                tint = onColorFor(Color(category.color)),
                 modifier = Modifier.padding(8.dp),
             )
         }

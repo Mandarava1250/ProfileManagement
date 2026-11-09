@@ -10,8 +10,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.personalassistant.R
@@ -33,19 +39,37 @@ import com.example.personalassistant.feature.task.presentation.ChecklistItemUi
  * 清单页的清单项卡片（Phase 15）—— 带分类 / 标签 / 截止 / 金额 / 优先级 + 可展开的子清单。
  *
  * 与旧的 [ChecklistItem] 的关系：
- * - 旧的 [ChecklistItem] 吃 [com.example.personalassistant.feature.task.domain.model.SubTask]，
+ * - 旧的 [ChecklistItem] 吃 [com.example.personalassistant.feature.task.domain.model.Task]，
  *   服务于任务详情页 / 编辑页的子清单，那里拿不到标签与嵌套子项。
  * - 这里的 [ChecklistItemUi] 是清单页专用的 UI 模型，自带 tags / children。
  * - 两边共用同一套行画法 [ChecklistItemRow]，视觉不会分叉。
+ *
+ * ## 手势（Phase 18.4 / 18.6 / 24）
+ *
+ * 卡片的行外面套了一层 [ChecklistItemGestureBox]（长按 → 多选 / 长按竖拖 → 排序），
+ * 行里面是 [SwipeActionBox]（左滑 → 改日期 / 移入清单 / 删除；右滑 → 完成 / 置顶）。
+ * 两层的分工见 [ChecklistItemGestureBox] 的注释：横滑先拿到事件，
+ * 竖拖排序不会被它抢走。
  *
  * @param item 清单项（UI 模型）
  * @param expandedIds 当前展开的清单项 id 集合（由列表页统一持有，滚动不丢状态）
  * @param onToggleExpand 展开 / 收起某个清单项的子清单
  * @param onToggleComplete 勾选回调
  * @param onDelete 删除回调
- * @param onEdit 编辑回调（点编辑图标 / 长按都走它）
+ * @param onEdit 编辑回调（点编辑图标走它）
  * @param onAddChild 在该项下面加子项（null = 不显示子项输入框）
  * @param depth 当前嵌套层级（用于缩进）
+ * @param selectionMode Phase 18.6：多选模式（勾选框变成「选中」框）
+ * @param selectedIds Phase 18.6：当前被选中的清单项 id 集合（父子项共用一份）
+ * @param onToggleSelect Phase 18.6：选中 / 取消选中（回调带 id —— 父子项各是各的）
+ * @param dragEnabled Phase 18.4：是否允许拖拽排序（只有顶层项可以）
+ * @param isDragging Phase 18.4：该项正被拖着
+ * @param onDragStart / onDrag / onDragEnd Phase 18.4：拖拽手势回调
+ * @param onSwipeChangeDate Phase 24：左滑「改日期」（回调带 itemId）
+ * @param onSwipeMoveToList Phase 24：左滑「移入清单」（回调带 itemId）
+ * @param onSwipeDelete Phase 24：左滑「删除」（回调带 itemId）
+ * @param onSwipeComplete Phase 24：右滑「完成 / 取消完成」（回调带 itemId 与目标完成态）
+ * @param onSwipeTogglePin Phase 24：右滑「置顶 / 取消置顶」（回调带 itemId 与目标置顶态）
  */
 @Composable
 fun ChecklistItemCard(
@@ -58,44 +82,155 @@ fun ChecklistItemCard(
     onAddChild: ((Long, String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     depth: Int = 0,
+    // ===== Phase 18.6：多选 =====
+    selectionMode: Boolean = false,
+    selectedIds: Set<Long> = emptySet(),
+    onToggleSelect: ((Long) -> Unit)? = null,
+    // ===== Phase 18.4：拖拽排序 =====
+    dragEnabled: Boolean = false,
+    isDragging: Boolean = false,
+    onDragStart: () -> Unit = {},
+    onDrag: (Float) -> Unit = {},
+    onDragEnd: () -> Unit = {},
+    // ===== Phase 24：左滑 / 右滑操作 =====
+    onSwipeChangeDate: ((Long) -> Unit)? = null,
+    onSwipeMoveToList: ((Long) -> Unit)? = null,
+    onSwipeDelete: ((Long) -> Unit)? = null,
+    onSwipeComplete: ((Long, Boolean) -> Unit)? = null,
+    onSwipeTogglePin: ((Long, Boolean) -> Unit)? = null,
 ) {
     val expanded = expandedIds.contains(item.id)
     val childCount = item.children.size
     val completedChildCount = item.children.count { it.isCompleted }
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        ChecklistItemRow(
-            title = item.title,
-            isCompleted = item.isCompleted,
-            onToggleComplete = { onToggleComplete(item.id, it) },
-            onDelete = { onDelete(item) },
-            category = item.category,
-            dueDate = item.dueDate,
-            priority = item.priority,
-            amount = item.amount,
-            tags = item.tags,
-            onEdit = { onEdit(item) },
-            onLongPress = { onEdit(item) },
-            gestureKey = item.id,
-            trailingContent = if (childCount > 0) {
-                {
-                    ChildrenHeader(
-                        completedCount = completedChildCount,
-                        totalCount = childCount,
-                        expanded = expanded,
-                        onToggle = { onToggleExpand(item.id) },
-                    )
-                }
-            } else {
-                null
-            },
-        )
+    // ===== Phase 24：滑动动作 =====
+    // 左滑三个（改日期 / 移入清单 / 删除）、右滑两个（完成 / 置顶）。
+    // 没传回调的动作就不加进去 —— 免得露出一个点了没反应的图标。
+    //
+    // Phase 26：颜色统一 —— 五个动作曾各用一种 Material3 容器色
+    // （secondary / tertiary / error / primary），露出来时整行五颜六色。
+    // 现在只有**删除**保留红色（唯一需要「危险」语义的动作），
+    // 其余一律用 primary 容器色 —— 图标不同就够区分了。
+    val endActions: List<SwipeAction> = buildList {
+        if (onSwipeChangeDate != null) {
+            add(
+                SwipeAction(
+                    icon = Icons.Rounded.Event,
+                    label = "改日期",
+                    backgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) { onSwipeChangeDate.invoke(item.id) },
+            )
+        }
+        if (onSwipeMoveToList != null) {
+            add(
+                SwipeAction(
+                    icon = Icons.Rounded.FolderOpen,
+                    label = "移入清单",
+                    backgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) { onSwipeMoveToList.invoke(item.id) },
+            )
+        }
+        if (onSwipeDelete != null) {
+            add(
+                SwipeAction(
+                    icon = Icons.Rounded.Delete,
+                    label = "删除",
+                    backgroundColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                ) { onSwipeDelete.invoke(item.id) },
+            )
+        }
+    }
+
+    val startActions: List<SwipeAction> = buildList {
+        if (onSwipeComplete != null) {
+            add(
+                SwipeAction(
+                    icon = Icons.Rounded.Check,
+                    label = if (item.isCompleted) "取消完成" else "完成",
+                    backgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) { onSwipeComplete.invoke(item.id, !item.isCompleted) },
+            )
+        }
+        if (onSwipeTogglePin != null) {
+            add(
+                SwipeAction(
+                    icon = Icons.Rounded.PushPin,
+                    label = if (item.isPinned) "取消置顶" else "置顶",
+                    backgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ) { onSwipeTogglePin.invoke(item.id, !item.isPinned) },
+            )
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            // Phase 18.4：被拖起来的那一项浮起来一点（阴影）
+            .shadow(if (isDragging) 6.dp else 0.dp),
+    ) {
+        // Phase 18.4 / 18.6：手势仲裁层（长按多选 / 长按竖拖排序）
+        ChecklistItemGestureBox(
+            enableLongPress = onToggleSelect != null,
+            enableDrag = dragEnabled,
+            onLongPress = { onToggleSelect?.invoke(item.id) },
+            onDragStart = onDragStart,
+            onDrag = onDrag,
+            onDragEnd = onDragEnd,
+        ) {
+            // Phase 24：左滑（改日期 / 移入清单 / 删除）+ 右滑（完成 / 置顶）
+            // 多选模式下关掉，避免误操作。
+            SwipeActionBox(
+                startActions = startActions,
+                endActions = endActions,
+                enabled = !selectionMode,
+            ) {
+                ChecklistItemRow(
+                    title = item.title,
+                    isCompleted = item.isCompleted,
+                    onToggleComplete = { onToggleComplete(item.id, it) },
+                    onDelete = { onDelete(item) },
+                    category = item.category,
+                    dueDate = item.dueDate,
+                    priority = item.priority,
+                    amount = item.amount,
+                    tags = item.tags,
+                    onEdit = { onEdit(item) },
+                    // 长按已经交给手势仲裁层做「多选」，这里不再挂长按手势
+                    onLongPress = null,
+                    gestureKey = item.id,
+                    trailingContent = if (childCount > 0) {
+                        {
+                            ChildrenHeader(
+                                completedCount = completedChildCount,
+                                totalCount = childCount,
+                                expanded = expanded,
+                                onToggle = { onToggleExpand(item.id) },
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                    // ===== Phase 18.6：多选 =====
+                    selectionMode = selectionMode,
+                    selected = item.id in selectedIds,
+                    onToggleSelect = { onToggleSelect?.invoke(item.id) },
+                )
+            }
+        }
 
         if (expanded && childCount > 0) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp * (depth + 1), top = 2.dp),
+                    // Phase 26：每层缩进 16dp → 32dp。
+                    // 父项的圆环在 12dp，父子只差 4dp 时层级根本看不出来；
+                    // 32dp 才是「这行缩进了一级」的可读距离。
+                    .padding(start = 32.dp * (depth + 1), top = 2.dp),
             ) {
                 item.children.forEach { child ->
                     ChecklistItemCard(
@@ -109,7 +244,19 @@ fun ChecklistItemCard(
                         // 再往下加会让树深到看不下去
                         onAddChild = null,
                         depth = depth + 1,
-                    )
+                        // ===== Phase 18.6：子项也能被选中 =====
+                        selectionMode = selectionMode,
+                        selectedIds = selectedIds,
+                        onToggleSelect = onToggleSelect,
+                        // Phase 18.4：只有顶层项能拖拽排序
+                        dragEnabled = false,
+                        // ===== Phase 24：子项也能左滑 / 右滑 =====
+                        onSwipeChangeDate = onSwipeChangeDate,
+                        onSwipeMoveToList = onSwipeMoveToList,
+                        onSwipeDelete = onSwipeDelete,
+                        onSwipeComplete = onSwipeComplete,
+                        onSwipeTogglePin = onSwipeTogglePin,
+                )
                 }
                 if (onAddChild != null) {
                     AddChildInput(onAdd = { title -> onAddChild(item.id, title) })
@@ -120,9 +267,13 @@ fun ChecklistItemCard(
 }
 
 /**
- * 子清单的折叠头 —— 展开箭头 + 完成进度徽标（如 2/5）。
+ * 子清单的折叠箭头 —— 挂在**标题行末尾**。
  *
- * 进度徽标的画法参考任务详情页的 `SubTaskSection`（`完成数/总数` + 次级文字色）。
+ * Phase 26：以前这是一条满宽左对齐的独立行（`ChecklistItemRow` 把 trailingContent
+ * 画在 Row 之外），视觉上像另一条内容，左缘还跟上面的标题不在一条竖线上。
+ * 现在收进标题行末尾，跟标题一起被单行省略号约束。
+ *
+ * 进度徽标（如 2/5）保留 —— 那是「这组子项做到哪儿了」的唯一提示。
  */
 @Composable
 private fun ChildrenHeader(
@@ -132,25 +283,26 @@ private fun ChildrenHeader(
     onToggle: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(start = 12.dp, top = 2.dp, bottom = 2.dp),
+        modifier = Modifier.clickable(onClick = onToggle),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Text(
+            text = stringResource(R.string.checklist_progress, completedCount, totalCount),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
         Icon(
             imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
             contentDescription = stringResource(
                 if (expanded) R.string.checklist_item_collapse else R.string.checklist_item_expand
             ),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-        Spacer(Modifier.width(4.dp))
-        Text(
-            text = stringResource(R.string.checklist_progress, completedCount, totalCount),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // 44dp 触达区 + 20dp 视觉图标 —— 箭头只有 20dp 大，
+            // 光靠图标本身点不准，得给它留够触达面积。
+            modifier = Modifier
+                .size(44.dp)
+                .padding(12.dp),
         )
     }
 }

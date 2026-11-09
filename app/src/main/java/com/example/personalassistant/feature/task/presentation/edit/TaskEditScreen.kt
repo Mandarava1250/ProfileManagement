@@ -54,7 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.personalassistant.core.holiday.model.HolidayStrategy
-import com.example.personalassistant.feature.task.domain.model.SubTask
+import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.task.presentation.edit.components.CategoryPickerSheet
 import com.example.personalassistant.feature.task.presentation.edit.components.ReminderTimePickerSheet
@@ -372,7 +372,7 @@ private fun FieldRow(
 
 @Composable
 private fun SubTaskRow(
-    item: SubTask,
+    item: Task,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
 ) {

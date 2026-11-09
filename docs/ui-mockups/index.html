@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>昔涟个人助手 · UI/UX 方案总览（三选一）</title>
+<link rel="stylesheet" href="shared/mock.css">
+<script src="shared/icons.js"></script>
+<style>
+.pick{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:20px;
+  max-width:1400px;margin:26px auto 0;
+}
+.pick .card{
+  background:#fff;border:1px solid #DCE2EC;border-radius:18px;padding:24px 22px;
+  display:flex;flex-direction:column;gap:12px;text-decoration:none;color:inherit;
+  transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.pick .card:hover{transform:translateY(-3px);box-shadow:0 14px 32px rgba(17,27,44,.12);border-color:#A8B7CC}
+.pick .mark{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+  color:#fff;font-size:19px;font-weight:800}
+.pick h3{margin:0;font-size:19px;letter-spacing:.2px}
+.pick .desc{margin:0;font-size:13px;line-height:1.75;color:#5A6678;flex:1}
+.pick .tags{display:flex;flex-wrap:wrap;gap:6px}
+.pick .tags span{font-size:11px;padding:5px 9px;border-radius:999px;background:#F0F3F8;color:#45536A}
+.pick .go{
+  margin-top:4px;font-size:13px;font-weight:700;color:#0B57D0;
+  display:flex;align-items:center;gap:5px;
+}
+.hl{background:#FFF8E6;padding:0 3px;border-radius:3px}
+code{
+  font-family:var(--mono);font-size:11.5px;background:#F1F4F9;color:#3D4A5C;
+  padding:1.5px 5px;border-radius:4px;
+}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:26px;max-width:1400px;margin:34px auto 0}
+@media (max-width:1100px){.pick{grid-template-columns:1fr}.two-col{grid-template-columns:1fr}}
+.sec-h{
+  max-width:1400px;margin:40px auto 0;display:flex;align-items:center;gap:12px;
+}
+.sec-h h2{font-size:20px;margin:0;letter-spacing:.2px}
+.sec-h .bar{height:1px;background:#DCE2EC;flex:1}
+.sec-h .n{font-size:12px;color:#8593A6}
+.fixlist{font-size:13.5px;line-height:1.9;color:#55637A;margin:0;padding-left:0;list-style:none}
+.fixlist li{
+  padding:11px 0;border-bottom:1px dashed #DFE5EE;display:flex;gap:12px;align-items:flex-start;
+}
+.fixlist li:last-child{border-bottom:none}
+.fixlist .lv{
+  font-size:10.5px;font-weight:800;letter-spacing:.8px;padding:3px 8px;border-radius:5px;
+  flex:none;margin-top:2px;white-space:nowrap;
+}
+.lv-a{background:#FDE8E8;color:#B3261E}
+.lv-b{background:#FFF0DC;color:#7A4A00}
+.lv-c{background:#E8EFFC;color:#0B57D0}
+.fixlist .txt{flex:1}
+.fixlist .txt b{color:#22303F}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <p class="eyebrow">Personal Assistant · UI/UX 重构</p>
+  <h1>三个方向，选一版</h1>
+  <p class="lede">
+    我把项目现状（<b>544 个 Kotlin 文件 / 9 个 feature 模块</b>）的界面代码通读了一遍，
+    找出真正的问题，再画了三套<b>可直接落地到 Jetpack Compose</b> 的界面方案。<br>
+    三套方案共用同一个品牌色（静谧蓝 <span class="hl">#0B57D0</span>）、同一套可访问性底线
+    （字号 ≥ 10dp、可点区域 ≥ 44dp、正文对比度 ≥ 4.5:1），
+    差别只在<b>布局语言</b>与<b>颜色的使用方式</b> —— 这样比出来的差异才是真实的。
+  </p>
+</div>
+
+<div class="pick">
+  <a class="card" href="plan-a.html">
+    <div class="mark" style="background:#0B57D0">A</div>
+    <h3>秩序 · Order</h3>
+    <p class="desc">
+      语义色收进封闭系统，每屏只留<b>一张主视觉卡</b>，清单项改成卡片，
+      课表网格加宽并支持横滑、补上当前时刻线。最平衡的一版：数字都看得清，结构也清楚。
+    </p>
+    <div class="tags"><span>语义色封闭</span><span>单主视觉卡</span><span>卡片化清单</span><span>网格横滑</span></div>
+    <div class="go">看方案 A →</div>
+  </a>
+  <a class="card" href="plan-b.html">
+    <div class="mark" style="background:#1F6FEB">B</div>
+    <h3>紧凑 · Compact</h3>
+    <p class="desc">
+      一屏装更多：取消卡片壳，统计从「一张卡」压成「一行字」，
+      记账首屏只剩一行概览，日历默认周视图。适合一天要看几十条流水 / 任务的人。
+    </p>
+    <div class="tags"><span>零卡片</span><span>统计压一行</span><span>行式列表</span><span>默认周视图</span></div>
+    <div class="go">看方案 B →</div>
+  </a>
+  <a class="card" href="plan-c.html">
+    <div class="mark" style="background:#3B3A38">C</div>
+    <h3>留白 · Calm</h3>
+    <p class="desc">
+      把界面当一张纸：26px 大标题、分组、无边框行，品牌蓝只标记「当前选中」。
+      课表改成今日时间线、日历改成竖向日程流 —— 一行文字都能读全。
+    </p>
+    <div class="tags"><span>大标题</span><span>无边框行</span><span>竖向时间线</span><span>颜色种类最少</span></div>
+    <div class="go">看方案 C →</div>
+  </a>
+  <a class="card" href="plan-d.html" style="border-color:#0B57D0;box-shadow:0 0 0 3px rgba(11,87,208,.10)">
+    <div class="mark" style="background:#0B57D0">D</div>
+    <h3>融合版 · Hybrid <span style="font-size:11px;font-weight:600;color:#0B57D0;vertical-align:3px">已选定</span></h3>
+    <p class="desc">
+      <b>C 打底</b>：大标题、无边框行、竖条色彩语言全保留；
+      <b>课表可切换</b>「时间线 / 整周网格」两种读法；
+      <b>今日剩余卡</b>用 A 的结构换 C 的皮肤（暖白底 + 左侧 3px 品牌蓝竖条）。
+      其余四个模块与 C 版一行未改。
+    </p>
+    <div class="tags"><span>C 骨架</span><span>课表双视图</span><span>今日剩余卡</span><span>网格 60dp 横滑</span></div>
+    <div class="go">看融合版 D →</div>
+  </a>
+</div>
+
+<div class="sec-h"><h2>现状问题清单</h2><span class="bar"></span><span class="n">全部来自代码走查，附 file:line</span></div>
+
+<div class="two-col">
+  <div>
+    <ul class="fixlist">
+      <li>
+        <span class="lv lv-a">颜色</span>
+        <span class="txt"><b>同一个「收入」有两套色。</b>本月报表里收入用 <code>colorScheme.primary</code>
+          （跟着用户主题色漂移），流水里用 <code>appColors.incomeInk</code> 绿 ——
+          用户换个主题色，报表里的「收入」就变成橙的。
+          <code>MonthlyReportCard.kt:116</code> vs <code>TransactionRow.kt:170</code></span>
+      </li>
+      <li>
+        <span class="lv lv-a">颜色</span>
+        <span class="txt"><b>「支出」有两个红。</b><code>colorScheme.error #BA1A1A</code> 与
+          <code>appColors.expenseInk #B3261E</code> 混用。<code>FinanceScreen.kt:441</code> vs <code>TransactionRow.kt:169</code></span>
+      </li>
+      <li>
+        <span class="lv lv-a">颜色</span>
+        <span class="txt"><b>「当前时刻」和「超支」共用 error 红。</b>时间轴上那条红线的意思是「现在几点」，
+          和「钱超了」撞了。<code>WeekCalendarView.kt:436</code> / <code>DayTimelineView.kt:158</code></span>
+      </li>
+      <li>
+        <span class="lv lv-a">颜色</span>
+        <span class="txt"><b>旧色残留。</b>事件默认色还是老 M3 紫 <code>#6750A4</code>（<code>Event.kt:70</code>），
+          习惯默认色还是 Phase 14 换掉的樱花粉 <code>#FF69B4</code>（<code>Habit.kt:17</code>），
+          抽屉色点 fallback 是热粉 <code>#FF69B4</code>（<code>ChecklistDrawer.kt:353</code>）。</span>
+      </li>
+      <li>
+        <span class="lv lv-a">颜色</span>
+        <span class="txt"><b>浅色分类上画白图标看不见。</b>5 处写死 <code>Color.White</code>，
+          而「学习 #FFB74D」「交通 #64B5F6」这些内置色很浅 ——
+          项目里已有 <code>onColorFor()</code> 这个正确做法，只是没同步过去。<code>CategoryManagementDialog.kt:346-353</code></span>
+      </li>
+      <li>
+        <span class="lv lv-b">层级</span>
+        <span class="txt"><b>卡片体系三套并存。</b>圆角有 20 / 16 / M3 默认 12 三档，底色有
+          <code>primaryContainer</code> / <code>surface</code> / <code>surfaceVariant</code> / <code>secondaryContainer</code> 四档。
+          记账首屏从上到下依次是这四档 —— 四张卡四个层级，没有主次。<code>FinanceScreen.kt:341-380</code></span>
+      </li>
+      <li>
+        <span class="lv lv-b">层级</span>
+        <span class="txt"><b>统计卡比单条任务还重。</b>完成率卡是全页唯一带底色带圆角的块，
+          清单项却什么都没有；而且它塞在 LazyColumn 里，滚两屏就看不见了。
+          <code>CompletionStatsCard.kt:40</code> vs <code>ChecklistItem.kt:140</code></span>
+      </li>
+    </ul>
+  </div>
+  <div>
+    <ul class="fixlist">
+      <li>
+        <span class="lv lv-b">布局</span>
+        <span class="txt"><b>想看流水得先滚过 4 张卡。</b>今日剩余 / 零钱池 / 本月报表 / 全部账户合计，
+          而「本月报表」一张卡里又塞了预算条 + 三段汇总 + Top5 分类 + 折线图四种信息。</span>
+      </li>
+      <li>
+        <span class="lv lv-b">布局</span>
+        <span class="txt"><b>课表 7 列硬挤在 360dp 里。</b>左侧 56dp 时间轴，剩 304dp 分 7 列 ≈ 43dp/列，
+          扣掉 padding 只剩约 35dp，课程名 12sp 中文只能露 3 个字；而且<b>没有当前时刻线</b>，
+          时间轴格子还塞了三行字（节号 + 起 + 止 ≈ 48dp）却只有 40.5dp 高。<code>TimetableGrid.kt</code></span>
+      </li>
+      <li>
+        <span class="lv lv-b">布局</span>
+        <span class="txt"><b>月视图一格塞了四条信息通道。</b>日期圆 + 最多 4 个 4dp 圆点 + 农历角标 + 选中描边，
+          四个点共 16dp 挤在约 40dp 的格子里几乎无法分辨。<code>MonthDayCell.kt:62-128</code></span>
+      </li>
+      <li>
+        <span class="lv lv-b">对齐</span>
+        <span class="txt"><b>清单项的元信息跟标题不对齐。</b>meta 区只缩进 4dp，分类色点几乎贴在勾选框正下方；
+          子项每层缩进 16dp，但父项勾选框在 12dp —— 相邻层只差 4dp，层级看不出来。
+          <code>ChecklistItem.kt:243</code> / <code>ChecklistItemCard.kt:230</code></span>
+      </li>
+      <li>
+        <span class="lv lv-c">可达性</span>
+        <span class="txt"><b>触控目标小于 44dp。</b>日历里「设置时间段」28dp、日历内习惯打卡 32dp，
+          课表格内图标 10dp。<code>DayCalendarView.kt:365</code> / <code>HabitCheckInSheet.kt:180</code> / <code>TimetableGrid.kt:226</code></span>
+      </li>
+      <li>
+        <span class="lv lv-c">可达性</span>
+        <span class="txt"><b>字号低到 8sp。</b>农历角标 9sp、时间轴块 9sp、「跨天」8sp，
+          非本月日期只有 <code>onSurfaceVariant@0.4</code>（约 2.3:1）。
+          <code>MonthDayCell.kt:118</code> / <code>WeekCalendarView.kt:509,525</code></span>
+      </li>
+      <li>
+        <span class="lv lv-c">可达性</span>
+        <span class="txt"><b>顶栏三种长相。</b>清单页是纯 <code>primaryContainer</code>、课表页是渐变、
+          习惯页是裸 <code>TopAppBar</code>。<code>TaskScreen.kt:183</code> / <code>TimetableScreen.kt:101</code> / <code>HabitScreen.kt:74</code></span>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<div class="sec-h"><h2>颜色系统对照</h2><span class="bar"></span><span class="n">语义色永不跟随用户主题色</span></div>
+
+<div class="cmp">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:150px">语义</th>
+        <th style="width:300px">现状</th>
+        <th>方案 A · 秩序</th>
+        <th>方案 B · 紧凑</th>
+        <th>方案 C · 留白</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>品牌主色</td>
+        <td><code>#0B57D0</code>（可被用户改）</td>
+        <td colspan="3" style="background:#F7F9FC">
+          三版都保留 <code>#0B57D0</code>，但<b>只用于交互与强调</b>，不再拿来表达收入 / 支出这类业务语义
+        </td>
+      </tr>
+      <tr>
+        <td>收入</td>
+        <td class="bad">报表 <code>#0B57D0</code> / 流水 <code>#1B5E20</code></td>
+        <td><code>#1B5E20</code></td>
+        <td><code>#1B5E20</code></td>
+        <td><code>#2E6B33</code></td>
+      </tr>
+      <tr>
+        <td>支出</td>
+        <td class="bad"><code>#BA1A1A</code> / <code>#B3261E</code> 两套</td>
+        <td><code>#B3261E</code></td>
+        <td><code>#B3261E</code></td>
+        <td><code>#B23A2E</code></td>
+      </tr>
+      <tr>
+        <td>超支</td>
+        <td class="bad">与支出同红</td>
+        <td><code>#8C1D18</code>（更深）</td>
+        <td><code>#8C1D18</code></td>
+        <td><code>#B23A2E</code></td>
+      </tr>
+      <tr>
+        <td>当前时刻</td>
+        <td class="bad">与超支同红</td>
+        <td><code>#B45309</code> 琥珀</td>
+        <td><code>#B45309</code></td>
+        <td><code>#B45309</code></td>
+      </tr>
+      <tr>
+        <td>转账</td>
+        <td class="bad">借用「预算」语义黄</td>
+        <td><code>#37474F</code> 蓝灰</td>
+        <td><code>#37474F</code></td>
+        <td><code>#4A5560</code></td>
+      </tr>
+      <tr>
+        <td>事件默认色</td>
+        <td class="bad">旧 M3 紫 <code>#6750A4</code></td>
+        <td colspan="3" style="background:#F7F9FC">改为蓝系（与品牌同族），用户自选色不变</td>
+      </tr>
+      <tr>
+        <td>习惯默认色</td>
+        <td class="bad">樱花粉 <code>#FF69B4</code></td>
+        <td colspan="3" style="background:#F7F9FC">改为蓝系 <code>#3F7DE0</code>，用户自选色不变</td>
+      </tr>
+      <tr>
+        <td>用户自选色前景</td>
+        <td class="bad">5 处写死白图标</td>
+        <td colspan="3" style="background:#F7F9FC">一律走 <code>onColorFor()</code> 按亮度选黑 / 白</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="sec-h"><h2>布局语言对照</h2><span class="bar"></span><span class="n">同样的数据，三种排法</span></div>
+
+<div class="cmp">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:150px">维度</th>
+        <th style="width:300px">现状</th>
+        <th>方案 A · 秩序</th>
+        <th>方案 B · 紧凑</th>
+        <th>方案 C · 留白</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>顶栏</td>
+        <td class="bad">3 页 3 种长相</td>
+        <td>白底 56px</td>
+        <td>白底 46px + 细线</td>
+        <td>无底色，26px 大标题</td>
+      </tr>
+      <tr>
+        <td>清单项形态</td>
+        <td>无底色的行（但统计卡有底）</td>
+        <td>卡片，圆角 20dp</td>
+        <td>行，细线分隔</td>
+        <td>无边框行，只靠留白分组</td>
+      </tr>
+      <tr>
+        <td>完成率放哪</td>
+        <td>卡在列表里，会滚走</td>
+        <td>顶部固定焦点条</td>
+        <td>顶栏下一行 30px</td>
+        <td>大标题的副标题里</td>
+      </tr>
+      <tr>
+        <td>记账首屏卡片数</td>
+        <td class="bad">4 张</td>
+        <td>1 张（今日剩余）</td>
+        <td>0 张（压成一行）</td>
+        <td>0 张（一行大字）</td>
+      </tr>
+      <tr>
+        <td>课表</td>
+        <td>7 列 × 约 43dp 硬挤</td>
+        <td>7 列 × 60dp，横向可滑</td>
+        <td>7 列 × 44dp，只留课程名</td>
+        <td>今日时间线（竖向）</td>
+      </tr>
+      <tr>
+        <td>日历</td>
+        <td>月视图，每格 4 条通道</td>
+        <td>月视图，圆点改色条</td>
+        <td>默认周视图</td>
+        <td>竖向日程流</td>
+      </tr>
+      <tr>
+        <td>容器底色档数</td>
+        <td class="bad">4</td>
+        <td>2</td>
+        <td>1</td>
+        <td>2</td>
+      </tr>
+      <tr>
+        <td>圆角档数</td>
+        <td class="bad">3（12 / 16 / 20）</td>
+        <td>2（12 / 20）</td>
+        <td>2（8 / 12）</td>
+        <td>2（8 / 14）</td>
+      </tr>
+      <tr>
+        <td>最小字号</td>
+        <td class="bad">8sp</td>
+        <td class="ok">10dp</td>
+        <td class="ok">10dp</td>
+        <td class="ok">10dp</td>
+      </tr>
+      <tr>
+        <td>最小可点区域</td>
+        <td class="bad">28dp</td>
+        <td class="ok">44dp</td>
+        <td class="ok">44dp</td>
+        <td class="ok">44dp</td>
+      </tr>
+      <tr>
+        <td>正文对比度</td>
+        <td class="bad">最低约 2.3:1</td>
+        <td class="ok">≥ 4.5:1</td>
+        <td class="ok">≥ 4.5:1</td>
+        <td class="ok">≥ 4.5:1</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="sec-h"><h2>三版各自的代价</h2><span class="bar"></span><span class="n">没有免费的那一版</span></div>
+
+<div class="two-col">
+  <ul class="fixlist">
+    <li><span class="lv lv-c">A</span><span class="txt"><b>卡片多了一层</b>，清单页视觉上比现状「重」；
+      课表横滑意味着看周一要先滑一下；记账报表收进二级页后，看趋势多一步。</span></li>
+    <li><span class="lv lv-b">B</span><span class="txt"><b>分隔变弱</b>，长列表里定位一条靠的是字重不是线；
+      课表 44dp 列里只塞得下课程名，地点教师要点开才知道；日历默认周视图，
+      「这个月哪天有空」反而要多点一次。</span></li>
+  </ul>
+  <ul class="fixlist">
+    <li><span class="lv lv-a">C</span><span class="txt"><b>一屏能看的内容最少</b>；
+      课表从网格改成时间线，意味着「这周总共有几节课」需要另找入口；
+      日历不再有月格子，找「某个月哪天有事」会变慢。</span></li>
+    <li><span class="lv" style="background:#EDEFF3;color:#45536A">共同</span><span class="txt"><b>三版都改变了操作路径</b>：
+      无论选哪版，筛选、批量、左滑删除这些交互都要跟着重新对一遍，不存在「只换皮不改逻辑」。</span></li>
+  </ul>
+</div>
+
+<div class="sec-h"><h2>如果让我选</h2><span class="bar"></span><span class="n">供参考，伙伴随意</span></div>
+
+<div class="two-col">
+  <ul class="fixlist">
+    <li><span class="lv lv-c">A</span><span class="txt"><b>方案 A 打底 + 方案 C 的课表</b>。
+      A 的颜色与层级最稳，C 的「今日时间线」解决了 7 列挤 43dp 这个硬伤 ——
+      网格确实不该在 360dp 屏上硬放。</span></li>
+  </ul>
+  <ul class="fixlist">
+    <li><span class="lv lv-b">B</span><span class="txt"><b>方案 B 打底 + 方案 A 的记账首屏</b>。
+      清单和流水确实需要密度，但「今日剩余」这种每天都要看的数字压成一行会让人不安心，
+      留一张卡更踏实。</span></li>
+  </ul>
+</div>
+
+<div class="page-foot">
+  三套方案的静态原型都放在 <code>docs/ui-mockups/</code>，用浏览器直接打开即可
+  （<code>shared/mock.css</code> 是共用的手机外壳层，<code>shared/icons.js</code> 是图标精灵）。<br>
+  全部界面按 360×800 dp 基准绘制，所有文字使用真实内容而非占位符；
+  三套方案均通过脚本自检：正文对比度 ≥ 4.5:1、字号 ≥ 10dp、可点区域 ≥ 44dp、无横向溢出。
+</div>
+
+</body>
+</html>
