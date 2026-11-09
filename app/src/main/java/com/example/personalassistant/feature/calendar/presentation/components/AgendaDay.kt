@@ -2,6 +2,7 @@ package com.example.personalassistant.feature.calendar.presentation.components
 
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
+import com.example.personalassistant.feature.calendar.domain.util.sessionsOn
 
 /**
  * 日程流的一行。
@@ -25,6 +26,13 @@ data class AgendaItem(
     val isAllDay: Boolean = false,
     /** 排序用：当天分钟数；全天事项用 -1 */
     val sortMinute: Int,
+    /**
+     * 课程 id（只有 [AgendaKind.COURSE] 有值）
+     *
+     * Phase 28 P9：日程流现在**一个课时一行**，所以 key 里带上了课时序号
+     * （`course-<id>-<序号>`），光看 key 拆不出课程 id —— 点击跳转改用这个字段。
+     */
+    val courseId: Long? = null,
 )
 
 /** 这一行来自哪一类内容 */
@@ -83,19 +91,29 @@ fun buildAgendaDay(dayDetail: DayDetail): AgendaDay {
         )
     }
 
-    // 课程
+    // 课程 —— **一个课时一行**
+    //
+    // Phase 28 P9：以前这里一门课只出一行，用的是 `course.startTime`
+    // （= 这门课**当天第一个课时**的时间）—— 一门课当天两个课时，第二个课时直接丢了，
+    // 用户在「今天的日程」里看不到它。现在按 `sessions` 展开：当天有几个课时就几行。
     dayDetail.courses.forEach { course ->
-        items += AgendaItem(
-            key = "course-${course.id}",
-            kind = AgendaKind.COURSE,
-            title = course.name,
-            timeText = DateUtils.formatMinutesOfDay(course.startTime),
-            subtitle = listOfNotNull(course.location, course.teacher)
-                .joinToString(" · ")
-                .ifBlank { null },
-            color = course.color,
-            sortMinute = course.startTime,
-        )
+        val sessions = course.sessionsOn(course.dayOfWeek)
+        if (sessions.isEmpty()) return@forEach
+        sessions.forEachIndexed { index, session ->
+            items += AgendaItem(
+                // key 带课时序号 —— 同门课同一天多行也不能撞 key（LazyColumn 用它做 item key）
+                key = "course-${course.id}-$index",
+                kind = AgendaKind.COURSE,
+                title = course.name,
+                timeText = DateUtils.formatMinutesOfDay(session.startTime),
+                subtitle = listOfNotNull(course.location, course.teacher)
+                    .joinToString(" · ")
+                    .ifBlank { null },
+                color = course.color,
+                sortMinute = session.startTime,
+                courseId = course.id,
+            )
+        }
     }
 
     // 任务

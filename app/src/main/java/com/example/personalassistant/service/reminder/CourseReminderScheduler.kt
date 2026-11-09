@@ -238,11 +238,38 @@ class CourseReminderScheduler @Inject constructor(
         /** 课程 id 取模（避免 courseId × 常数 溢出 Int） */
         private const val COURSE_KEY_MOD = 4_194_304L
 
-        /** 日期取模（epochDay 取低 13 位，够覆盖十多年） */
-        private const val DATE_KEY_MOD = 8_192L
+        // ===== 通知 id 的位段（Phase 28 P9）=====
 
-        /** 通知 id 的可用区间（Int.MAX - 基址） */
-        private const val NOTIFICATION_ID_RANGE = 2_000_000_000L
+        /**
+         * 课时序号占 **5 bit**（0..31）
+         *
+         * 与 [SESSION_SLOTS] 对齐 —— 一门课一天超过 32 个课时才会绕回（现实中不可能）。
+         */
+        private const val SESSION_BITS = 5
+
+        /**
+         * 课程 id 占 **12 bit**（0..4095）
+         *
+         * 个人课表的课程数（Room 自增 id）远远到不了 4096。
+         */
+        private const val COURSE_BITS = 12
+
+        /**
+         * 日期占 **13 bit**（0..8191 天 ≈ 22.4 年）
+         *
+         * 基准日 [NOTIFICATION_EPOCH_DAY] 是 2024-01-01，8192 天后到 2046 年年中 ——
+         * 够覆盖任何 realistically 会跑起来的安装周期。
+         */
+        private const val DAY_BITS = 13
+
+        /** 日期位段能表示的天数 */
+        private const val DAY_SLOTS_RANGE = 1 shl DAY_BITS
+
+        /** 课程位段能表示的课程数 */
+        private const val COURSE_SLOTS_RANGE = 1 shl COURSE_BITS
+
+        /** 日期位段的基准日：2024-01-01（epochDay） */
+        private const val NOTIFICATION_EPOCH_DAY = 19_723L
 
         /**
          * 闹钟 requestCode
@@ -251,6 +278,10 @@ class CourseReminderScheduler @Inject constructor(
          *
          * - 课程部分先取模（[COURSE_KEY_MOD]）→ `4_194_304 × 224 ≈ 9.4 亿`，**不会溢出 Int**
          * - 课时序号占 5 bit（0..31）—— 一门课一天超过 32 个课时才会撞（现实中不可能）
+         *
+         * ⚠️ requestCode **不是**闹钟的唯一标识 —— PendingIntent 的身份还包括 `data`，
+         * 而这里的 `data`（闹钟 Uri）里带着**完整日期 + 课时序号**。
+         * 所以不同日期的同一个闹钟也不会互相覆盖。
          *
          * @param dayOfWeek 1=周一 … 7=周日
          * @param sessionIndex 当天第几个课时（0 起）
@@ -263,23 +294,47 @@ class CourseReminderScheduler @Inject constructor(
         }
 
         /**
-         * 通知 id
+         * 通知 id —— **三个字段按位段拼进一个 Int**（Phase 28 P9）
          *
-         * 组成：`基址 + (courseKey × 日期槽 × 每天槽 + 日期槽 × 每天槽 + 每天槽内的位置)`
+         * ## 位段布局（低位 → 高位）
          *
-         * 与 [requestCodeFor] 一样带上课时序号 —— 同门课同一天的两个课时
-         * 不会撞同一个通知 id（后一条不会把前一条顶掉）。
+         * ```
+         * ┌────────────────────┬──────────────┬───────────────┐
+         * │ 日期 (13 bit)      │ 课程 (12 bit)│ 课时 (5 bit)  │
+         * └────────────────────┴──────────────┴───────────────┘
+         * ```
+         *
+         * ## 为什么不再取模
+         *
+         * 旧实现是 `courseId % 4_194_304` + `epochDay % 8_192` 再乘加 ——
+         * **取模必然产生别名**：两门 id 差 4_194_304 的课会拿到同一个通知 id，
+         * 后弹的通知把先弹的顶掉，用户只看到一条。
+         *
+         * 改成按位段拼之后，**同一个位段里取值不同 ⇒ 拼出来的 id 一定不同**，
+         * 不靠「概率上不撞」：
+         * - 不同课程 → 课程位段不同 → id 不同
+         * - 同一天不同课时 → 课时位段不同 → id 不同
+         * - 不同日期 → 日期位段不同 → id 不同
+         *
+         * ## 取值范围（写死在这里，别偷偷改）
+         *
+         * - 课程数 ≤ 4096（个人课表远远够用）
+         * - 日期跨度 ≤ 8192 天 ≈ 22.4 年（基准日 2024-01-01，即到 2046 年年中）
+         * - 每天每门课 ≤ 32 个课时
+         *
+         * 超出范围会**绕回**（绕回后与 N 年前的旧 id 相同）—— 但提醒只排未来 4 周，
+         * 那时旧通知早就不在托盘里了。
          *
          * @param sessionIndex 当天第几个课时（0 起）
          */
         fun notificationIdFor(courseId: Long, targetDate: LocalDate, sessionIndex: Int): Int {
-            val courseKey = bounded(courseId, COURSE_KEY_MOD)
-            val dateKey = bounded(targetDate.toEpochDay(), DATE_KEY_MOD)
-            val slot = (targetDate.dayOfWeek.value.coerceIn(1, 7) - 1) * SESSION_SLOTS +
-                sessionIndex.coerceIn(0, SESSION_SLOTS - 1)
-            val raw = courseKey.toLong() * (DATE_KEY_MOD * DAY_SLOTS) +
-                dateKey * DAY_SLOTS + slot
-            return NOTIFICATION_ID_BASE + (raw % NOTIFICATION_ID_RANGE).toInt()
+            val dayOffset = bounded(targetDate.toEpochDay() - NOTIFICATION_EPOCH_DAY, DAY_SLOTS_RANGE.toLong())
+            val courseKey = bounded(courseId, COURSE_SLOTS_RANGE.toLong())
+            val slot = sessionIndex.coerceIn(0, SESSION_SLOTS - 1)
+            val packed = (dayOffset shl (COURSE_BITS + SESSION_BITS)) or
+                (courseKey shl SESSION_BITS) or
+                slot.toLong()
+            return NOTIFICATION_ID_BASE + packed.toInt()
         }
 
         /** 取模并保证非负（负 id 也要落在合法区间里） */

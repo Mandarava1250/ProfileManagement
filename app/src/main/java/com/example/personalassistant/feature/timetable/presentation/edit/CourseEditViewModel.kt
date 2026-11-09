@@ -146,6 +146,17 @@ class CourseEditViewModel @Inject constructor(
     // ===== 课时列表 =====
 
     /**
+     * 本地 key 发放器（Phase 28 P9）
+     *
+     * 负数自增 id（-1, -2, -3…），编辑页生命周期内唯一。
+     * 用负数是为了跟**落库的课时 id**（正数）区分开 —— 万一哪天有人拿它去查库，
+     * 查不到东西而不是误命中某条记录。
+     */
+    private var localKeySeq: Long = 0L
+
+    private fun nextLocalKey(): Long = --localKeySeq
+
+    /**
      * 追加一个默认课时（周一 / 第 1 节），并**自动展开**
      *
      * 展开是为了让用户一进来就看到「刚加的这条长什么样」，不用再点一下。
@@ -163,17 +174,20 @@ class CourseEditViewModel @Inject constructor(
     }
 
     /**
-     * 删除第 [index] 个课时
+     * 删除 **localKey** 指定的课时
      *
      * ⚠️ **至少要留一个课时** —— 删光了就等于「把这门课删了」，
      * 而删除有独立的入口（顶栏的 🗑），这里静默删光会让用户误操作。
+     *
+     * 按 key 定位（不是下标）—— 下标会随删除而错位，key 不会。
      */
-    fun removeSession(index: Int) {
+    fun removeSession(localKey: Long) {
         _uiState.update { state ->
             if (state.sessions.size <= 1) return@update state
-            if (index !in state.sessions.indices) return@update state
+            val target = state.sessions.indexOfFirst { it.localKey == localKey }
+            if (target < 0) return@update state
             state.copy(
-                sessions = state.sessions.toMutableList().also { it.removeAt(index) },
+                sessions = state.sessions.toMutableList().also { it.removeAt(target) },
                 errorMessage = null,
                 // 排课变了 → 上一次冲突的结论作废
                 conflict = null,
@@ -181,17 +195,17 @@ class CourseEditViewModel @Inject constructor(
         }
     }
 
-    /** 展开 / 折叠第 [index] 个课时 */
-    fun toggleSessionExpanded(index: Int) = mutateSession(index) { session, _ ->
+    /** 展开 / 折叠 **localKey** 指定的课时 */
+    fun toggleSessionExpanded(localKey: Long) = mutateSession(localKey) { session, _ ->
         session.copy(expanded = !session.expanded)
     }
 
-    /** 通用改法：直接替换第 [index] 个课时的编辑态 */
-    fun updateSession(index: Int, transform: (SessionEditState) -> SessionEditState) =
-        mutateSession(index) { session, _ -> transform(session) }
+    /** 通用改法：直接替换 **localKey** 指定课时的编辑态 */
+    fun updateSession(localKey: Long, transform: (SessionEditState) -> SessionEditState) =
+        mutateSession(localKey) { session, _ -> transform(session) }
 
     /** 改星期几 */
-    fun updateSessionDay(index: Int, dayOfWeek: Int) = mutateSession(index) { session, _ ->
+    fun updateSessionDay(localKey: Long, dayOfWeek: Int) = mutateSession(localKey) { session, _ ->
         session.copy(dayOfWeek = dayOfWeek.coerceIn(1, 7))
     }
 
@@ -201,7 +215,7 @@ class CourseEditViewModel @Inject constructor(
      * 切到 PERIOD 时按当前分钟数反推一下「第几节」，让 chip 尽量对得上；
      * 切到 CLOCK 时分钟数原样保留（用户填的 HH:mm 不该被改）。
      */
-    fun updateSessionMode(index: Int, mode: TimeMode) = mutateSession(index) { session, schedule ->
+    fun updateSessionMode(localKey: Long, mode: TimeMode) = mutateSession(localKey) { session, schedule ->
         if (mode == session.mode) return@mutateSession session
         if (mode == TimeMode.CLOCK) {
             session.copy(mode = TimeMode.CLOCK)
@@ -221,7 +235,7 @@ class CourseEditViewModel @Inject constructor(
     }
 
     /** 改开始时间（时段模式，分钟数） */
-    fun updateSessionStartMinutes(index: Int, minutes: Int) = mutateSession(index) { session, _ ->
+    fun updateSessionStartMinutes(localKey: Long, minutes: Int) = mutateSession(localKey) { session, _ ->
         session.copy(
             startMinutes = minutes.coerceIn(0, 1439),
             errorMessage = validateTimes(minutes.coerceIn(0, 1439), session.endMinutes),
@@ -229,7 +243,7 @@ class CourseEditViewModel @Inject constructor(
     }
 
     /** 改结束时间（时段模式，分钟数） */
-    fun updateSessionEndMinutes(index: Int, minutes: Int) = mutateSession(index) { session, _ ->
+    fun updateSessionEndMinutes(localKey: Long, minutes: Int) = mutateSession(localKey) { session, _ ->
         val end = minutes.coerceIn(0, 1440)
         session.copy(
             endMinutes = end,
@@ -242,8 +256,8 @@ class CourseEditViewModel @Inject constructor(
      *
      * 按课时表把「第 N 节」翻成分钟**并写回** —— 分钟数是权威值（见 [SessionEditState]）。
      */
-    fun updateSessionStartPeriod(index: Int, periodIndex: Int) =
-        mutateSession(index) { session, schedule ->
+    fun updateSessionStartPeriod(localKey: Long, periodIndex: Int) =
+        mutateSession(localKey) { session, schedule ->
             val period = schedule.periods.firstOrNull { it.index == periodIndex }
                 ?: return@mutateSession session
             session.copy(
@@ -255,8 +269,8 @@ class CourseEditViewModel @Inject constructor(
         }
 
     /** 改结束节（选第 N 节） */
-    fun updateSessionEndPeriod(index: Int, periodIndex: Int) =
-        mutateSession(index) { session, schedule ->
+    fun updateSessionEndPeriod(localKey: Long, periodIndex: Int) =
+        mutateSession(localKey) { session, schedule ->
             val period = schedule.periods.firstOrNull { it.index == periodIndex }
                 ?: return@mutateSession session
             session.copy(
@@ -276,6 +290,7 @@ class CourseEditViewModel @Inject constructor(
      * - 冲突时把错误**回写到具体课时**的 `errorMessage`（就近显示在行内），
      *   同时把冲突摘要放进 [CourseEditUiState.conflict] —— UI 据此弹「仍然保存」确认框
      * - 存成功后重排课程提醒闹钟（此前 `rescheduleAll` 全项目没有调用方，提醒从没排上）
+     *   —— **按这门课所属的学期**排（Phase 28 P9），不是笼统的「当前学期」
      *
      * @param force true = 忽略冲突硬写（用户点了「仍然保存」）
      */
@@ -296,7 +311,8 @@ class CourseEditViewModel @Inject constructor(
                 val color = CoursePalette[state.colorIndex.coerceIn(0, CoursePalette.lastIndex)].value.toInt()
                 upsertCourseUseCase(state.toCourse(color), force = force)
                 // 课程变了 → 提醒闹钟跟着重排（失败不能影响保存结果）
-                runCatching { reminderRescheduler.rescheduleAll() }
+                // Phase 28 P9：按**这门课所属的学期**排，不是「当前学期」
+                runCatching { reminderRescheduler.rescheduleAll(state.semester.ifBlank { null }) }
                 _saved.value = true
             } catch (e: CourseConflictException) {
                 _uiState.update { current ->
@@ -329,7 +345,8 @@ class CourseEditViewModel @Inject constructor(
             runCatching { repository.deleteCourse(state.id) }
                 .onSuccess {
                     // 课没了 → 旧闹钟也要撤
-                    runCatching { reminderRescheduler.rescheduleAll() }
+                    // Phase 28 P9：按**这门课所属的学期**撤，不是「当前学期」
+                    runCatching { reminderRescheduler.rescheduleAll(state.semester.ifBlank { null }) }
                     _deleted.value = true
                 }
                 .onFailure { _uiState.update { s -> s.copy(errorMessage = it.message) } }
@@ -339,21 +356,23 @@ class CourseEditViewModel @Inject constructor(
     // ===== 内部 =====
 
     /**
-     * 改第 [index] 个课时（下标越界时什么都不做）
+     * 改 **localKey** 指定的课时（找不到时什么都不做）
      *
      * 顺带把 [CourseEditUiState.conflict] 清掉 —— 排课一旦变了，
      * 上一次「撞了谁」的结论就不再成立，对话框不该继续拿旧结论问用户。
      */
     private fun mutateSession(
-        index: Int,
+        localKey: Long,
         transform: (SessionEditState, TimeSlotSchedule) -> SessionEditState,
     ) {
         _uiState.update { state ->
-            val current = state.sessions.getOrNull(index) ?: return@update state
+            val target = state.sessions.indexOfFirst { it.localKey == localKey }
+            if (target < 0) return@update state
+            val current = state.sessions[target]
             val updated = transform(current, state.availableTimeSlots)
             if (updated == current) return@update state
             val list = state.sessions.toMutableList()
-            list[index] = updated
+            list[target] = updated
             state.copy(sessions = list, conflict = null)
         }
     }
@@ -363,6 +382,7 @@ class CourseEditViewModel @Inject constructor(
         val first = schedule.periods.firstOrNull()
         val second = schedule.periods.getOrNull(1) ?: first
         return SessionEditState(
+            localKey = nextLocalKey(),
             id = 0L,
             dayOfWeek = 1,
             mode = TimeMode.PERIOD,
@@ -392,6 +412,7 @@ class CourseEditViewModel @Inject constructor(
         val endPeriod = schedule.periods.firstOrNull { it.endMinutes == session.endTime }
         val lastIndex = schedule.periods.lastOrNull()?.index ?: 1
         return SessionEditState(
+            localKey = nextLocalKey(),
             id = session.id,
             dayOfWeek = session.dayOfWeek,
             mode = if (startPeriod != null) TimeMode.PERIOD else TimeMode.CLOCK,

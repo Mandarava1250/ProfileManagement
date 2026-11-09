@@ -106,4 +106,70 @@ class CourseReminderIdsTest {
         assertNull(DeepLinks.parseCourseReminderUri("course://1/2"))
         assertNull(DeepLinks.parseCourseReminderUri("course://x/2/0"))
     }
+
+    // ===== Phase 28 P9：通知 id 的位段拼接 =====
+
+    @Test
+    fun `不同课程同一天的通知 id 不重复`() {
+        val ids = (1L..50L).map { courseId ->
+            CourseReminderScheduler.notificationIdFor(courseId, day, 0)
+        }
+
+        assertEquals("50 门课的通知 id 必须都不同", ids.size, ids.toSet().size)
+    }
+
+    @Test
+    fun `同一天所有课时的通知 id 不重复`() {
+        val ids = (0..31).map { index ->
+            CourseReminderScheduler.notificationIdFor(courseId, day, index)
+        }
+
+        assertEquals("同一天 32 个课时的通知 id 必须都不同", ids.size, ids.toSet().size)
+    }
+
+    @Test
+    fun `不同日期的通知 id 不重复`() {
+        val ids = (0..60).map { offset ->
+            CourseReminderScheduler.notificationIdFor(courseId, day.plusDays(offset.toLong()), 0)
+        }
+
+        assertEquals("连续 61 天的通知 id 必须都不同", ids.size, ids.toSet().size)
+    }
+
+    @Test
+    fun `课程与日期与课时三个维度同时不同也不撞`() {
+        val ids = mutableListOf<Int>()
+        for (courseId in listOf(1L, 7L, 42L, 4095L)) {
+            for (offset in 0..3) {
+                for (session in 0..2) {
+                    ids += CourseReminderScheduler.notificationIdFor(
+                        courseId = courseId,
+                        targetDate = day.plusDays(offset.toLong()),
+                        sessionIndex = session,
+                    )
+                }
+            }
+        }
+
+        assertEquals("三个维度组合起来也不能撞", ids.size, ids.toSet().size)
+    }
+
+    @Test
+    fun `同一个三元组算出来的通知 id 稳定不变`() {
+        val first = CourseReminderScheduler.notificationIdFor(courseId, day, 2)
+        val second = CourseReminderScheduler.notificationIdFor(courseId, day, 2)
+
+        assertEquals("同一条提醒重排多次必须是同一个 id", first, second)
+    }
+
+    @Test
+    fun `通知 id 落在课程段的合法区间内`() {
+        val id = CourseReminderScheduler.notificationIdFor(courseId, day, 3)
+
+        assertTrue(
+            "通知 id 必须落在课程段（>= 100_000），实际 $id",
+            id >= CourseReminderScheduler.NOTIFICATION_ID_BASE,
+        )
+        assertTrue("通知 id 不能越过 Int 上界，实际 $id", id < Int.MAX_VALUE)
+    }
 }

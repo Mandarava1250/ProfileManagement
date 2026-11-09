@@ -5,6 +5,7 @@ import com.example.personalassistant.feature.calendar.domain.model.Event
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.timetable.domain.model.Course
+import com.example.personalassistant.feature.timetable.domain.model.CourseSession
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -51,6 +52,7 @@ class AgendaDayTest {
         name: String,
         startMinute: Int,
         endMinute: Int,
+        sessions: List<CourseSession> = emptyList(),
     ) = Course(
         id = id,
         name = name,
@@ -60,6 +62,7 @@ class AgendaDayTest {
         color = 0xFF3F7DE0.toInt(),
         semester = "2026-2027-1",
         weeks = null,
+        sessions = sessions,
     )
 
     private fun task(id: Long, title: String, dueMillis: Long?) = Task(
@@ -163,5 +166,94 @@ class AgendaDayTest {
         // 三条都带时刻
         assertEquals(3, day.timedCount)
         assertTrue(!day.isEmpty)
+    }
+
+    // ===== Phase 28 P9：一门课当天多个时段 =====
+
+    @Test
+    fun `一门课当天两个时段在日程里都出现`() {
+        // 「高数」周三 08:00-09:00 + 14:00-15:00（同一个 dayOfWeek）
+        val day = buildAgendaDay(
+            detail(
+                courses = listOf(
+                    course(
+                        id = 7L,
+                        name = "高数",
+                        startMinute = 8 * 60,
+                        endMinute = 9 * 60,
+                        sessions = listOf(
+                            CourseSession(courseId = 7L, dayOfWeek = 3, startTime = 8 * 60, endTime = 9 * 60, sortOrder = 0),
+                            CourseSession(courseId = 7L, dayOfWeek = 3, startTime = 14 * 60, endTime = 15 * 60, sortOrder = 1),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals("两个时段就该是两行", 2, day.items.size)
+        assertEquals("高数", day.items[0].title)
+        assertEquals("08:00", day.items[0].timeText)
+        assertEquals("高数", day.items[1].title)
+        assertEquals("14:00", day.items[1].timeText)
+        assertEquals(2, day.timedCount)
+    }
+
+    @Test
+    fun `同一门课多个时段的行 key 不重复`() {
+        val day = buildAgendaDay(
+            detail(
+                courses = listOf(
+                    course(
+                        id = 7L,
+                        name = "高数",
+                        startMinute = 8 * 60,
+                        endMinute = 9 * 60,
+                        sessions = listOf(
+                            CourseSession(courseId = 7L, dayOfWeek = 3, startTime = 8 * 60, endTime = 9 * 60, sortOrder = 0),
+                            CourseSession(courseId = 7L, dayOfWeek = 3, startTime = 14 * 60, endTime = 15 * 60, sortOrder = 1),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val keys = day.items.map { it.key }
+        assertEquals("key 必须唯一（LazyColumn 用它当 item key）", keys.size, keys.toSet().size)
+    }
+
+    @Test
+    fun `课程行带着课程 id 供点击跳转`() {
+        val day = buildAgendaDay(
+            detail(
+                courses = listOf(course(id = 42L, name = "高数", startMinute = 8 * 60, endMinute = 9 * 60)),
+            ),
+        )
+
+        assertEquals(42L, day.items[0].courseId)
+    }
+
+    @Test
+    fun `只有别的天的课时不进门`() {
+        // 「高数」周三 08:00-09:00 + **周四** 14:00-15:00
+        // 当天是周三（dayOfWeek = 3）→ 只该看到周三那个时段
+        val day = buildAgendaDay(
+            detail(
+                courses = listOf(
+                    course(
+                        id = 7L,
+                        name = "高数",
+                        startMinute = 8 * 60,
+                        endMinute = 9 * 60,
+                        sessions = listOf(
+                            CourseSession(courseId = 7L, dayOfWeek = 3, startTime = 8 * 60, endTime = 9 * 60, sortOrder = 0),
+                            CourseSession(courseId = 7L, dayOfWeek = 4, startTime = 14 * 60, endTime = 15 * 60, sortOrder = 1),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(1, day.items.size)
+        assertEquals("08:00", day.items[0].timeText)
     }
 }

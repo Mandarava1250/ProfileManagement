@@ -161,20 +161,22 @@ fun CourseEditScreen(
 
             Spacer(Modifier.height(4.dp))
 
-            state.sessions.forEachIndexed { index, session ->
+            // Phase 28 P9：按 **localKey** 定位，不按下标 —— 下标会随删除而错位
+            state.sessions.forEach { session ->
+                val key = session.localKey
                 SessionRow(
                     session = session,
                     schedule = state.availableTimeSlots,
                     accent = accent,
                     canDelete = state.sessions.size > 1,
-                    onToggle = { viewModel.toggleSessionExpanded(index) },
-                    onDelete = { viewModel.removeSession(index) },
-                    onDayChange = { viewModel.updateSessionDay(index, it) },
-                    onModeChange = { viewModel.updateSessionMode(index, it) },
-                    onStartChange = { viewModel.updateSessionStartMinutes(index, it) },
-                    onEndChange = { viewModel.updateSessionEndMinutes(index, it) },
-                    onStartPeriod = { viewModel.updateSessionStartPeriod(index, it) },
-                    onEndPeriod = { viewModel.updateSessionEndPeriod(index, it) },
+                    onToggle = { viewModel.toggleSessionExpanded(key) },
+                    onDelete = { viewModel.removeSession(key) },
+                    onDayChange = { viewModel.updateSessionDay(key, it) },
+                    onModeChange = { viewModel.updateSessionMode(key, it) },
+                    onStartChange = { viewModel.updateSessionStartMinutes(key, it) },
+                    onEndChange = { viewModel.updateSessionEndMinutes(key, it) },
+                    onStartPeriod = { viewModel.updateSessionStartPeriod(key, it) },
+                    onEndPeriod = { viewModel.updateSessionEndPeriod(key, it) },
                 )
                 Spacer(Modifier.height(6.dp))
             }

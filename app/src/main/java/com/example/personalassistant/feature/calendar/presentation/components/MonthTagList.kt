@@ -30,9 +30,11 @@ import androidx.compose.ui.unit.dp
 import com.example.personalassistant.core.ui.components.AppCard
 import com.example.personalassistant.core.ui.theme.AppRadii
 import com.example.personalassistant.core.ui.theme.AppSpacing
+import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.CalendarHabitItem
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.model.Event
+import com.example.personalassistant.feature.calendar.domain.util.sessionsOn
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.timetable.domain.model.Course
 
@@ -95,12 +97,28 @@ fun MonthTagList(
         if (courses.isNotEmpty()) {
             TagRow(
                 label = "课程",
-                tags = courses.map { course ->
-                    TagChipData(
-                        text = course.name,
-                        color = Color(course.color),
-                        onClick = { onCourseClick(course) },
-                    )
+                // Phase 28 P9：一门课当天有几个课时就几个标签 —— 以前只出一个，
+                // 第二个课时的时段在月视图里直接看不见了。
+                // 多个课时时把开始时刻带在名字后面，否则两个同名标签分不清谁是谁。
+                tags = courses.flatMap { course ->
+                    val sessions = course.sessionsOn(course.dayOfWeek)
+                    if (sessions.size <= 1) {
+                        listOf(
+                            TagChipData(
+                                text = course.name,
+                                color = Color(course.color),
+                                onClick = { onCourseClick(course) },
+                            ),
+                        )
+                    } else {
+                        sessions.map { session ->
+                            TagChipData(
+                                text = "${course.name} ${DateUtils.formatMinutesOfDay(session.startTime)}",
+                                color = Color(course.color),
+                                onClick = { onCourseClick(course) },
+                            )
+                        }
+                    }
                 },
             )
         }

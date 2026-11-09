@@ -372,15 +372,19 @@ private fun openAgendaItem(
     days: List<AgendaDay>,
     item: com.example.personalassistant.feature.calendar.presentation.components.AgendaItem,
 ) {
+    // Phase 28 P9：课程行直接带 courseId（key 里带了课时序号，拆不出课程 id）——
+    // 用它跳转，不用在 days 里翻（那样会翻到 N 天 → 跳 N 次）。
+    if (item.kind == AgendaKind.COURSE) {
+        item.courseId?.let { courseId -> navController.navigate(Screen.EditCourse.build(courseId)) }
+        return
+    }
     days.forEach { day ->
         val detail = day.detail ?: return@forEach
         when (item.kind) {
             AgendaKind.EVENT -> detail.events
                 .firstOrNull { "event-${it.id}" == item.key }
                 ?.let { viewModel.startEditEvent(it) }
-            AgendaKind.COURSE -> detail.courses
-                .firstOrNull { "course-${it.id}" == item.key }
-                ?.let { navController.navigate(Screen.EditCourse.build(it.id)) }
+            AgendaKind.COURSE -> Unit // 上面已经处理完
             AgendaKind.TASK -> detail.tasks
                 .firstOrNull { "task-${it.id}" == item.key }
                 ?.let { navController.navigate(Screen.DetailTask.build(it.id)) }

@@ -50,8 +50,17 @@ class CourseEditViewModelTest {
         var callCount: Int = 0
             private set
 
-        override suspend fun rescheduleAll() {
+        /**
+         * Phase 28 P9：最近一次重排用的是**哪个学期**
+         *
+         * null = 没传学期（走当前学期）
+         */
+        var lastSemesterName: String? = null
+            private set
+
+        override suspend fun rescheduleAll(semesterName: String?) {
             callCount++
+            lastSemesterName = semesterName
         }
     }
 
@@ -122,6 +131,14 @@ class CourseEditViewModelTest {
         reminderRescheduler = rescheduler,
     )
 
+    /**
+     * 拿到第 [index] 个课时的**本地 key**（Phase 28 P9）
+     *
+     * 编辑页按 key 定位课时，不按下标 —— 下标会随删除而错位。
+     */
+    private fun CourseEditViewModel.keyAt(index: Int): Long =
+        uiState.value.sessions[index].localKey
+
     // ===== 课时增删改 =====
 
     @Test
@@ -167,9 +184,9 @@ class CourseEditViewModelTest {
         vm.addSession()
         advanceUntilIdle()
 
-        vm.updateSessionDay(1, 3)
-        vm.updateSessionStartMinutes(1, 10 * 60)
-        vm.updateSessionEndMinutes(1, 10 * 60 + 45)
+        vm.updateSessionDay(vm.keyAt(1), 3)
+        vm.updateSessionStartMinutes(vm.keyAt(1), 10 * 60)
+        vm.updateSessionEndMinutes(vm.keyAt(1), 10 * 60 + 45)
         advanceUntilIdle()
 
         val sessions = vm.uiState.value.sessions
@@ -189,8 +206,8 @@ class CourseEditViewModelTest {
         vm.initialize(0L)
         advanceUntilIdle()
 
-        vm.updateSessionStartPeriod(0, 3)
-        vm.updateSessionEndPeriod(0, 3)
+        vm.updateSessionStartPeriod(vm.keyAt(0), 3)
+        vm.updateSessionEndPeriod(vm.keyAt(0), 3)
         advanceUntilIdle()
 
         val session = vm.uiState.value.sessions[0]
@@ -208,7 +225,7 @@ class CourseEditViewModelTest {
         vm.initialize(0L)
         advanceUntilIdle()
 
-        vm.updateSessionEndMinutes(0, 8 * 60)
+        vm.updateSessionEndMinutes(vm.keyAt(0), 8 * 60)
         advanceUntilIdle()
 
         val session = vm.uiState.value.sessions[0]
@@ -226,7 +243,7 @@ class CourseEditViewModelTest {
         vm.addSession()
         advanceUntilIdle()
 
-        vm.removeSession(1)
+        vm.removeSession(vm.keyAt(1))
         advanceUntilIdle()
 
         assertEquals(1, vm.uiState.value.sessions.size)
@@ -239,7 +256,7 @@ class CourseEditViewModelTest {
         vm.initialize(0L)
         advanceUntilIdle()
 
-        vm.removeSession(0)
+        vm.removeSession(vm.keyAt(0))
         advanceUntilIdle()
 
         assertEquals("最后一条课时不能被删掉", 1, vm.uiState.value.sessions.size)
@@ -338,9 +355,9 @@ class CourseEditViewModelTest {
         vm.updateName("高数")
         vm.addSession()
         advanceUntilIdle()
-        vm.updateSessionDay(1, 3)
-        vm.updateSessionStartMinutes(1, 10 * 60)
-        vm.updateSessionEndMinutes(1, 10 * 60 + 45)
+        vm.updateSessionDay(vm.keyAt(1), 3)
+        vm.updateSessionStartMinutes(vm.keyAt(1), 10 * 60)
+        vm.updateSessionEndMinutes(vm.keyAt(1), 10 * 60 + 45)
         advanceUntilIdle()
 
         vm.save()
@@ -386,7 +403,7 @@ class CourseEditViewModelTest {
         vm.updateName("高数")
         vm.addSession()
         advanceUntilIdle()
-        vm.removeSession(1)
+        vm.removeSession(vm.keyAt(1))
         advanceUntilIdle()
 
         vm.save()
@@ -411,9 +428,9 @@ class CourseEditViewModelTest {
         vm.addSession()
         advanceUntilIdle()
         // 第二个课时挪到周三 09:00-10:00 → 撞上「线性代数」
-        vm.updateSessionDay(1, 3)
-        vm.updateSessionStartMinutes(1, 9 * 60)
-        vm.updateSessionEndMinutes(1, 10 * 60)
+        vm.updateSessionDay(vm.keyAt(1), 3)
+        vm.updateSessionStartMinutes(vm.keyAt(1), 9 * 60)
+        vm.updateSessionEndMinutes(vm.keyAt(1), 10 * 60)
         advanceUntilIdle()
 
         vm.save()
@@ -438,9 +455,9 @@ class CourseEditViewModelTest {
         vm.addSession()
         advanceUntilIdle()
         // 第二个课时跟第一个完全重合
-        vm.updateSessionDay(1, 1)
-        vm.updateSessionStartMinutes(1, 8 * 60)
-        vm.updateSessionEndMinutes(1, 9 * 60 + 45)
+        vm.updateSessionDay(vm.keyAt(1), 1)
+        vm.updateSessionStartMinutes(vm.keyAt(1), 8 * 60)
+        vm.updateSessionEndMinutes(vm.keyAt(1), 9 * 60 + 45)
         advanceUntilIdle()
 
         vm.save()
@@ -482,9 +499,9 @@ class CourseEditViewModelTest {
         vm.addSession()
         advanceUntilIdle()
         // 第二个课时挪到周三 09:00-10:00 → 撞上「线性代数」
-        vm.updateSessionDay(1, 3)
-        vm.updateSessionStartMinutes(1, 9 * 60)
-        vm.updateSessionEndMinutes(1, 10 * 60)
+        vm.updateSessionDay(vm.keyAt(1), 3)
+        vm.updateSessionStartMinutes(vm.keyAt(1), 9 * 60)
+        vm.updateSessionEndMinutes(vm.keyAt(1), 10 * 60)
         advanceUntilIdle()
         return vm
     }
@@ -560,7 +577,7 @@ class CourseEditViewModelTest {
         assertNotNull(vm.uiState.value.conflict)
 
         // 把第二个课时挪走 → 之前的「撞了线性代数」结论不再成立
-        vm.updateSessionDay(1, 4)
+        vm.updateSessionDay(vm.keyAt(1), 4)
         advanceUntilIdle()
 
         assertNull("排课变了就不要再拿旧结论问用户", vm.uiState.value.conflict)
@@ -591,7 +608,7 @@ class CourseEditViewModelTest {
         advanceUntilIdle()
 
         // 结束早于开始 → 行内错误
-        vm.updateSessionEndMinutes(0, 8 * 60)
+        vm.updateSessionEndMinutes(vm.keyAt(0), 8 * 60)
         advanceUntilIdle()
 
         assertNotNull(vm.uiState.value.sessions[0].errorMessage)
@@ -609,9 +626,9 @@ class CourseEditViewModelTest {
         vm.addSession()
         advanceUntilIdle()
         // 第二个课时跟第一个完全重合
-        vm.updateSessionDay(1, 1)
-        vm.updateSessionStartMinutes(1, 8 * 60)
-        vm.updateSessionEndMinutes(1, 9 * 60 + 45)
+        vm.updateSessionDay(vm.keyAt(1), 1)
+        vm.updateSessionStartMinutes(vm.keyAt(1), 8 * 60)
+        vm.updateSessionEndMinutes(vm.keyAt(1), 9 * 60 + 45)
         advanceUntilIdle()
 
         vm.save()
@@ -628,5 +645,114 @@ class CourseEditViewModelTest {
 
         assertEquals("force 时要写库", 1, repo.upsertCount)
         assertTrue(vm.saved.value)
+    }
+
+    // ===== Phase 28 P9：按学期排提醒 + 按 key 定位课时 =====
+
+    @Test
+    fun `保存时按课程所属的学期重排提醒`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val rescheduler = FakeCourseReminderRescheduler()
+        val vm = viewModel(repo, rescheduler)
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        // 这门课属于「2023-2024-1」，不是当前学期
+        vm.updateSemester("2023-2024-1")
+        vm.updateName("高数")
+        advanceUntilIdle()
+
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals(1, rescheduler.callCount)
+        assertEquals(
+            "提醒要按这门课所属的学期排，不是笼统的当前学期",
+            "2023-2024-1",
+            rescheduler.lastSemesterName,
+        )
+    }
+
+    @Test
+    fun `编辑别的学期的课时按那个学期重排提醒`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        // 另一个学期（不是当前学期）
+        repo.seedSemester(Semester(name = "2023-2024-1", startDate = 0L, endDate = 100L, isCurrent = false))
+        repo.seedCourse(course(id = 10L, name = "线性代数", semesterName = "2023-2024-1"))
+        val rescheduler = FakeCourseReminderRescheduler()
+        val vm = viewModel(repo, rescheduler)
+
+        vm.initialize(10L)
+        advanceUntilIdle()
+
+        vm.save()
+        advanceUntilIdle()
+
+        assertEquals(1, rescheduler.callCount)
+        assertEquals("2023-2024-1", rescheduler.lastSemesterName)
+    }
+
+    @Test
+    fun `每个课时都有唯一的本地 key`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.addSession()
+        vm.addSession()
+        advanceUntilIdle()
+
+        val keys = vm.uiState.value.sessions.map { it.localKey }
+        assertEquals(3, keys.size)
+        assertEquals("本地 key 必须唯一", keys.size, keys.toSet().size)
+        assertTrue("本地 key 应该是负数（跟落库 id 区分开）", keys.all { it < 0L })
+    }
+
+    @Test
+    fun `删掉一行后按 key 改另一行仍然改对那一行`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.addSession()
+        vm.addSession()
+        advanceUntilIdle()
+
+        // 记下第三行的 key（删掉第一行后它会往前挪，但 key 不变）
+        val thirdKey = vm.keyAt(2)
+        val firstKey = vm.keyAt(0)
+
+        // 删掉第一行
+        vm.removeSession(firstKey)
+        advanceUntilIdle()
+        assertEquals(2, vm.uiState.value.sessions.size)
+
+        // 用 key 改第三行 —— 改的必须是「第三行」，不是现在的第二行
+        vm.updateSessionDay(thirdKey, 5)
+        advanceUntilIdle()
+
+        val sessions = vm.uiState.value.sessions
+        assertEquals("改的是还活着的那一行", 5, sessions[1].dayOfWeek)
+        assertEquals("另一行不该被动", 1, sessions[0].dayOfWeek)
+    }
+
+    @Test
+    fun `用不存在的 key 改课时不会误伤别的行`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.addSession()
+        advanceUntilIdle()
+
+        val before = vm.uiState.value.sessions.map { it.dayOfWeek }
+
+        vm.updateSessionDay(localKey = -999L, dayOfWeek = 6)
+        vm.removeSession(localKey = -999L)
+        advanceUntilIdle()
+
+        val after = vm.uiState.value.sessions
+        assertEquals("不该删掉任何一行", before.size, after.size)
+        assertEquals("不该改到任何一行", before, after.map { it.dayOfWeek })
     }
 }
