@@ -3385,3 +3385,221 @@ val routes: Set<String> = setOf(screen.route)   // 默认只认自己的入口
 - **「本机无法目测」这条过期了** —— 现在跑的是 `pm_ui36`（google_apis 镜像），能显示；`adb shell uiautomator dump` + 像素直方图可以替代肉眼验收
 
 
+---
+
+## 🏁 2026-11-09 —— Phase 28「课表一门课多课时」收口（P7 编辑页重写 + P8 台账 / 测试 / 提醒重排）
+
+**触发**：伙伴要求「点课表任意课时块 → 编辑**整门课**；编辑页列出该课全部课时，每课时可独立增删改」。
+改造前数据模型是「一门课 = 一个上课时段」（星期几 + 起止时间都长在 `courses` 行上），
+所以「周一 1-2 节、周三 3-4 节」根本记不下来 —— 只能记成其中一条。
+
+本轮是 Phase 28 的**最后一批**：P7 编辑页重写 + P8 收尾（P1~P6 已在前 6 个 commit 落地）。
+
+| 子项 | commit | 内容 |
+|---|---|---|
+| P1 数据层 | `674f80f` | `course_sessions` 表 + `CourseSession` 模型 + `Migration_19_20`（含存量播种） |
+| P2 备份 | `58b5ca9` | 备份接入 `course_sessions` 表 |
+| P3/P4 仓储 + 领域 | `f0afe11` | `Course.sessions` 落地 + Repository 整门课事务读写 + 逐课时冲突检测 |
+| P5 渲染 | `ac579cb` | 课表按课时渲染（一门课的多个课时各占一块）+ `CourseSlot` |
+| P6 跨模块 | `e8366d4` | 日历按天查课改 JOIN 课时表 + 提醒 id 纳入课时序号 |
+| **P7 编辑页** | **本轮** | 课程编辑页重写为「整门课 + 课时列表」，每课时可独立增删改 |
+| **P8 收尾** | **本轮** | JVM 测试补齐 + 台账 + 提醒重排接上调用方 |
+
+---
+
+### 一、数据模型
+
+**一句话**：一门课 = 课程本体（`courses` 一行）+ N 个课时（`course_sessions` N 行）。
+
+```kotlin
+data class CourseSession(
+    val id: Long = 0L,          // 0 = 还没落库（新建 / 兜底假课时）
+    val courseId: Long = 0L,
+    val dayOfWeek: Int,         // 1=周一 … 7=周日
+    val startTime: Int,         // 当天分钟数 0..1439
+    val endTime: Int,           // 当天分钟数 0..1439，且 > startTime
+    val sortOrder: Int = 0,     // 课程内的显示顺序
+) {
+    fun overlaps(other: CourseSession): Boolean =
+        dayOfWeek == other.dayOfWeek && startTime < other.endTime && endTime > other.startTime
+}
+```
+
+`Course` 侧：
+
+- 新增 `sessions: List<CourseSession>`（默认空列表 —— 这样所有还在 `Course(...)` 里写
+  `dayOfWeek/startTime/endTime` 的旧代码（测试 / 日历 / 提醒）**一行都不用改**就能编译）
+- 保留 `dayOfWeek/startTime/endTime` 三列，语义收窄为「**主时段镜像**」= 第一个课时
+- `effectiveSessions`：**没有课时记录时**（老数据 / 旧备份导入）用主时段镜像兜底出一个单课时
+  —— 这条兜底很关键：一门课在课表上必须至少占一个格子，「没有课时」不能让整门课从课表上消失
+
+`CourseSession.id == 0` 是「兜底假课时」的标记：**还没落库**的新课时、以及老数据兜底出来的那一条，
+id 都是 0。落库时由 `upsertCourseWithSessions` 统一重新编号（`sortOrder` 也重排成 0,1,2…，
+避免调用方传重复 `sortOrder` 撞 `(courseId, sortOrder)` 唯一索引）。
+
+### 二、迁移（DB v19 → v20）
+
+`Migration_19_20` 只做四件事，**`courses` 表一动不动**：
+
+```sql
+CREATE TABLE IF NOT EXISTS `course_sessions` (
+    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    `courseId` INTEGER NOT NULL,
+    `sortOrder` INTEGER NOT NULL,
+    `dayOfWeek` INTEGER NOT NULL,
+    `startTime` INTEGER NOT NULL,
+    `endTime` INTEGER NOT NULL,
+    FOREIGN KEY(`courseId`) REFERENCES `courses`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- + courseId 索引 + (courseId, sortOrder) 唯一索引
+INSERT INTO course_sessions (courseId, sortOrder, dayOfWeek, startTime, endTime)
+SELECT id, 0, dayOfWeek, startTime, endTime FROM courses;   -- 播种：存量零损失
+```
+
+- **不 ALTER、不重建 `courses`** —— SQLite 删列要重建表，风险高；老备份导入也有落点
+- **播种**：每门存量课 → 一条 `sortOrder = 0` 的课时，迁移后行为与改造前**完全一致**
+- 新表形状必须与 Room 生成的 `20.json` **逐字一致**（`AUTOINCREMENT NOT NULL` / 不写任何 `DEFAULT`），
+  否则运行期抛 `Migration didn't properly handle: course_sessions`
+
+### 三、编辑页交互（P7）
+
+编辑页从「**一组**全局时间控件」改成「**N 个课时行**」：
+
+```
+● 周一 08:00-09:40 第1节        ← 折叠态（左边一条 3dp 课程色竖条 + 圆点）
+  点一行展开 →
+  星期：周一 周二 周三 …
+  时段（HH:mm） | 选第 N 节       ← 每个课时自己的模式
+  开始 / 结束（时段模式）或 开始节 / 结束节（选节模式）
+```
+
+| 交互 | 行为 |
+|---|---|
+| 「＋ 添加课时」 | 追加一个默认课时（周一 / 第 1 节 = 08:00-09:40），并**自动展开** |
+| 点课时行 | 展开 / 折叠该行 |
+| 🗑 | 删掉该课时；**至少留一个**（删最后一条被拦住 —— 删光等于删课，而删除有独立入口） |
+| 星期 chip / 模式切换 / 起止输入 | 只影响该行，其它行不动 |
+| 保存 | **整门课一次性提交**（`upsertCourseWithSessions` 一个事务：课程 + 全部课时 + 三列镜像） |
+
+**错误就近显示**（不是全堆在页面底部）：
+
+| 错误 | 落在哪 |
+|---|---|
+| 单个课时结束早于开始 / 结束超过 24:00 | 该课时的 `errorMessage` → 行内 |
+| 该课时与别的课撞了 | 该课时的 `errorMessage` → 行内「与《线性代数》时间冲突」 |
+| 同门课两个课时自己重叠 | 两个课时**都**标「与本课程另一个课时重叠」 |
+| 保存失败等页面级错误 | 页面底部一条汇总 |
+
+冲突定位靠「星期 + 起止分钟」当 key：冲突明细里的课时就是按当前列表拼出来的，能一一对上，
+所以能精确写到**那一行**（`CourseConflict.sessionDetails` 跨课程 / `internalOverlaps` 内部重叠）。
+
+**mode 反推放宽**：旧口径要求开始**和**结束都命中某个 period 才算「选第 N 节」模式，
+多课时后命中率很低（每个课时的起止都不同），于是大部分课时都掉回「时段」模式。
+现在放宽为「**开始时刻命中任一 period 的 startMinutes 就用 PERIOD**」，且**每个 session 单独记自己的 mode**。
+
+> ⚠️ 但**分钟数是权威值**：用户每次改「开始节 / 结束节」时就把 index 翻成分钟写回。
+> 如果改成「保存时再按 index 翻」，那么「08:00-10:00」这种**结束时刻不在节表上**的课时
+> 会在保存时被悄悄改成所在那一节的结束时间（10:00 → 10:40）—— 静默改数据，比模式判错更糟。
+
+### 四、三类坑（这一轮踩过 / 修掉的）
+
+#### 坑 1：提醒撞车 —— 同一门课同一天两个课时，闹钟互相顶掉
+
+`AlarmManager` 的 `PendingIntent` 身份 = (requestCode, action, data, …)。改造前标识只有
+`courseId + dayOfWeek`，所以同门课同一天的两个课时**是同一个闹钟** —— 后者顶掉前者；
+通知 id 同理，两条通知只留一条。
+
+现在三处标识都带上**当天第几个课时**（`sessionIndex`）：
+
+- 闹钟 requestCode：`requestCodeFor(courseId, dayOfWeek, sessionIndex)`
+- 通知 Uri：`course://<courseId>/<epochDay>/<sessionIndex>`（`DeepLinks`）
+- 通知 id：`notificationIdFor(courseId, targetDate, sessionIndex)`
+
+⚠️ **`cancelAll` 必须跟排闹钟一样逐课时取消**：少了课时序号就对不上那个闹钟
+（`FLAG_NO_CREATE` 时 cancel 什么也不会发生），旧闹钟会一直留着响。
+
+⚠️ **另一个坑：`rescheduleAll` 全项目没有调用方** —— 课程提醒的闹钟**从来没排上过**，
+通知里的课程提醒也就从来没响过。本轮在编辑页保存 / 删除课程后接上了它
+（`CourseReminderRescheduler` 接口 + `DefaultCourseReminderRescheduler` 实现，
+取当前学期的课程 + 学期开始日期喂给 `CourseReminderScheduler`）。
+抽接口而不是直接依赖具体类，是因为 `CourseReminderScheduler` 依赖 Android 的
+`Context` / `AlarmManager` / 节假日判断，JVM 单测里造不出来。
+
+#### 坑 2：日历漏课 —— 按天查课只认主时段，多课时的那天看不到课
+
+日历按天查课原来走 `courseDao.observeByDayOfWeek(day)` —— 查的是 `courses` 表的
+**主时段镜像**那一列。多课时之后，一门课周三的课时不在主时段上（比如主时段是周一），
+**周三的日历上这门课直接消失**。
+
+现在日历按天查课改成 **JOIN `course_sessions`**：按 `dayOfWeek` 过滤课时表，
+一门课有几个课时就出几条日程。
+
+#### 坑 3：备份漏表 —— 备份清单里没有这张表，导入后课程全空
+
+备份是「按表导出 JSON」。`course_sessions` 没进 `BackupManifest.DEFAULT_TABLES` 的话，
+**导入后课程一条课时都没有**（课表上整门课消失），而且这种问题在开发机上不容易发现
+（自己写的数据本来就在库里）。
+
+所以 P2 专门把 `course_sessions` 接进备份：导表映射 + 备份格式版本 + 1（老备份兼容）+
+导入时**重新播种**（备份导入走 DAO 不是 Repository，三列镜像可能与 sessions 不一致，导入后要重播种）。
+
+### 五、关键变更文件（本轮）
+
+| 文件 | 改动 |
+|---|---|
+| `feature/timetable/presentation/edit/CourseEditUiState.kt` | **重写** —— 新增 `SessionEditState`；`CourseEditUiState` 加 `sessions: List<SessionEditState>`，删掉全局的 `dayOfWeek/mode/startMinutes/endMinutes/startPeriodIndex/endPeriodIndex`；`isValid` 改成「名称非空 && 至少一课时 && 每课时合法」 |
+| `feature/timetable/presentation/edit/CourseEditViewModel.kt` | **重写** —— `initialize` 摊课时 / `addSession` / `removeSession` / `updateSession` / 逐字段更新 / 整门课一次性 `save` / 冲突回写到具体课时 / 保存后重排提醒 |
+| `feature/timetable/presentation/edit/CourseEditScreen.kt` | **重写** —— 时间区块下沉成课时列表（折叠摘要 + 展开编辑 + 行内错误 + 右上「＋ 添加课时」） |
+| `service/reminder/CourseReminderRescheduler.kt`（新） | 课程提醒重排的接口 + 默认实现（取当前学期的课程 + 学期开始日期） |
+| `service/reminder/ReminderModule.kt`（新） | Hilt 绑定 |
+| `service/reminder/CourseReminderScheduler.kt` | `Context` 加 `@ApplicationContext`（之前没有调用方，缺这个限定符一直没暴露） |
+| `core/database/Migration_19_20.kt` | 修一个 P1 留下的乱码字符（「只有**一**个课时的课」） |
+| `feature/timetable/data/repository/FakeTimetableRepository.kt`（test） | 支持学期（`seedSemester`）+ `lastUpserted`（断言「整门课一次性提交」） |
+
+### 六、验证结果
+
+| 项 | 值 |
+|---|---|
+| JVM 回归 | `gradlew :app:assembleDebug :app:testDebugUnitTest` → **BUILD SUCCESSFUL**，**1266 个 JVM 单测 / 129 套件 / 0 失败 / 0 错误 / 0 跳过**（改造前 1249 + 本轮新增 17） |
+| 新增测试 | `CourseEditViewModelTest` 17 例：默认课时 / 增删改 / 选第 N 节同步分钟 / 时间非法行内报错 / **不能删到最后一条** / mode 反推三种 / 每课时各自记 mode / 整门课一次性提交 / 删课后只提交剩下的 / **冲突回写到具体课时** / 内部重叠回写 / 保存后重排提醒 / 课程不存在 |
+| instrumented | `:app:connectedDebugAndroidTest` @ AVD `pm_ui36`（API 36）→ 87 例，**3 例失败** |
+| 3 例失败的性质 | `DailyAutoBackupWorkerTest.safHappyPathWritesZipAndUpdatesTimestamp`（AVD DownloadsProvider 不可写）+ `AccountSwitcherBarTest` 两条 chip 选中态断言 —— **与本轮无关**：把本轮改动 `git stash` 后在同一台模拟器上重跑，**同样这 3 条红**（改造前后一致），属既有失败 |
+| 真机 UI（`pm_ui36` + `uiautomator dump`） | 编辑页文本节点：`课程名称* / 上课时间 / 添加课时 / 周一 08:00-09:40 第1节 / 收起 / 星期 周一…周五 / 时段（HH:mm）/ 选第 N 节 / 开始节 第1节 08:00-08:45 … / 结束节 … / 上课地点 / 授课教师 / 颜色 / 新增课程`；logcat 无 FATAL EXCEPTION |
+| 真机交互 | 点「＋ 添加课时」→ 页面出现**第二个**课时行（各自的星期 chip / 模式 / 开始节），互不干扰 ✅ |
+
+### 七、设计判断与偏差（诚实记录）
+
+1. **`isValid` 保留了一条旧规则**：规格写的是「名称非空 && 至少一课时 && 每课时合法」，
+   实现里额外保留了「**新建时学期不能为空**」（旧版就有这条）。删掉它会让「没学期也能建课」，
+   而没学期的课在课表观察流里根本查不到 —— 等于建了个看不见的课。**这一条是刻意保留的既有行为。**
+2. **分钟数是权威值，index 只是选择器**（见上文「mode 反推放宽」后的说明）。
+   规格描述的「落库前按 index 翻译成 minutes」是在**用户点选那一刻**做的，不是保存那一刻 ——
+   效果等价，但不会静默改时间。
+3. **`SessionEditState.id` 对新课时都是 0**（还没落库），所以 ViewModel 的增删改
+   **按列表下标**定位，不按 id —— 否则两个新课时没法区分。
+4. **「＋ 添加课时」默认给的是「周一 / 第 1-2 节」**（= 08:00-09:40），与旧编辑页的默认值一致；
+   规格里写的「第 1 节」指的是开始节。
+5. **冲突提示里同门课内部重叠会让两行都标红**（规格只写了「后一个课时」）；
+   两行都标才不会让用户只改掉一行、结果还是撞。
+6. `CourseReminderScheduler` 补了 `@ApplicationContext` —— 之前它没有调用方，
+   缺限定符这件事一直没被 Dagger 检出来；接上调用方后立刻暴露。
+
+### 八、遗留风险 / 未做
+
+- **冲突时没有「强制保存」入口**：旧的 `save(force = true)` 通路仍在，但编辑页 UI 没接
+  「仍然保存」按钮 —— 撞了就是不让存。想放行得改代码。
+- **`removeSession` 按下标定位**：如果 UI 层在同一次 composition 里先删后改，下标会错位
+  （Compose 每次都是新快照，实际不会错位，但这是约定不是保证）。
+- **提醒重排的口径是「当前学期」**：编辑的是别的学期的课时时，重排的是当前学期的闹钟 ——
+  跟 `rescheduleAll` 既有签名（一个 `semesterStartMillis`）一致，但「跨学期同时排」做不到。
+- **instrumented 那 3 条既有失败没修**（备份 + 账号切换条，都不在本轮范围），
+  但它们让 `:app:connectedDebugAndroidTest` 整体是红的 —— 已用 stash 基线复跑证明与本轮无关。
+- 备份 / 日历 / 提醒三处的改动是 P1~P6 落的，本轮只补了「提醒没有调用方」这一处；
+  日历与备份本轮没有再动。
+
+### 九、本轮 commit
+
+| # | SHA | 类型 | 内容 |
+|---|---|---|---|
+| 1 | 本 commit | feat(timetable) | 课程编辑页改为整门课多课时列表，课时可独立增删改（P7） |
+| 2 | 本 commit | docs(dev_log) | 台账补课表一课多课时改造（P8） |
