@@ -145,5 +145,8 @@ class CalendarCourseMappersTest {
         sessionStartTime = startTime,
         sessionEndTime = endTime,
         sessionSortOrder = 0,
+        // Phase 28 P10：课时自己的教师 / 地点（这里跟课程级一致，等价于迁移后的回填结果）
+        sessionTeacher = course.teacher,
+        sessionLocation = course.location,
     )
 }

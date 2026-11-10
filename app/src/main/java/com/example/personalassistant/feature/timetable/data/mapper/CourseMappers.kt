@@ -73,6 +73,10 @@ fun CourseEntity.toDomainWithSessions(sessions: List<CourseSessionEntity>): Cour
                 startTime = startTime,
                 endTime = endTime,
                 sortOrder = 0,
+                // Phase 28 P10：兜底课时代表的就是「这门课的那个时段」，
+                // 教师 / 地点自然跟课程本体一致
+                teacher = teacher,
+                location = location,
             ),
         )
     }
@@ -92,6 +96,9 @@ fun CourseSessionEntity.toDomain(): CourseSession = CourseSession(
     startTime = startTime,
     endTime = endTime,
     sortOrder = sortOrder,
+    // Phase 28 P10：课时自己的教师 / 地点（空串 = 沿用课程级）
+    teacher = teacher,
+    location = location,
 )
 
 /**
@@ -106,6 +113,9 @@ fun CourseWithSessionRow.toDomainSession(): CourseSession = CourseSession(
     startTime = sessionStartTime,
     endTime = sessionEndTime,
     sortOrder = sessionSortOrder,
+    // Phase 28 P10：JOIN 出来的课时自带教师 / 地点
+    teacher = sessionTeacher,
+    location = sessionLocation,
 )
 
 fun CourseSession.toEntity(): CourseSessionEntity = CourseSessionEntity(
@@ -115,6 +125,8 @@ fun CourseSession.toEntity(): CourseSessionEntity = CourseSessionEntity(
     startTime = startTime,
     endTime = endTime,
     sortOrder = sortOrder,
+    teacher = teacher,
+    location = location,
 )
 
 fun SemesterEntity.toDomain(): Semester = Semester(

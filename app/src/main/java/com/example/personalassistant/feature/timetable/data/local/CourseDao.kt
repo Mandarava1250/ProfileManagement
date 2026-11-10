@@ -83,7 +83,9 @@ interface CourseDao {
                s.dayOfWeek AS sessionDayOfWeek,
                s.startTime AS sessionStartTime,
                s.endTime AS sessionEndTime,
-               s.sortOrder AS sessionSortOrder
+               s.sortOrder AS sessionSortOrder,
+               s.teacher AS sessionTeacher,
+               s.location AS sessionLocation
         FROM courses c
         INNER JOIN course_sessions s ON s.courseId = c.id
         WHERE s.dayOfWeek = :dayOfWeek
@@ -106,7 +108,9 @@ interface CourseDao {
                s.dayOfWeek AS sessionDayOfWeek,
                s.startTime AS sessionStartTime,
                s.endTime AS sessionEndTime,
-               s.sortOrder AS sessionSortOrder
+               s.sortOrder AS sessionSortOrder,
+               s.teacher AS sessionTeacher,
+               s.location AS sessionLocation
         FROM courses c
         INNER JOIN course_sessions s ON s.courseId = c.id
         WHERE s.dayOfWeek IN (:days)

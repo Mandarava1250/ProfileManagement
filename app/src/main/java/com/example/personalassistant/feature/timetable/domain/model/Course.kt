@@ -76,6 +76,9 @@ data class Course(
      *
      * ⚠️ 这条兜底很重要：一门课在课表上必须至少占一个格子，
      * 「没有课时」不能让整门课从课表上消失。
+     *
+     * Phase 28 P10：兜底出来的课时**带上课程级的教师 / 地点** ——
+     * 它代表的本来就是「这门课的那个时段」，教师地点自然跟课程本体一致。
      */
     val effectiveSessions: List<CourseSession>
         get() = sessions.ifEmpty {
@@ -86,6 +89,8 @@ data class Course(
                     startTime = startTime,
                     endTime = endTime,
                     sortOrder = 0,
+                    teacher = teacher,
+                    location = location,
                 ),
             )
         }

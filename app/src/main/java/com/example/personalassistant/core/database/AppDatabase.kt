@@ -51,7 +51,7 @@ import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
  *
  * ⚠️ 升版时必须同步：本常量 + 新 Migration + `BackupFormatVersion.DB_VERSION`。
  */
-const val APP_DATABASE_VERSION = 20
+const val APP_DATABASE_VERSION = 21
 
 /**
  * App 主数据库
@@ -133,6 +133,8 @@ const val APP_DATABASE_VERSION = 20
     // + 新建 coin_pool_settlements（每日结算流水，accountId+date 唯一）。
     // v20（Phase 28 P1 课表一课多课时）：新建 course_sessions（课时表，courseId 外键 → courses）。
     // courses 表**结构不动** —— 它的 dayOfWeek/startTime/endTime 变成「主时段镜像」。
+    // v21（Phase 28 P10 教师/地点下沉到课时）：course_sessions 加 teacher / location 两列
+    // （空串 = 沿用课程级），并把课程级的值回填进存量课时。
     version = APP_DATABASE_VERSION,
     exportSchema = true
 )
@@ -183,6 +185,7 @@ abstract class AppDatabase : RoomDatabase() {
                 MIGRATION_17_18,
                 MIGRATION_18_19,
                 MIGRATION_19_20,
+                MIGRATION_20_21,
             )
     }
 }

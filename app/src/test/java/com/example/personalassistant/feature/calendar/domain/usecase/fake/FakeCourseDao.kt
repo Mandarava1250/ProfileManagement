@@ -104,6 +104,9 @@ class FakeCourseDao : CourseDao {
         sessionStartTime = startTime,
         sessionEndTime = endTime,
         sessionSortOrder = 0,
+        // Phase 28 P10：课时自己的教师 / 地点（这里跟课程级一致）
+        sessionTeacher = teacher,
+        sessionLocation = location,
     )
 
     /** 性能优化：一次拿多个 dayOfWeek 的课程（与真 DAO 的 IN 查询语义一致）。 */

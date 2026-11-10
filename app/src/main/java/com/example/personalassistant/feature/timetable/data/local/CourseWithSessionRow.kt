@@ -26,4 +26,8 @@ data class CourseWithSessionRow(
     val sessionEndTime: Int,
     /** 课时在课程内的顺序（0 起） */
     val sessionSortOrder: Int,
+    /** 课时的授课教师（空串 = 沿用课程级；Phase 28 P10） */
+    val sessionTeacher: String,
+    /** 课时的上课地点（空串 = 沿用课程级；Phase 28 P10） */
+    val sessionLocation: String,
 )

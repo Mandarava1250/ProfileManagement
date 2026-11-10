@@ -79,4 +79,24 @@ data class CourseSessionEntity(
     /** 当天分钟数，0-1439 */
     @ColumnInfo(name = "endTime")
     val endTime: Int,
+
+    /**
+     * 这个课时自己的授课教师；**空串 = 沿用课程级的**（Phase 28 P10）
+     *
+     * ⚠️ `defaultValue = "''"` 必须与
+     * [com.example.personalassistant.core.database.Migration_20_21] 里的
+     * `ADD COLUMN teacher TEXT NOT NULL DEFAULT ''` **逐字一致** ——
+     * Room 2.6 的列比对是**双向**的：数据库有 DEFAULT 而实体没声明，同样算不匹配，
+     * 运行期直接抛 `Migration didn't properly handle: course_sessions`。
+     */
+    @ColumnInfo(name = "teacher", defaultValue = "''")
+    val teacher: String = "",
+
+    /**
+     * 这个课时自己的上课地点；**空串 = 沿用课程级的**（Phase 28 P10）
+     *
+     * ⚠️ `defaultValue = "''"` 与迁移里的 `DEFAULT ''` 逐字一致（理由同上）。
+     */
+    @ColumnInfo(name = "location", defaultValue = "''")
+    val location: String = "",
 )
