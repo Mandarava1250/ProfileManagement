@@ -9,6 +9,8 @@ import android.util.Log
 import com.example.personalassistant.core.holiday.usecase.IsHolidayUseCase
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.feature.timetable.domain.model.CourseSession
+import com.example.personalassistant.feature.timetable.domain.model.resolvedLocation
+import com.example.personalassistant.feature.timetable.domain.model.resolvedTeacher
 import com.example.personalassistant.navigation.DeepLinks
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.runBlocking
@@ -125,8 +127,9 @@ class CourseReminderScheduler @Inject constructor(
             sessionIndex = sessionIndex,
             targetDate = targetDate,
             courseName = course.name,
-            teacher = course.teacher,
-            location = course.location,
+            // Phase 28 P10：通知里的教师 / 地点用**这个课时**的值（没有就回落课程级）
+            teacher = session.resolvedTeacher(course.teacher),
+            location = session.resolvedLocation(course.location),
             reminderMinutes = course.reminderMinutes,
         )
 

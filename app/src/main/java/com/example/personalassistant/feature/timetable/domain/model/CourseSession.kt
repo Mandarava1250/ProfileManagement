@@ -82,22 +82,29 @@ data class CourseSession(
 }
 
 /**
- * 这个课时的**授课教师**（空 → 回落课程级）
+ * 「课时自己的值优先，空的回落课程级」—— **唯一**的实现处
  *
- * ## 为什么要有这个函数
- *
- * 「课时自己的教师优先，空的沿用课程级」这条规则**必须只有一处实现**：
- * 渲染层（课表格子 / 时间线 / 日程流 / 月视图标签 / 提醒通知）和编辑页
- * 都走它 —— 两处各写一遍 `ifBlank` 的话，早晚有一处忘了回落，
+ * 渲染层（课表格子 / 时间线 / 日程流 / 提醒通知）和编辑页都走这里。
+ * 两处各写一遍 `ifBlank` 的话，早晚有一处忘了回落，
  * 用户就会看到「有的地方显示张三，有的地方空白」。
  *
- * @param course 这门课（提供课程级的默认值）
+ * @param own 课时自己的值
+ * @param courseLevel 课程级的默认值
  */
-fun CourseSession.resolvedTeacher(course: Course): String = teacher.ifBlank { course.teacher }
+fun resolveSessionMeta(own: String, courseLevel: String): String = own.ifBlank { courseLevel }
+
+/**
+ * 这个课时的**授课教师**（空 → 回落课程级）
+ *
+ * @param courseTeacher 课程级的教师（课时的值为空时用它）
+ */
+fun CourseSession.resolvedTeacher(courseTeacher: String): String = resolveSessionMeta(teacher, courseTeacher)
 
 /**
  * 这个课时的**上课地点**（空 → 回落课程级）
  *
  * 口径同 [resolvedTeacher]。
+ *
+ * @param courseLocation 课程级的地点（课时的值为空时用它）
  */
-fun CourseSession.resolvedLocation(course: Course): String = location.ifBlank { course.location }
+fun CourseSession.resolvedLocation(courseLocation: String): String = resolveSessionMeta(location, courseLocation)

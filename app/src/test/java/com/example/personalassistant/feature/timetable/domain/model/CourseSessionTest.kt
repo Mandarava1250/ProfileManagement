@@ -7,6 +7,7 @@ import org.junit.Test
 
 /**
  * Phase 28 P1：CourseSession 的参数校验与区间相交判断
+ * Phase 28 P10：课时的教师 / 地点与「回落课程级」规则
  */
 class CourseSessionTest {
 
@@ -17,6 +18,8 @@ class CourseSessionTest {
         startTime: Int = 8 * 60,
         endTime: Int = 9 * 60 + 40,
         sortOrder: Int = 0,
+        teacher: String = "",
+        location: String = "",
     ) = CourseSession(
         id = id,
         courseId = courseId,
@@ -24,6 +27,8 @@ class CourseSessionTest {
         startTime = startTime,
         endTime = endTime,
         sortOrder = sortOrder,
+        teacher = teacher,
+        location = location,
     )
 
     // ===== init 校验 =====
@@ -136,10 +141,42 @@ class CourseSessionTest {
         assertTrue(a.overlaps(b))
     }
 
+    // ===== Phase 28 P10：教师 / 地点的回落规则 =====
+
+    @Test
+    fun `课时教师为空时回落课程级`() {
+        val s = session(teacher = "")
+        assertEquals("李老师", s.resolvedTeacher("李老师"))
+    }
+
+    @Test
+    fun `课时自己有教师时用自己的`() {
+        val s = session(teacher = "外教 Tom")
+        assertEquals("外教 Tom", s.resolvedTeacher("李老师"))
+    }
+
+    @Test
+    fun `课时地点为空时回落课程级`() {
+        val s = session(location = "")
+        assertEquals("教三 201", s.resolvedLocation("教三 201"))
+    }
+
+    @Test
+    fun `课时自己有地点时用自己的`() {
+        val s = session(location = "外教楼 301")
+        assertEquals("外教楼 301", s.resolvedLocation("教三 201"))
+    }
+
+    @Test
+    fun `课程级也为空时回落成空串`() {
+        val s = session(teacher = "", location = "")
+        assertEquals("", s.resolvedTeacher(""))
+        assertEquals("", s.resolvedLocation(""))
+    }
+
     // ===== helpers =====
 
-    private fun assertThrowsIllegalArgument(block: () -> Unit) {
-        try {
+    private fun assertThrowsIllegalArgument(block: () -> Unit) {        try {
             block()
             throw AssertionError("期望抛出 IllegalArgumentException，但没有抛")
         } catch (e: IllegalArgumentException) {

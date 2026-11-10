@@ -12,6 +12,7 @@ import com.example.personalassistant.feature.profile.data.local.UserProfileEntit
 import com.example.personalassistant.feature.task.data.local.TagEntity
 import com.example.personalassistant.feature.task.data.local.TaskEntity
 import com.example.personalassistant.feature.timetable.data.local.CourseEntity
+import com.example.personalassistant.feature.timetable.data.local.CourseSessionEntity
 import com.example.personalassistant.feature.timetable.data.local.SemesterEntity
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
@@ -263,6 +264,55 @@ class BackupLegacyCompatTest {
 
         assertNotNull(rows)
         assertTrue(rows.isEmpty())
+    }
+
+    // ---------- Phase 28 P10：v3 老备份的课时候没有 teacher / location ----------
+
+    /**
+     * v3 的备份里课时没有 `teacher` / `location` 两列（备份格式 v4 才加的）。
+     * 解码端必须用属性默认值（空串）兜住 —— 空串正好等于「沿用课程级」，
+     * 老备份导入后的显示与改造前完全一致。
+     */
+    @Test
+    fun `v3 老备份的课时缺 teacher 与 location 时解出空串`() {
+        val v3Sessions = "[{\"id\":1,\"courseId\":1,\"sortOrder\":0," +
+            "\"dayOfWeek\":1,\"startTime\":480,\"endTime\":570}]"
+
+        val decoded = decodeList(v3Sessions, ListSerializer(CourseSessionEntity.serializer()))
+
+        assertEquals(1, decoded.size)
+        assertEquals("缺 teacher 时应解成空串（= 沿用课程级）", "", decoded[0].teacher)
+        assertEquals("缺 location 时应解成空串（= 沿用课程级）", "", decoded[0].location)
+        // 其余字段照常解出来
+        assertEquals(1L, decoded[0].courseId)
+        assertEquals(480, decoded[0].startTime)
+    }
+
+    /**
+     * v4 的备份里课时带着 `teacher` / `location` —— 往返不能丢。
+     */
+    @Test
+    fun `v4 备份的课时教师与地点能 round-trip`() {
+        val session = CourseSessionEntity(
+            id = 1L,
+            courseId = 1L,
+            sortOrder = 0,
+            dayOfWeek = 1,
+            startTime = 480,
+            endTime = 570,
+            teacher = "外教 Tom",
+            location = "外教楼 301",
+        )
+
+        val text = backupJson.encodeToString(
+            ListSerializer(CourseSessionEntity.serializer()),
+            listOf(session),
+        )
+        val decoded = decodeList(text, ListSerializer(CourseSessionEntity.serializer()))
+
+        assertEquals(1, decoded.size)
+        assertEquals("外教 Tom", decoded[0].teacher)
+        assertEquals("外教楼 301", decoded[0].location)
     }
 
     // ---------- 表清单不变量 ----------

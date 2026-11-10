@@ -35,6 +35,8 @@ import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.core.ui.theme.LocalAppSurfaces
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.timetable.domain.model.Course
+import com.example.personalassistant.feature.timetable.domain.model.resolvedLocation
+import com.example.personalassistant.feature.timetable.domain.model.resolvedTeacher
 // Phase 28：时间线上画的也是「课时块」（一门课的一个课时）。
 // 别名导入的原因同 TimetableGrid：本包里已有一个同名的 `CourseSlot`（布局结果类）。
 import com.example.personalassistant.feature.timetable.presentation.CourseSlot as Slot
@@ -242,7 +244,10 @@ private fun TimelineCourseRow(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                if (course.location.isNotBlank()) {
+                // Phase 28 P10：地点 / 教师用**这个课时**的值（没有就回落课程级）
+                val sessionLocation = session.resolvedLocation(course.location)
+                val sessionTeacher = session.resolvedTeacher(course.teacher)
+                if (sessionLocation.isNotBlank()) {
                     Row(
                         modifier = Modifier.padding(top = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -255,13 +260,13 @@ private fun TimelineCourseRow(
                         )
                         Spacer(Modifier.width(AppSpacing.xxs))
                         Text(
-                            text = course.location,
+                            text = sessionLocation,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-                if (course.teacher.isNotBlank()) {
+                if (sessionTeacher.isNotBlank()) {
                     Row(
                         modifier = Modifier.padding(top = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -274,7 +279,7 @@ private fun TimelineCourseRow(
                         )
                         Spacer(Modifier.width(AppSpacing.xxs))
                         Text(
-                            text = course.teacher,
+                            text = sessionTeacher,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

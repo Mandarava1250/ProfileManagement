@@ -110,7 +110,12 @@ class CourseEditViewModel @Inject constructor(
                         teacher = course.teacher,
                         location = course.location,
                         sessions = course.effectiveSessions.map { session ->
-                            sessionStateOf(session, timeSlots)
+                            sessionStateOf(
+                                session = session,
+                                schedule = timeSlots,
+                                courseTeacher = course.teacher,
+                                courseLocation = course.location,
+                            )
                         },
                         semester = course.semester ?: currentSem?.name.orEmpty(),
                         weeks = course.weeks.orEmpty(),
@@ -133,8 +138,33 @@ class CourseEditViewModel @Inject constructor(
         it.copy(name = v, nameError = null, errorMessage = null)
     }
 
-    fun updateTeacher(v: String) = _uiState.update { it.copy(teacher = v) }
-    fun updateLocation(v: String) = _uiState.update { it.copy(location = v) }
+    fun updateTeacher(v: String) = _uiState.update { state ->
+        state.copy(
+            teacher = v,
+            // Phase 28 P10：**只**更新那些没单独设置过的课时。
+            //
+            // 「没单独设置过」= 值为空 **或** 值等于**旧的**课程级教师 ——
+            // 后者是上一次改课程级教师时被自动填进去的，不是用户单独指定的。
+            //
+            // 只判「值为空」会出事：第一次改课程级教师时，空值课时被填成新值；
+            // 第二次再改，它们已经非空，就被误判成「用户单独指定过」，
+            // 从此不再跟着课程级走 —— 值被永久钉死，载入时的归一化也救不回来。
+            sessions = state.sessions.map { s ->
+                if (s.teacher.isBlank() || s.teacher == state.teacher) s.copy(teacher = v) else s
+            },
+        )
+    }
+
+    fun updateLocation(v: String) = _uiState.update { state ->
+        state.copy(
+            location = v,
+            // 口径同 [updateTeacher]
+            sessions = state.sessions.map { s ->
+                if (s.location.isBlank() || s.location == state.location) s.copy(location = v) else s
+            },
+        )
+    }
+
     fun updateColorIndex(v: Int) = _uiState.update { it.copy(colorIndex = v) }
     fun updateSemester(v: String) = _uiState.update { it.copy(semester = v) }
     fun updateWeeks(v: String) = _uiState.update { it.copy(weeks = v) }
@@ -160,10 +190,24 @@ class CourseEditViewModel @Inject constructor(
      * 追加一个默认课时（周一 / 第 1 节），并**自动展开**
      *
      * 展开是为了让用户一进来就看到「刚加的这条长什么样」，不用再点一下。
+     *
+     * ## 教师 / 地点：继承前一个课时（Phase 28 P10）
+     *
+     * 一门课通常几个课时都同一个老师同一个教室 —— 新加的课时直接继承**前一个课时**
+     * 的值，用户就不用再抄一遍。没有前一个课时时（新建课程的第一条）继承课程级的。
+     *
+     * 继承的是**原始值**（不是回落后的）：前一个课时的值是空串（沿用课程级），
+     * 新课时也是空串 —— 这样「继承课程级」这件事不会被悄悄变成「单独指定」。
      */
     fun addSession() {
         _uiState.update { state ->
-            val session = defaultSession(state.availableTimeSlots, expanded = true)
+            val previous = state.sessions.lastOrNull()
+            val session = defaultSession(
+                schedule = state.availableTimeSlots,
+                expanded = true,
+                teacher = previous?.teacher ?: state.teacher,
+                location = previous?.location ?: state.location,
+            )
             state.copy(
                 sessions = state.sessions + session,
                 errorMessage = null,
@@ -203,6 +247,16 @@ class CourseEditViewModel @Inject constructor(
     /** 通用改法：直接替换 **localKey** 指定课时的编辑态 */
     fun updateSession(localKey: Long, transform: (SessionEditState) -> SessionEditState) =
         mutateSession(localKey) { session, _ -> transform(session) }
+
+    /** 改某个课时**自己**的授课教师（清空 = 回到「沿用课程级」） */
+    fun updateSessionTeacher(localKey: Long, value: String) = mutateSessionMeta(localKey) { session ->
+        session.copy(teacher = value)
+    }
+
+    /** 改某个课时**自己**的上课地点（清空 = 回到「沿用课程级」） */
+    fun updateSessionLocation(localKey: Long, value: String) = mutateSessionMeta(localKey) { session ->
+        session.copy(location = value)
+    }
 
     /** 改星期几 */
     fun updateSessionDay(localKey: Long, dayOfWeek: Int) = mutateSession(localKey) { session, _ ->
@@ -377,8 +431,35 @@ class CourseEditViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 改 **localKey** 指定课时的**教师 / 地点**（不动排课）
+     *
+     * 与 [mutateSession] 分开：教师 / 地点跟时间冲突没关系 ——
+     * 不该因为改了个名字就把「仍然保存」对话框的结论作废掉。
+     */
+    private fun mutateSessionMeta(
+        localKey: Long,
+        transform: (SessionEditState) -> SessionEditState,
+    ) {
+        _uiState.update { state ->
+            val target = state.sessions.indexOfFirst { it.localKey == localKey }
+            if (target < 0) return@update state
+            val current = state.sessions[target]
+            val updated = transform(current)
+            if (updated == current) return@update state
+            val list = state.sessions.toMutableList()
+            list[target] = updated
+            state.copy(sessions = list)
+        }
+    }
+
     /** 新建课程 / 「＋ 添加课时」用的默认课时：周一 / 第 1 节 */
-    private fun defaultSession(schedule: TimeSlotSchedule, expanded: Boolean): SessionEditState {
+    private fun defaultSession(
+        schedule: TimeSlotSchedule,
+        expanded: Boolean,
+        teacher: String = "",
+        location: String = "",
+    ): SessionEditState {
         val first = schedule.periods.firstOrNull()
         val second = schedule.periods.getOrNull(1) ?: first
         return SessionEditState(
@@ -391,6 +472,8 @@ class CourseEditViewModel @Inject constructor(
             startPeriodIndex = first?.index ?: 1,
             endPeriodIndex = second?.index ?: 2,
             expanded = expanded,
+            teacher = teacher,
+            location = location,
         )
     }
 
@@ -407,7 +490,12 @@ class CourseEditViewModel @Inject constructor(
      *
      * 分钟数始终按库里的原值保留（[SessionEditState] 的注释解释了为什么）。
      */
-    private fun sessionStateOf(session: CourseSession, schedule: TimeSlotSchedule): SessionEditState {
+    private fun sessionStateOf(
+        session: CourseSession,
+        schedule: TimeSlotSchedule,
+        courseTeacher: String,
+        courseLocation: String,
+    ): SessionEditState {
         val startPeriod = schedule.periods.firstOrNull { it.startMinutes == session.startTime }
         val endPeriod = schedule.periods.firstOrNull { it.endMinutes == session.endTime }
         val lastIndex = schedule.periods.lastOrNull()?.index ?: 1
@@ -421,8 +509,32 @@ class CourseEditViewModel @Inject constructor(
             startPeriodIndex = startPeriod?.index ?: 1,
             endPeriodIndex = (endPeriod?.index ?: (startPeriod?.index ?: 1) + 1).coerceAtMost(lastIndex),
             expanded = false,
+            teacher = session.teacher.normalizedAgainst(courseTeacher),
+            location = session.location.normalizedAgainst(courseLocation),
         )
     }
+
+    /**
+     * 把「值等于课程级」的课时值**归一化回空串**（Phase 28 P10）
+     *
+     * ## 为什么
+     *
+     * 迁移（[com.example.personalassistant.core.database.Migration_20_21]）会把课程级的
+     * 教师 / 地点**回填**进每条课时 —— 于是迁移后的课时全都「看起来有自己的教师」。
+     * 但那份值跟课程级一模一样，语义上它**不是**用户单独指定的。
+     *
+     * 不归一化的话，用户改课程级教师时，这些课时（值非空）会被判成「单独设置过」
+     * 而不跟着变 —— 用户明明没给它们单独指定过，却看到它们纹丝不动。
+     *
+     * 归一化之后：
+     * - 值与课程级相同 → 当作「没单独设置」→ 空串 → 跟着课程级走
+     * - 值与课程级不同 → 是真的单独指定过 → 保留
+     *
+     * 代价：用户给某个课时填了**恰好等于课程级**的值，语义上分不出来 ——
+     * 但那种情况下两种解释的显示结果完全一样，分不出来也没关系。
+     */
+    private fun String.normalizedAgainst(courseLevel: String): String =
+        if (isNotEmpty() && this != courseLevel) this else ""
 
     /** 时间的本地校验（就近显示在行内） */
     private fun validateTimes(start: Int, end: Int): String? = when {

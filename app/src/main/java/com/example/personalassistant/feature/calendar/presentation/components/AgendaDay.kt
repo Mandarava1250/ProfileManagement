@@ -3,6 +3,8 @@ package com.example.personalassistant.feature.calendar.presentation.components
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.calendar.domain.model.DayDetail
 import com.example.personalassistant.feature.calendar.domain.util.sessionsOn
+import com.example.personalassistant.feature.timetable.domain.model.resolvedLocation
+import com.example.personalassistant.feature.timetable.domain.model.resolvedTeacher
 
 /**
  * 日程流的一行。
@@ -106,7 +108,11 @@ fun buildAgendaDay(dayDetail: DayDetail): AgendaDay {
                 kind = AgendaKind.COURSE,
                 title = course.name,
                 timeText = DateUtils.formatMinutesOfDay(session.startTime),
-                subtitle = listOfNotNull(course.location, course.teacher)
+                // Phase 28 P10：地点 / 教师用**这个课时**的值（没有就回落课程级）
+                subtitle = listOfNotNull(
+                    session.resolvedLocation(course.location).ifBlank { null },
+                    session.resolvedTeacher(course.teacher).ifBlank { null },
+                )
                     .joinToString(" · ")
                     .ifBlank { null },
                 color = course.color,

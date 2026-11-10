@@ -23,10 +23,14 @@ class CourseTest {
         endTime: Int = 9 * 60 + 45,
         semester: String? = "2024-2025-1",
         weeks: String? = null,
+        teacher: String = "",
+        location: String = "",
         sessions: List<CourseSession> = emptyList(),
     ) = Course(
         id = id,
         name = name,
+        teacher = teacher,
+        location = location,
         dayOfWeek = dayOfWeek,
         startTime = startTime,
         endTime = endTime,
@@ -184,6 +188,16 @@ class CourseTest {
         assertEquals(2, c.effectiveSessions.size)
         assertEquals(1, c.effectiveSessions[0].dayOfWeek)
         assertEquals(3, c.effectiveSessions[1].dayOfWeek)
+    }
+
+    // ===== Phase 28 P10：兜底课时的教师 / 地点 =====
+
+    @Test
+    fun `effectiveSessions 兜底出来的课时带上课程级的教师与地点`() {
+        val c = course(teacher = "李老师", location = "教三 201")
+        val s = c.effectiveSessions[0]
+        assertEquals("兜底课时的教师应跟课程级一致", "李老师", s.teacher)
+        assertEquals("兜底课时的地点应跟课程级一致", "教三 201", s.location)
     }
 
     @Test

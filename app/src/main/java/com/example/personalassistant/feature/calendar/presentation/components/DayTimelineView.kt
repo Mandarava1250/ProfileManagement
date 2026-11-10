@@ -41,6 +41,7 @@ import com.example.personalassistant.feature.calendar.domain.util.sessionsOn
 import com.example.personalassistant.feature.task.domain.model.Task
 import com.example.personalassistant.feature.task.domain.model.TaskPriority
 import com.example.personalassistant.feature.timetable.domain.model.Course
+import com.example.personalassistant.feature.timetable.domain.model.resolvedLocation
 import java.time.Instant
 import java.time.ZoneId
 
@@ -229,7 +230,8 @@ internal fun buildTimelineBlocks(
                     "course-${course.id}"
                 },
                 title = course.name,
-                subtitle = course.location.takeIf { it.isNotBlank() },
+                // Phase 28 P10：地点用**这个课时**的值（没有就回落课程级）
+                subtitle = session.resolvedLocation(course.location).takeIf { it.isNotBlank() },
                 startMinute = session.startTime,
                 endMinute = session.endTime,
                 color = Color(course.color),

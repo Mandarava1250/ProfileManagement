@@ -38,6 +38,8 @@ import com.example.personalassistant.core.ui.theme.LocalAppColors
 import com.example.personalassistant.core.utils.DateUtils
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.feature.timetable.domain.model.TimeSlotSchedule
+import com.example.personalassistant.feature.timetable.domain.model.resolvedLocation
+import com.example.personalassistant.feature.timetable.domain.model.resolvedTeacher
 // Phase 28：课表上画的是「课时块」（一门课的一个课时）。
 // 这里用别名导入，是因为本包里已经有一个同名的 `CourseSlot` —— 那是
 // TimetableLayout 里算「块画在哪、多高」用的布局结果类，两者不是一回事。
@@ -289,7 +291,10 @@ private fun DayColumn(
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 2,
                         )
-                        if (course.location.isNotBlank()) {
+                        // Phase 28 P10：地点 / 教师用**这个课时**的值（没有就回落课程级）
+                        val sessionLocation = session.resolvedLocation(course.location)
+                        val sessionTeacher = session.resolvedTeacher(course.teacher)
+                        if (sessionLocation.isNotBlank()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Rounded.LocationOn,
@@ -298,14 +303,14 @@ private fun DayColumn(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Text(
-                                    text = course.location,
+                                    text = sessionLocation,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
                                 )
                             }
                         }
-                        if (course.teacher.isNotBlank()) {
+                        if (sessionTeacher.isNotBlank()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Rounded.Person,
@@ -314,7 +319,7 @@ private fun DayColumn(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Text(
-                                    text = course.teacher,
+                                    text = sessionTeacher,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,

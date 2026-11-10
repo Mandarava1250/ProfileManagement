@@ -169,6 +169,9 @@ fun CourseEditScreen(
                     schedule = state.availableTimeSlots,
                     accent = accent,
                     canDelete = state.sessions.size > 1,
+                    // Phase 28 P10：课程级的教师 / 地点 —— 课时没单独设置时回落用
+                    courseTeacher = state.teacher,
+                    courseLocation = state.location,
                     onToggle = { viewModel.toggleSessionExpanded(key) },
                     onDelete = { viewModel.removeSession(key) },
                     onDayChange = { viewModel.updateSessionDay(key, it) },
@@ -177,6 +180,8 @@ fun CourseEditScreen(
                     onEndChange = { viewModel.updateSessionEndMinutes(key, it) },
                     onStartPeriod = { viewModel.updateSessionStartPeriod(key, it) },
                     onEndPeriod = { viewModel.updateSessionEndPeriod(key, it) },
+                    onTeacherChange = { viewModel.updateSessionTeacher(key, it) },
+                    onLocationChange = { viewModel.updateSessionLocation(key, it) },
                 )
                 Spacer(Modifier.height(6.dp))
             }
@@ -352,8 +357,8 @@ fun CourseEditScreen(
 /**
  * 一个课时的行
  *
- * - 折叠态：一行摘要（点一下展开）
- * - 展开态：星期 chip + 时段模式切换 + 起止输入 + 这一行自己的错误
+ * - 折叠态：一行摘要（点一下展开）—— 含时间 + 教师 / 地点
+ * - 展开态：星期 chip + 时段模式切换 + 起止输入 + **教师 / 地点** + 这一行自己的错误
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -362,6 +367,8 @@ private fun SessionRow(
     schedule: TimeSlotSchedule,
     accent: Color,
     canDelete: Boolean,
+    courseTeacher: String,
+    courseLocation: String,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
     onDayChange: (Int) -> Unit,
@@ -370,12 +377,19 @@ private fun SessionRow(
     onEndChange: (Int) -> Unit,
     onStartPeriod: (Int) -> Unit,
     onEndPeriod: (Int) -> Unit,
+    onTeacherChange: (String) -> Unit,
+    onLocationChange: (String) -> Unit,
 ) {
     val dayLabels = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
     val dayLabel = dayLabels.getOrElse(session.dayOfWeek - 1) { "周一" }
     // 折叠摘要里的「第 N 节」：开始时刻命中某一节时才显示
     val periodLabel = schedule.periods.firstOrNull { it.startMinutes == session.startMinutes }
         ?.let { "第${it.index}节" }
+    // Phase 28 P10：摘要里显示**生效**的教师 / 地点（课时的值优先，空的回落课程级）
+    val metaText = listOf(
+        session.resolvedTeacher(courseTeacher),
+        session.resolvedLocation(courseLocation),
+    ).filter { it.isNotBlank() }.joinToString(" · ")
 
     Column(
         modifier = Modifier
@@ -412,6 +426,11 @@ private fun SessionRow(
                     if (periodLabel != null) {
                         append(' ')
                         append(periodLabel)
+                    }
+                    // Phase 28 P10：教师 / 地点跟在时间后面（两个空格分隔）
+                    if (metaText.isNotBlank()) {
+                        append("  ")
+                        append(metaText)
                     }
                 },
                 style = MaterialTheme.typography.bodyMedium,
@@ -499,6 +518,36 @@ private fun SessionRow(
                     onEndChange = onEndPeriod,
                 )
             }
+
+            // ====== 教师 / 地点（Phase 28 P10：每个课时可单独设置）======
+            // 留空 = 沿用课程级的（课程级那两栏在页面下方）
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = session.teacher,
+                onValueChange = onTeacherChange,
+                label = { Text("授课教师") },
+                placeholder = {
+                    Text(if (courseTeacher.isBlank()) "留空 = 不单独指定" else courseTeacher)
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = session.location,
+                onValueChange = onLocationChange,
+                label = { Text("上课地点") },
+                placeholder = {
+                    Text(if (courseLocation.isBlank()) "留空 = 不单独指定" else courseLocation)
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Spacer(Modifier.height(8.dp))
 
             // 这一行自己的错误（冲突 / 时间非法）—— 就近显示在行内
             session.errorMessage?.let {

@@ -108,9 +108,13 @@ class CourseEditViewModelTest {
         startTime: Int = 8 * 60,
         endTime: Int = 8 * 60 + 45,
         semesterName: String? = "2024-2025-1",
+        teacher: String = "",
+        location: String = "",
     ) = Course(
         id = id,
         name = name,
+        teacher = teacher,
+        location = location,
         dayOfWeek = dayOfWeek,
         startTime = startTime,
         endTime = endTime,
@@ -754,5 +758,201 @@ class CourseEditViewModelTest {
         val after = vm.uiState.value.sessions
         assertEquals("不该删掉任何一行", before.size, after.size)
         assertEquals("不该改到任何一行", before, after.map { it.dayOfWeek })
+    }
+
+    // ===== Phase 28 P10：课时的教师 / 地点 =====
+
+    @Test
+    fun `添加课时继承前一个课时的教师与地点`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.addSession()
+        advanceUntilIdle()
+
+        // 给**最后一个**课时单独设教师 / 地点 ——
+        // 再加一个课时时，新课时继承的是 sessions.last()，也就是它
+        val lastKey = vm.keyAt(vm.uiState.value.sessions.lastIndex)
+        vm.updateSessionTeacher(lastKey, "李老师")
+        vm.updateSessionLocation(lastKey, "教三 201")
+        advanceUntilIdle()
+
+        // 再加一个课时 → 继承前一个的
+        vm.addSession()
+        advanceUntilIdle()
+
+        val sessions = vm.uiState.value.sessions
+        assertEquals(3, sessions.size)
+        assertEquals("新课时继承前一个课时的教师", "李老师", sessions[2].teacher)
+        assertEquals("新课时继承前一个课时的地点", "教三 201", sessions[2].location)
+    }
+
+    @Test
+    fun `改课程级教师只填空值课时`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.addSession()
+        advanceUntilIdle()
+
+        // 第二个课时单独设了教师
+        val secondKey = vm.keyAt(1)
+        vm.updateSessionTeacher(secondKey, "王老师")
+        advanceUntilIdle()
+
+        // 改课程级教师
+        vm.updateTeacher("李老师")
+        advanceUntilIdle()
+
+        val sessions = vm.uiState.value.sessions
+        assertEquals("课程级教师改了", "李老师", vm.uiState.value.teacher)
+        assertEquals("空值课时应被填上", "李老师", sessions[0].teacher)
+        assertEquals("已单独设置过的课时保持不变", "王老师", sessions[1].teacher)
+    }
+
+    @Test
+    fun `连续改课程级教师时沿用课程级的课时跟着变`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        // 第一次改课程级教师 → 空值课时被填上
+        vm.updateTeacher("李老师")
+        advanceUntilIdle()
+        assertEquals("第一次改后空值课时应被填上", "李老师", vm.uiState.value.sessions[0].teacher)
+
+        // 第二次改课程级教师 → 这些课时是「跟着课程级」的，必须继续跟着变。
+        // 只判「值为空」的话，它们已经非空了，会被误判成「用户单独指定过」而从此失联。
+        vm.updateTeacher("王老师")
+        advanceUntilIdle()
+        assertEquals("第二次改后应继续跟着课程级", "王老师", vm.uiState.value.sessions[0].teacher)
+    }
+
+    @Test
+    fun `改课程级地点只填空值课时`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.addSession()
+        advanceUntilIdle()
+
+        val secondKey = vm.keyAt(1)
+        vm.updateSessionLocation(secondKey, "操场")
+        advanceUntilIdle()
+
+        vm.updateLocation("教三 201")
+        advanceUntilIdle()
+
+        val sessions = vm.uiState.value.sessions
+        assertEquals("空值课时应被填上", "教三 201", sessions[0].location)
+        assertEquals("已单独设置过的课时保持不变", "操场", sessions[1].location)
+    }
+
+    @Test
+    fun `课时的教师与地点可以单独设置`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+
+        val key = vm.keyAt(0)
+        vm.updateSessionTeacher(key, "李老师")
+        vm.updateSessionLocation(key, "教三 201")
+        advanceUntilIdle()
+
+        val session = vm.uiState.value.sessions[0]
+        assertEquals("李老师", session.teacher)
+        assertEquals("教三 201", session.location)
+    }
+
+    @Test
+    fun `保存时逐课时带上自己的教师与地点`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        val vm = viewModel(repo)
+        vm.initialize(0L)
+        advanceUntilIdle()
+        vm.addSession()
+        advanceUntilIdle()
+
+        val secondKey = vm.keyAt(1)
+        vm.updateSessionTeacher(secondKey, "王老师")
+        vm.updateSessionLocation(secondKey, "操场")
+        vm.updateName("高数")
+        vm.updateSemester(semester.name) // 新建课程时学期必填，缺了 save() 直接返回不落库
+        advanceUntilIdle()
+
+        // 两个课时的默认时段相同（第 1-2 节），会触发同门课内部重叠而被冲突拦下。
+        // 这里 force 保存 —— 本例要验的是「逐课时带上自己的教师与地点」，
+        // 正常保存路径由「保存时整门课一次性提交」那条用例守着。
+        vm.save(force = true)
+        advanceUntilIdle()
+
+        val saved = repo.lastUpserted!!
+        assertEquals(2, saved.sessions.size)
+        assertEquals("第一个课时没单独设置 → 空串（沿用课程级）", "", saved.sessions[0].teacher)
+        assertEquals("第二个课时带自己的教师", "王老师", saved.sessions[1].teacher)
+        assertEquals("第二个课时带自己的地点", "操场", saved.sessions[1].location)
+    }
+
+    @Test
+    fun `载入时值等于课程级的课时归一化成空串`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        // 这门课的课时 teacher / location 跟课程级一样（= 迁移回填后的样子）
+        repo.seedCourse(
+            course(id = 10L, name = "高数", teacher = "李老师", location = "教三 201"),
+        )
+        repo.seedSessions(
+            10L,
+            listOf(
+                CourseSession(
+                    courseId = 10L,
+                    dayOfWeek = 1,
+                    startTime = 8 * 60,
+                    endTime = 9 * 60 + 45,
+                    teacher = "李老师",
+                    location = "教三 201",
+                ),
+            ),
+        )
+        val vm = viewModel(repo)
+        vm.initialize(10L)
+        advanceUntilIdle()
+
+        val session = vm.uiState.value.sessions[0]
+        assertEquals("与课程级相同 → 当作没单独设置", "", session.teacher)
+        assertEquals("与课程级相同 → 当作没单独设置", "", session.location)
+        // 但生效值仍是课程级那份
+        assertEquals("李老师", session.resolvedTeacher(vm.uiState.value.teacher))
+        assertEquals("教三 201", session.resolvedLocation(vm.uiState.value.location))
+    }
+
+    @Test
+    fun `载入时与课程级不同的课时值保留`() = runTest(testDispatcher) {
+        val repo = newRepository()
+        repo.seedCourse(course(id = 10L, name = "高数", teacher = "李老师", location = "教三 201"))
+        repo.seedSessions(
+            10L,
+            listOf(
+                CourseSession(
+                    courseId = 10L,
+                    dayOfWeek = 1,
+                    startTime = 8 * 60,
+                    endTime = 9 * 60 + 45,
+                    teacher = "外教 Tom",
+                    location = "外教楼 301",
+                ),
+            ),
+        )
+        val vm = viewModel(repo)
+        vm.initialize(10L)
+        advanceUntilIdle()
+
+        val session = vm.uiState.value.sessions[0]
+        assertEquals("单独设置过的教师要保留", "外教 Tom", session.teacher)
+        assertEquals("单独设置过的地点要保留", "外教楼 301", session.location)
     }
 }

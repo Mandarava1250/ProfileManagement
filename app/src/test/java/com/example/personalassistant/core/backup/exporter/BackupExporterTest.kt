@@ -104,6 +104,8 @@ class BackupExporterTest {
      *
      * 漏了课时表 = 导出的备份恢复后课程变成「没有课时」，
      * 用户的一门课三个时段会退化成一个。
+     *
+     * Phase 28 P10：课时的教师 / 地点也要跟着进出（备份格式升到 v4）。
      */
     @Test
     fun `export 写出的 course_sessions 内容与输入一致`() {
@@ -115,6 +117,8 @@ class BackupExporterTest {
             dayOfWeek = 3,
             startTime = 600,
             endTime = 690,
+            teacher = "外教 Tom",
+            location = "外教楼 301",
         )
         val outputStream = ByteArrayOutputStream()
         val result = exporter.export(

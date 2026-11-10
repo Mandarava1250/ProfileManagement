@@ -3,6 +3,7 @@ package com.example.personalassistant.feature.timetable.presentation.edit
 import com.example.personalassistant.feature.timetable.domain.model.Course
 import com.example.personalassistant.feature.timetable.domain.model.CourseSession
 import com.example.personalassistant.feature.timetable.domain.model.TimeSlotSchedule
+import com.example.personalassistant.feature.timetable.domain.model.resolveSessionMeta
 
 /**
  * 课程编辑页 UI 状态
@@ -97,6 +98,14 @@ data class CourseEditUiState(
      * - [Course.sessions] = 全部课时（按列表顺序 = sortOrder）
      * - `courses` 表的三列镜像 = **第一个课时**（老数据 / 旧备份没有课时记录时靠它兜底）
      *
+     * ## 课时级的教师 / 地点
+     *
+     * 逐课时带上**自己的**值（空串就写空串）。
+     * 「空串 = 沿用课程级」这条回落规则在**领域层**统一实现
+     * （[com.example.personalassistant.feature.timetable.domain.model.resolvedTeacher]），
+     * 这里不烤进课程级的值 —— 烤进去的话，用户后来改课程级教师，
+     * 这些课时就永远跟着旧值走了。
+     *
      * ⚠️ 调用前请先看 [isValid] —— 非法时间（结束早于开始等）会让
      * [CourseSession] 的 `require` 直接抛异常。
      */
@@ -109,6 +118,8 @@ data class CourseEditUiState(
                 startTime = session.startMinutes,
                 endTime = session.endMinutes,
                 sortOrder = index,
+                teacher = session.teacher.trim(),
+                location = session.location.trim(),
             )
         }
         val first = domainSessions.firstOrNull()
@@ -227,6 +238,19 @@ data class SessionEditState(
     val expanded: Boolean = false,
     /** 这一行自己的错误（冲突 / 时间非法） */
     val errorMessage: String? = null,
+    /**
+     * Phase 28 P10：这个课时**自己**的授课教师
+     *
+     * 空串 = 沿用课程级的（见 [CourseEditUiState.teacher]）。
+     * 输入框留空就是「我不单独指定」—— 折叠摘要里显示的仍是课程级那份。
+     */
+    val teacher: String = "",
+    /**
+     * Phase 28 P10：这个课时**自己**的上课地点
+     *
+     * 空串 = 沿用课程级的（见 [CourseEditUiState.location]）。
+     */
+    val location: String = "",
 ) {
     /** 落库用的分钟区间（见类注释：分钟数是权威值） */
     val effectiveMinutes: Pair<Int, Int> get() = startMinutes to endMinutes
@@ -245,6 +269,27 @@ data class SessionEditState(
  * 每个课时单独一个（多课时后一门课里可能既有按时段的、也有按节的）。
  */
 enum class TimeMode { CLOCK, PERIOD }
+
+/**
+ * 这个课时的**授课教师**（空 → 回落课程级）
+ *
+ * 口径与领域层共用 [resolveSessionMeta] —— 编辑页的折叠摘要
+ * 跟课表上显示的必须是同一个值。
+ *
+ * @param courseTeacher 课程级的教师
+ */
+fun SessionEditState.resolvedTeacher(courseTeacher: String): String =
+    resolveSessionMeta(teacher, courseTeacher)
+
+/**
+ * 这个课时的**上课地点**（空 → 回落课程级）
+ *
+ * 口径同 [resolvedTeacher]。
+ *
+ * @param courseLocation 课程级的地点
+ */
+fun SessionEditState.resolvedLocation(courseLocation: String): String =
+    resolveSessionMeta(location, courseLocation)
 
 /**
  * 课时表里「第 index 节」的起止分钟
