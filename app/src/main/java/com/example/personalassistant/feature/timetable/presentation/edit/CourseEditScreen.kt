@@ -186,27 +186,6 @@ fun CourseEditScreen(
                 Spacer(Modifier.height(6.dp))
             }
 
-            Spacer(Modifier.height(6.dp))
-
-            // ====== 地点 + 教师（紧贴课程名下方）======
-            OutlinedTextField(
-                value = state.location,
-                onValueChange = viewModel::updateLocation,
-                label = { Text("上课地点") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = state.teacher,
-                onValueChange = viewModel::updateTeacher,
-                label = { Text("授课教师") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
             Spacer(Modifier.height(12.dp))
 
             Text("颜色", style = MaterialTheme.typography.titleSmall)
