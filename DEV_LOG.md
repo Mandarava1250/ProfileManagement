@@ -3694,3 +3694,62 @@ Modifier.selectable(selected = selected, enabled = enabled, onClick = onClick)
 - 模拟器：`pm_ui36`（`pm_ui37` 的 surfaceflinger 会崩）。headless 启动时用
   `adb shell settings put global hide_error_dialogs 1` 挡掉 SystemUI 弹的 ANR 对话框。
 
+---
+
+### 📌 Phase 28 P10 —— 课表「授课教师 / 上课地点」下沉到课时（2026-11-10）
+
+伙伴需求：一门课的每个课时能单独设置自己的授课教师与上课地点；「＋ 添加课时」时新课时默认继承前面课时的值。
+
+#### 数据模型
+
+- `courses.teacher` / `courses.location` **语义降级**为「课程级默认值」，列**不删**
+- `course_sessions` 新增 `teacher` / `location` 两列，**空串 = 沿用课程级**
+- 回落规则**唯一实现处** = `CourseSession.kt` 的 `resolveSessionMeta` / `resolvedTeacher` / `resolvedLocation`；
+  课表网格 / 时间轴 / 日历 / 提醒通知 / 编辑页折叠摘要六个出口共用，谁都不许自己写一遍 `ifBlank`
+
+#### 迁移 20→21
+
+- `ALTER TABLE course_sessions ADD COLUMN teacher/location TEXT NOT NULL DEFAULT ''`
+- **`DEFAULT ''` 两个都不能省**：
+  ① SQLite 不允许给已有表加「NOT NULL 且无默认值」的列（`Cannot add a NOT NULL column with default value NULL`）
+  ② Room 2.6 的列比对是**双向**的 —— DDL 有 DEFAULT 而实体没声明 `defaultValue` 同样算不匹配，
+  运行期直接抛 `Migration didn't properly handle: course_sessions`
+- 回填用**相关子查询**（`UPDATE ... FROM` 要 SQLite 3.33+，老 Android 不一定支持）
+- 回填是 UPDATE 不增删行 → 课时数天然不变（androidTest 断言 `COUNT(course_sessions) == COUNT(courses)`）
+
+#### 编辑页交互
+
+- 课时行两个输入框（授课教师 / 上课地点），**留空 = 不单独指定**，placeholder 显示课程级兜底值
+- 折叠摘要显示**生效值**（课时优先，空则回落）
+- 继承规则三条：
+  1. 「＋ 添加课时」继承**前一个课时的原始值**（继承回落值会把「沿用课程级」悄悄变成「单独指定」）
+  2. 改课程级只影响「没单独设置过」的课时 —— 判据是「值为空 **或** 值等于旧的课程级值」
+  3. 载入时「值 == 课程级」**归一化回空串**（迁移回填后每条课时都「看起来有自己的教师」，
+  不归一化的话用户改课程级时它们纹丝不动）
+
+#### 踩到的坑
+
+- **「值为空」当判据不够**：第一次改课程级教师时，空值课时被填成新值；第二次再改，它们已经非空，
+  被误判成「用户单独指定过」，从此不再跟着课程级走 —— 值被永久钉死，载入时的归一化也救不回来。
+  修法：判据加 `|| s.teacher == state.teacher`（旧课程级值）。
+- **Room 2.6 的 default 比对是双向的**：只在 DDL 侧写 DEFAULT 而实体侧忘写 `defaultValue`，
+  编译期毫无征兆，运行期直接崩。
+- **`UPDATE ... FROM` 的 SQLite 版本门槛**：用相关子查询兜底。
+- 新写但从没跑过的测试最容易红：本轮三条里两条是场景构造 / 前置条件写错
+  （继承测试给错了课时、`save` 前漏设学期、两个默认时段相同触发内部重叠），一条是实现真 bug。
+
+#### 验证
+
+- `gradlew :app:assembleDebug :app:testDebugUnitTest` → **BUILD SUCCESSFUL**
+- **1314 个 JVM 单测 / 0 失败 / 0 跳过**（基线 1288 → 新增 26）
+- `Migration_20_21Test`（androidTest）：表建出、存量回填、外键 CASCADE —— 需设备
+- 版本号升到 **0.3.1**（versionCode 4）—— v0.3.0 的 Release 已撤、tag 仍指旧 commit，新版另起 tag
+
+#### 遗留
+
+- **全局搜索搜不到课时级教师 / 地点**：`CourseDao.searchCourses` 只 LIKE `courses.teacher/location`，
+  搜「外教 Tom」找不到「只有那个课时是外教 Tom」的课
+- **`ConflictWarningBanner` 仍用 `course.location`**（课程级），没走课时级回落
+- **SAF happy path 仍未经任何验证**（见上一节）
+
+
